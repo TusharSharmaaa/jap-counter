@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'ads/test_banner.dart';
+
 
 class App extends StatefulWidget {
   const App({super.key});
@@ -65,7 +67,7 @@ class _CounterPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Counter')),
       body: const Center(child: Text('Counter UI stub')),
-      bottomNavigationBar: const _BannerReserve(),
+      bottomNavigationBar: const TestBanner(),
     );
   }
 }
