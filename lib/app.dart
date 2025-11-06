@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
 
@@ -60,6 +62,7 @@ class _BannerReserve extends StatelessWidget {
   }
 }
 
+
 class _CounterPage extends StatefulWidget {
   const _CounterPage();
 
@@ -80,7 +83,7 @@ class _CounterPageState extends State<_CounterPage> {
   }
 
   Future<void> _init() async {
-    final s = await CounterStore.create(); // also enforces daily reset
+    final s = await CounterStore.create(); // enforces daily reset
     setState(() {
       _store = s;
       _today = s.todayJaps;
@@ -92,7 +95,19 @@ class _CounterPageState extends State<_CounterPage> {
   Future<void> _inc() async {
     final s = _store;
     if (s == null) return;
+
+    final willBe = _today + 1; // value after this tap
+
     await s.increment();
+
+    // Light tap feedback every press
+    HapticFeedback.selectionClick();
+
+    // Stronger feedback on completing a mala (108, 216, 324, ...)
+    if (willBe % 108 == 0) {
+      HapticFeedback.mediumImpact();
+    }
+
     setState(() {
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
@@ -111,7 +126,6 @@ class _CounterPageState extends State<_CounterPage> {
         bottomNavigationBar: const TestBanner(),
       );
     }
-
 
     return Scaffold(
       appBar: AppBar(title: const Text('Counter')),
@@ -132,12 +146,10 @@ class _CounterPageState extends State<_CounterPage> {
             ),
           ),
           const SizedBox(height: 24),
-      const SizedBox(height: 24),
-      const SizedBox(height: 8),
-      _MalaProgress(todayJaps: _today),
-      const SizedBox(height: 8),
-
-      Expanded(
+          const SizedBox(height: 8),
+          _MalaProgress(todayJaps: _today),
+          const SizedBox(height: 8),
+          Expanded(
             child: Center(
               child: GestureDetector(
                 onTap: _inc,
