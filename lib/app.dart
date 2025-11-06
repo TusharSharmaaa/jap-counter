@@ -132,7 +132,12 @@ class _CounterPageState extends State<_CounterPage> {
             ),
           ),
           const SizedBox(height: 24),
-          Expanded(
+      const SizedBox(height: 24),
+      const SizedBox(height: 8),
+      _MalaProgress(todayJaps: _today),
+      const SizedBox(height: 8),
+
+      Expanded(
             child: Center(
               child: GestureDetector(
                 onTap: _inc,
@@ -185,6 +190,37 @@ class _StatTile extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.labelMedium),
           const Spacer(),
           Text(value, style: Theme.of(context).textTheme.titleLarge),
+        ],
+      ),
+    );
+  }
+}
+
+class _MalaProgress extends StatelessWidget {
+  final int todayJaps;
+  const _MalaProgress({required this.todayJaps});
+
+  @override
+  Widget build(BuildContext context) {
+    final inThisMala = todayJaps % 108;
+    final remaining = 108 - inThisMala;
+    final progress = inThisMala / 108.0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '$remaining more to complete this mala',
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(value: progress),
+          ),
         ],
       ),
     );
