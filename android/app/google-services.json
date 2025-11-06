@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "751316045327",
+    "project_id": "jap-counter-d0e4e",
+    "storage_bucket": "jap-counter-d0e4e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:751316045327:android:1cf934f8ec5b05e5b39d7a",
+        "android_client_info": {
+          "package_name": "com.example.jap_counter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKu2sGg-lcR_v3YBN4U6Fy0Cz38DeOmy4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:751316045327:android:44615a4c29abc13bb39d7a",
+        "android_client_info": {
+          "package_name": "com.tusharsharma.japcounter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKu2sGg-lcR_v3YBN4U6Fy0Cz38DeOmy4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
