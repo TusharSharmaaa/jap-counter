@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'ads/test_banner.dart';
+import 'data/counter_store.dart';
 
 
 class App extends StatefulWidget {
@@ -67,15 +68,51 @@ class _CounterPage extends StatefulWidget {
 }
 
 class _CounterPageState extends State<_CounterPage> {
-  int _japs = 0; // today's japs (temporary, memory-only for now)
+  CounterStore? _store;
+  bool _loading = true;
+  int _today = 0;
+  int _lifetime = 0;
 
-  void _inc() => setState(() => _japs++);
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
 
-  int get _malas => _japs ~/ 108;         // 108 = 1 mala
-  int get _lifetimeMalas => _malas;       // placeholder until we add persistence
+  Future<void> _init() async {
+    final s = await CounterStore.create(); // also enforces daily reset
+    setState(() {
+      _store = s;
+      _today = s.todayJaps;
+      _lifetime = s.lifetimeJaps;
+      _loading = false;
+    });
+  }
+
+  Future<void> _inc() async {
+    final s = _store;
+    if (s == null) return;
+    await s.increment();
+    setState(() {
+      _today = s.todayJaps;
+      _lifetime = s.lifetimeJaps;
+    });
+  }
+
+  int get _malas => _today ~/ 108;
+  int get _lifetimeMalas => _lifetime ~/ 108;
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Counter')),
+        body: const Center(child: CircularProgressIndicator()),
+        bottomNavigationBar: const TestBanner(),
+      );
+    }
+
+
     return Scaffold(
       appBar: AppBar(title: const Text('Counter')),
       body: Column(
@@ -86,7 +123,7 @@ class _CounterPageState extends State<_CounterPage> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
-                Expanded(child: _StatTile(title: "Today's Japs", value: _japs.toString())),
+                Expanded(child: _StatTile(title: "Today's Japs", value: _today.toString())),
                 const SizedBox(width: 8),
                 Expanded(child: _StatTile(title: "Malas", value: _malas.toString())),
                 const SizedBox(width: 8),
@@ -114,7 +151,7 @@ class _CounterPageState extends State<_CounterPage> {
                     children: [
                       Text('Tap to Count', style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 12),
-                      Text('$_japs', style: Theme.of(context).textTheme.displaySmall),
+                      Text('$_today', style: Theme.of(context).textTheme.displaySmall),
                     ],
                   ),
                 ),
@@ -123,7 +160,7 @@ class _CounterPageState extends State<_CounterPage> {
           ),
         ],
       ),
-      bottomNavigationBar: const TestBanner(), // keep the test banner on Counter only
+      bottomNavigationBar: const TestBanner(),
     );
   }
 }
