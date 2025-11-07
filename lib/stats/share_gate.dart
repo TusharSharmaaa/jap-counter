@@ -15,9 +15,22 @@ Future<bool> gateShareMyStreak(BuildContext context, {required Future<void> Func
   hideAdLoadingOverlay(context);
 
   if (!earned && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Preparing video… please try again in a moment.')),
-    );
+    final rs = RewardedShareAd();
+    if (rs.isCoolingDown) {
+      final rem = rs.cooldownRemaining ?? const Duration(seconds: 0);
+      final m = rem.inMinutes;
+      final s = rem.inSeconds % 60;
+      final msg = m > 0
+          ? 'Please wait ${m}m ${s}s before sharing again.'
+          : 'Please wait ${s}s before sharing again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Preparing video… please try again in a moment.')),
+      );
+    }
   }
 
   return earned;
