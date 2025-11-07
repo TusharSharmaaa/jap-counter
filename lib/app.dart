@@ -424,6 +424,10 @@ class _StatsPageState extends State<_StatsPage> {
       _todayMin = mstore.todayMinutes;
       _lifetimeMin = mstore.lifetimeMinutes;
     });
+    // Also ensure today is marked active on manual refresh
+    if (s.todayJaps > 0) {
+      await ActivityStore.markTodayActive();
+    }
   }
 
   Future<void> _init() async {
@@ -442,6 +446,11 @@ class _StatsPageState extends State<_StatsPage> {
       _todayMin = mstore.todayMinutes;
       _lifetimeMin = mstore.lifetimeMinutes;
     });
+    // Ensure today is recorded as active if user already has japs today
+    if (s.todayJaps > 0) {
+      await ActivityStore.markTodayActive();
+    }
+
   }
 
   @override
@@ -636,6 +645,7 @@ class _ActivityCalendar extends StatefulWidget {
 
 class _ActivityCalendarState extends State<_ActivityCalendar> {
   Map<String, bool>? _recent; // yyyy-MM-dd -> active?
+  Set<String>? _streak;       // dates that are part of the current streak
 
   @override
   void initState() {
@@ -645,8 +655,24 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
 
   Future<void> _load() async {
     final data = await ActivityStore.recentDays(days: widget.days);
+    final streakLen = await ActivityStore.currentStreak();
+
+    // Build a set of ISO dates for the last [streakLen] days (today inclusive)
+    final now = DateTime.now();
+    final streakDates = <String>{};
+    for (int i = 0; i < streakLen; i++) {
+      final d = DateTime(now.year, now.month, now.day).subtract(Duration(days: i));
+      final y = d.year.toString().padLeft(4, '0');
+      final m = d.month.toString().padLeft(2, '0');
+      final dd = d.day.toString().padLeft(2, '0');
+      streakDates.add('$y-$m-$dd');
+    }
+
     if (!mounted) return;
-    setState(() => _recent = data);
+    setState(() {
+      _recent = data;
+      _streak = streakDates;
+    });
   }
 
   @override
@@ -656,9 +682,10 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
       return const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()));
     }
 
-    // Order oldest -> newest so the latest day appears at the end.
-    final keys = recent.keys.toList().reversed.toList().reversed.toList(); // stable order
+    // Oldest -> newest so the latest day appears at the end.
+    final keys = recent.keys.toList().reversed.toList();
     final values = keys.map((k) => recent[k] ?? false).toList();
+    final streak = _streak ?? const <String>{};
 
     const cols = 7;
     final rows = (values.length / cols).ceil();
@@ -675,14 +702,24 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
         itemCount: rows * cols,
         itemBuilder: (context, i) {
           final active = i < values.length ? values[i] : false;
-          final color = active
-              ? Theme.of(context).colorScheme.primary.withOpacity(0.85)
+          final key = i < keys.length ? keys[i] : null;
+          final isStreak = key != null && streak.contains(key);
+
+          // Active days are filled; streak days get a stronger fill + thicker border.
+          final base = Theme.of(context).colorScheme.primary;
+          final fill = active
+              ? (isStreak ? base.withOpacity(0.95) : base.withOpacity(0.65))
               : Colors.transparent;
+          final borderColor = isStreak
+              ? base.withOpacity(0.9)
+              : Theme.of(context).dividerColor;
+          final borderWidth = isStreak ? 2.0 : 1.0;
+
           return Container(
             decoration: BoxDecoration(
-              color: color,
+              color: fill,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(context).dividerColor),
+              border: Border.all(color: borderColor, width: borderWidth),
             ),
           );
         },
