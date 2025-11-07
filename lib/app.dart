@@ -17,6 +17,7 @@ import 'legal/terms_conditions.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'data/activity_store.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -213,10 +214,13 @@ class _CounterPageState extends State<_CounterPage> {
     final s = _store;
     if (s == null) return;
 
+    final wasZero = _today == 0;            // track 0 → 1 transition
     final willBe = _today + 1; // value after this tap
-
     await s.increment();
-
+// If this was the first jap of the day, mark today as active
+    if (wasZero) {
+      await ActivityStore.markTodayActive();
+    }
     if (!mounted) return;
 
     // Light tap feedback every press
@@ -547,12 +551,27 @@ class _StatsPageState extends State<_StatsPage> {
           ),
 
           const SizedBox(height: 24),
-
+// Days active count
+              FutureBuilder<int>(
+                future: ActivityStore.totalActiveDays(),
+                builder: (context, snap) {
+                  final count = snap.data ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      "Days Active: $count",
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  );
+                },
+              ),
           // Calendar stub block (we'll wire real data/colors later)
-          Text("Calendar", style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          const _CalendarStub(),
-        ],
+              // Calendar (last 35 days; colored when active)
+              Text("Calendar", style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              const _ActivityCalendar(days: 35),
+
+            ],
       ),
         ),
       bottomNavigationBar: const _BannerReserve(), // reserved; no real ad here yet
@@ -590,7 +609,70 @@ class _CalendarStub extends StatelessWidget {
     );
   }
 }
+class _ActivityCalendar extends StatefulWidget {
+  final int days; // how many days to show (e.g., 35 = 5 rows x 7 cols)
+  const _ActivityCalendar({this.days = 35});
 
+  @override
+  State<_ActivityCalendar> createState() => _ActivityCalendarState();
+}
+
+class _ActivityCalendarState extends State<_ActivityCalendar> {
+  Map<String, bool>? _recent; // yyyy-MM-dd -> active?
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final data = await ActivityStore.recentDays(days: widget.days);
+    if (!mounted) return;
+    setState(() => _recent = data);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final recent = _recent;
+    if (recent == null) {
+      return const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()));
+    }
+
+    // Order oldest -> newest so the latest day appears at the end.
+    final keys = recent.keys.toList().reversed.toList().reversed.toList(); // stable order
+    final values = keys.map((k) => recent[k] ?? false).toList();
+
+    const cols = 7;
+    final rows = (values.length / cols).ceil();
+
+    return AspectRatio(
+      aspectRatio: cols / rows,
+      child: GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: cols,
+          mainAxisSpacing: 6,
+          crossAxisSpacing: 6,
+        ),
+        itemCount: rows * cols,
+        itemBuilder: (context, i) {
+          final active = i < values.length ? values[i] : false;
+          final color = active
+              ? Theme.of(context).colorScheme.primary.withOpacity(0.85)
+              : Colors.transparent;
+          return Container(
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Theme.of(context).dividerColor),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
 
 class _ContentPage extends StatelessWidget {
   const _ContentPage();
