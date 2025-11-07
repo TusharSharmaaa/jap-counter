@@ -221,6 +221,22 @@ class _CounterPageState extends State<_CounterPage> {
     if (wasZero) {
       await ActivityStore.markTodayActive();
     }
+    // If first jap today, check for streak milestones
+    if (wasZero) {
+      final streak = await ActivityStore.currentStreak();
+      if (mounted && (streak == 7 || streak == 21 || streak == 40)) {
+        HapticFeedback.mediumImpact();
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('✨ $streak-day streak! Keep going.'),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+      }
+    }
     if (!mounted) return;
 
     // Light tap feedback every press
