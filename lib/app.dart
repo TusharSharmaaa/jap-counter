@@ -592,11 +592,14 @@ class _StatsPageState extends State<_StatsPage> {
               ),
 
               // Calendar stub block (we'll wire real data/colors later)
-              // Calendar (last 35 days; colored when active)
+// Calendar (last 35 days; colored when active)
               Text("Calendar", style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
+              const _CalendarHeader(),
+              const SizedBox(height: 6),
+              const _WeekdayRow(),
+              const SizedBox(height: 6),
               const _ActivityCalendar(days: 35),
-
             ],
       ),
         ),
@@ -727,7 +730,37 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
     );
   }
 }
+class _CalendarHeader extends StatelessWidget {
+  const _CalendarHeader();
 
+  static const _months = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December'
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final label = '${_months[now.month - 1]} ${now.year}';
+    return Text(label, style: Theme.of(context).textTheme.titleSmall);
+  }
+}
+
+class _WeekdayRow extends StatelessWidget {
+  const _WeekdayRow();
+
+  @override
+  Widget build(BuildContext context) {
+    const days = ['S','M','T','W','T','F','S'];
+    final style = Theme.of(context).textTheme.labelMedium;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: days.map((d) => Expanded(
+        child: Center(child: Text(d, style: style)),
+      )).toList(),
+    );
+  }
+}
 class _ContentPage extends StatelessWidget {
   const _ContentPage();
 
