@@ -100,12 +100,23 @@ class _CounterPageState extends State<_CounterPage> {
 
     await s.increment();
 
+    if (!mounted) return;
+
     // Light tap feedback every press
     HapticFeedback.selectionClick();
 
-    // Stronger feedback on completing a mala (108, 216, 324, ...)
+    // Stronger feedback + toast on completing a mala (108, 216, 324, ...)
     if (willBe % 108 == 0) {
       HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('🎯 Mala completed!'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
     }
 
     setState(() {
