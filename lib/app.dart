@@ -12,6 +12,7 @@ import 'stats/share_gate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/notification_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'legal/privacy_policy.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -721,8 +722,8 @@ class SettingsPage extends StatelessWidget {
             subtitle: const Text('Read our privacy policy'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Privacy Policy screen coming soon')),
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
               );
             },
           ),
