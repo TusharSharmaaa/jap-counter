@@ -11,6 +11,17 @@ class RewardedShareAd {
   bool _invalidated = false;
   DateTime? _lastRewardTime;
   static const Duration _minGapBetweenRewards = Duration(minutes: 3);
+  bool get isCoolingDown {
+    if (_lastRewardTime == null) return false;
+    return DateTime.now().difference(_lastRewardTime!) < _minGapBetweenRewards;
+  }
+
+  Duration? get cooldownRemaining {
+    if (_lastRewardTime == null) return null;
+    final elapsed = DateTime.now().difference(_lastRewardTime!);
+    final remaining = _minGapBetweenRewards - elapsed;
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
 
   static final RewardedShareAd _instance = RewardedShareAd._internal();
   RewardedShareAd._internal();
@@ -50,19 +61,22 @@ class RewardedShareAd {
   /// Shows the ad if available. Returns true if the user earned the reward.
   /// If no ad is available, returns false and does NOT call [onEarned].
   Future<bool> showIfAvailable({required Future<void> Function() onEarned}) async {
-    // Cooldown: avoid showing too frequently
+    // 1) Hard cooldown BEFORE any show
     final now = DateTime.now();
     if (_lastRewardTime != null && now.difference(_lastRewardTime!) < _minGapBetweenRewards) {
       if (kDebugMode) {
-        debugPrint('[RewardedShareAd] Cooldown active. Try again later.');
+        final rem = _minGapBetweenRewards - now.difference(_lastRewardTime!);
+        debugPrint('[RewardedShareAd] Cooldown active: ${rem.inSeconds}s remaining.');
       }
-      // Ensure a future ad is ready
+      // Keep the pipeline warm for next time
       unawaited(preload());
       return false;
     }
+
+    // 2) Need an ad loaded
     final ad = _ad;
     if (ad == null) {
-      // Try to kick off a background load for next time.
+      // Not ready—prep one and bail
       unawaited(preload());
       if (kDebugMode) {
         debugPrint('[RewardedShareAd] No ad available to show.');
@@ -70,19 +84,20 @@ class RewardedShareAd {
       return false;
     }
 
+    // 3) Mark the "show" moment as the start of cooldown (prevents immediate re-shows)
+    _lastRewardTime = DateTime.now();
+
     var earned = false;
     await ad.show(onUserEarnedReward: (adWithoutView, reward) async {
       earned = true;
       if (kDebugMode) {
         debugPrint('[RewardedShareAd] Reward earned: ${reward.amount} ${reward.type}');
       }
-      _lastRewardTime = DateTime.now();
       await onEarned();
     });
 
-    // After show, the ad cannot be reused; clear and request next.
+    // 4) After show, the ad cannot be reused; clear and request next.
     _disposeCurrent(invalidate: true);
-    // Fire and forget next preload.
     unawaited(preload());
 
     return earned;
