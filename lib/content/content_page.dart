@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:jap_counter/ads/test_native.dart';
+import 'package:jap_counter/content/gita_service.dart';
 
 class ContentPage extends StatefulWidget {
   const ContentPage({super.key});
@@ -11,9 +12,10 @@ class ContentPage extends StatefulWidget {
 
 class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin {
   late final TabController _tabs;
+
+  // Quotes state
   int _quoteIndex = 0;
 
-  // Placeholder quotes (Premanand Maharaj Ji vibe)
   static const _quotes = [
     "ख़ामोशी में ही सबसे गहरी प्रार्थना होती है।",
     "जप की डोरी पकड़ लो, मन अपने आप शांत हो जाएगा।",
@@ -21,6 +23,10 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     "हर साँस में राधा-नाम, हर क्षण में माधुर्य।",
     "चलते-फिरते, उठते-बैठते — जप रुकना नहीं चाहिए।",
   ];
+
+  // Gita state
+  int _chapter = 1;
+  int _verse = 1;
 
   @override
   void initState() {
@@ -34,6 +40,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     super.dispose();
   }
 
+  // Quotes helpers
   void _prevQuote() {
     setState(() => _quoteIndex = (_quoteIndex - 1) < 0 ? _quotes.length - 1 : _quoteIndex - 1);
   }
@@ -45,6 +52,25 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   Future<void> _shareQuote() async {
     final text = "🌸 ${_quotes[_quoteIndex]}\n— Radha Jap Counter";
     await Share.share(text);
+  }
+
+  // Gita nav
+  void _prevVerse() {
+    setState(() {
+      if (_verse > 1) {
+        _verse--;
+      } else {
+        // stay at 1 for now; later we can move to previous chapter’s last verse
+        _verse = 1;
+      }
+    });
+  }
+
+  void _nextVerse() {
+    setState(() {
+      // naive next; later we can bound by chapter length and roll chapter
+      _verse++;
+    });
   }
 
   @override
@@ -63,7 +89,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
       body: TabBarView(
         controller: _tabs,
         children: [
-          // QUOTES TAB
+          // ---------------- QUOTES TAB ----------------
           Column(
             children: [
               const SizedBox(height: 12),
@@ -119,7 +145,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                 ),
               ),
               const SizedBox(height: 16),
-              // Native Ad reserved slot (we'll wire the real native ad later)
+              // Native Ad below quotes
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: ClipRRect(
@@ -127,58 +153,95 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                   child: const TestNativeAd(),
                 ),
               ),
-
             ],
           ),
 
-          // GITA TAB (placeholder content)
-          ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text("Chapter 1, Verse 1", style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              const Text(
-                "धृतराष्ट्र उवाच ।\nधर्मक्षेत्रे कुरुक्षेत्रे समवेता युयुत्सवः ।\nमामकाः पाण्डवाश्चैव किमकुर्वत सञ्जय ॥१॥",
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                "अनुवाद (Hindi): धृतराष्ट्र बोले — हे संजय! धर्मभूमि कुरुक्षेत्र में युद्ध की इच्छा से एकत्रित हुए मेरे पुत्रों और पाण्डु के पुत्रों ने क्या किया?",
-              ),
-              const SizedBox(height: 16),
-              Row(
+          // ---------------- GITA TAB (LIVE) ----------------
+          FutureBuilder<GitaVerse?>(
+            future: GitaService.fetchVerse(_chapter, _verse),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snap.hasData || snap.data == null) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("Unable to load verse."),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          onPressed: () => setState(() {}),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text("Retry"),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final v = snap.data!;
+              return ListView(
+                padding: const EdgeInsets.all(16),
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.chevron_left),
-                      label: const Text("Previous"),
+                  Text(
+                    "अध्याय ${v.chapter}, श्लोक ${v.verse}",
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    v.sanskrit,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    v.hindi,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _prevVerse,
+                          icon: const Icon(Icons.chevron_left),
+                          label: const Text("Previous"),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _nextVerse,
+                          icon: const Icon(Icons.chevron_right),
+                          label: const Text("Next"),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 44,
+                    child: FilledButton.icon(
+                      onPressed: () async {
+                        await Share.share("अध्याय ${v.chapter}, श्लोक ${v.verse} — Radha Jap Counter");
+                      },
+                      icon: const Icon(Icons.share),
+                      label: const Text("Share"),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.chevron_right),
-                      label: const Text("Next"),
-                    ),
-                  ),
+                  const SizedBox(height: 16),
+                  // Keep a native ad slot here too (optional)
+                  const _NativeAdReserve(),
                 ],
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 44,
-                child: FilledButton.icon(
-                  onPressed: () async {
-                    await Share.share("Chapter 1, Verse 1 — Radha Jap Counter");
-                  },
-                  icon: const Icon(Icons.share),
-                  label: const Text("Share"),
-                ),
-              ),
-              const SizedBox(height: 16),
-              _NativeAdReserve(),
-            ],
+              );
+            },
           ),
         ],
       ),
@@ -187,6 +250,8 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
 }
 
 class _NativeAdReserve extends StatelessWidget {
+  const _NativeAdReserve();
+
   @override
   Widget build(BuildContext context) {
     return Container(
