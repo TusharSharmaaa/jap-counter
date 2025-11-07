@@ -251,18 +251,135 @@ class _MalaProgress extends StatelessWidget {
 }
 
 
-class _StatsPage extends StatelessWidget {
+class _StatsPage extends StatefulWidget {
   const _StatsPage();
 
   @override
+  State<_StatsPage> createState() => _StatsPageState();
+}
+
+class _StatsPageState extends State<_StatsPage> {
+  CounterStore? _store;
+  bool _loading = true;
+  int _today = 0;
+  int _lifetime = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final s = await CounterStore.create(); // uses same prefs + new-day reset
+    setState(() {
+      _store = s;
+      _today = s.todayJaps;
+      _lifetime = s.lifetimeJaps;
+      _loading = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Stats')),
+        body: const Center(child: CircularProgressIndicator()),
+        bottomNavigationBar: const _BannerReserve(), // keep reserved for now
+      );
+    }
+
+    final todayMalas = _today ~/ 108;
+    final lifetimeMalas = _lifetime ~/ 108;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Stats')),
-      body: const Center(child: Text('Stats UI stub')),
-      bottomNavigationBar: const _BannerReserve(),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Top tiles
+          Row(
+            children: [
+              Expanded(child: _StatTile(title: "Today's Japs", value: _today.toString())),
+              const SizedBox(width: 8),
+              Expanded(child: _StatTile(title: "Today's Malas", value: todayMalas.toString())),
+              const SizedBox(width: 8),
+              Expanded(child: _StatTile(title: "Lifetime Malas", value: lifetimeMalas.toString())),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Dedication note placeholder (read-only for now)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Theme.of(context).dividerColor),
+            ),
+            child: Text(
+              "Dedication: (coming soon)",
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Share My Streak (no rewarded, no image yet)
+          SizedBox(
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: null, // disabled for now; we’ll enable after rewarded flow
+              icon: const Icon(Icons.ios_share),
+              label: const Text("Share My Streak"),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Calendar stub block (we'll wire real data/colors later)
+          Text("Calendar", style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          const _CalendarStub(),
+        ],
+      ),
+      bottomNavigationBar: const _BannerReserve(), // reserved; no real ad here yet
     );
   }
 }
+
+class _CalendarStub extends StatelessWidget {
+  const _CalendarStub();
+
+  @override
+  Widget build(BuildContext context) {
+    // Simple 7x5 grid placeholder (no real dates/colors yet)
+    const rows = 5;
+    const cols = 7;
+    return AspectRatio(
+      aspectRatio: cols / rows,
+      child: GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: cols,
+          mainAxisSpacing: 6,
+          crossAxisSpacing: 6,
+        ),
+        itemCount: rows * cols,
+        itemBuilder: (context, i) {
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Theme.of(context).dividerColor),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 
 class _ContentPage extends StatelessWidget {
   const _ContentPage();
