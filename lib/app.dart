@@ -16,6 +16,7 @@ import 'legal/privacy_policy.dart';
 import 'legal/terms_conditions.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -664,7 +665,32 @@ class _NotificationsToggleState extends State<_NotificationsToggle> {
     );
   }
 }
+class _AboutFooter extends StatelessWidget {
+  const _AboutFooter();
 
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snap) {
+        final ver = snap.data?.version ?? '';
+        final build = snap.data?.buildNumber ?? '';
+        final versionLabel = ver.isEmpty ? '' : ' • v$ver+$build';
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            children: [
+              Text('Radha Jap Counter$versionLabel', style: style),
+              const SizedBox(height: 4),
+              Text('Made with devotion in India', style: style),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
 class SettingsPage extends StatelessWidget {
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
@@ -758,6 +784,9 @@ class SettingsPage extends StatelessWidget {
               }
             },
           ),
+          const SizedBox(height: 24),
+          const _AboutFooter(),
+
           ListTile(
             leading: const Icon(Icons.share),
             title: const Text('Share App'),
