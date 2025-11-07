@@ -4,7 +4,9 @@ import 'package:flutter/services.dart'; // for light haptics on taps (optional)
 import 'timer_sound_controller.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../ads/interstitial_timer.dart';
-
+import '../data/meditation_store.dart';
+import 'timer_prefs.dart';
+import '../data/meditation_store.dart'; // keep this if not already added
 enum _TimerState { idle, running, paused, completed }
 
 class TimerPage extends StatefulWidget {
@@ -33,8 +35,32 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _sound.setSound(_selectedSound); // already there
-    // preload interstitial for post-completion
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    // preload sound (no auto-play)
+    _sound.setSound(_selectedSound);
+
+    // Load saved prefs
+    final prefs = await TimerPrefs.create();
+    final savedMinutes = prefs.minutes;
+    final savedSoundIdx = prefs.soundIndex;
+
+    if (!mounted) return;
+    setState(() {
+      _selectedMinutes = savedMinutes;
+      _total = Duration(minutes: savedMinutes);
+      _remaining = _total;
+      _selectedSound = TimerSoundType.values[
+      savedSoundIdx.clamp(0, TimerSoundType.values.length - 1)
+      ];
+    });
+
+    // Preload the chosen sound asset
+    _sound.setSound(_selectedSound);
+
+    // Preload interstitial for post-completion
     TimerInterstitialGate.instance.preload();
   }
 
@@ -56,6 +82,8 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       _remaining = _total;
       _state = _TimerState.idle;
     });
+    // SAVE
+    TimerPrefs.create().then((p) => p.setMinutes(minutes));
   }
 
   void _selectSound(TimerSoundType t) {
@@ -64,6 +92,8 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     setState(() => _selectedSound = t);
     // Preload the chosen sound; no auto-play
     _sound.setSound(t);
+    // SAVE
+    TimerPrefs.create().then((p) => p.setSoundIndex(t.index));
   }
 
   void _start() {
@@ -184,11 +214,15 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
         barrierDismissible: true,
         builder: (context) {
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
             title: const Text('साधना पूर्ण हुई'),
             content: Text(
               'आपने ${_formatDuration(_total)} ध्यान पूर्ण किया।',
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: Theme
+                  .of(context)
+                  .textTheme
+                  .bodyMedium,
             ),
             actions: [
               TextButton(
@@ -201,13 +235,17 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       );
     }
 
-    // After dialog: try interstitial once per session
+// Save completed meditation minutes (today + lifetime)
+    try {
+      final store = await MeditationStore.create();
+      await store.addMinutes(_total.inMinutes);
+    } catch (_) {}
+
+// After dialog: try interstitial once per session
     await TimerInterstitialGate.instance.maybeShow();
+  }
 
-
-}
-
-  double get _progress {
+    double get _progress {
     if (_total.inMilliseconds == 0) return 0;
     final done = _total.inMilliseconds - _remaining.inMilliseconds;
     return (done / _total.inMilliseconds).clamp(0, 1).toDouble();
