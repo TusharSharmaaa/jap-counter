@@ -680,7 +680,13 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Appearance section
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text('Appearance', style: Theme.of(context).textTheme.labelLarge),
+          ),
           SwitchListTile(
+            secondary: const Icon(Icons.dark_mode),
             title: const Text('Dark Mode'),
             subtitle: const Text('Use plum & gold theme'),
             value: isDark,
@@ -688,24 +694,29 @@ class SettingsPage extends StatelessWidget {
               onThemeModeChanged(v ? ThemeMode.dark : ThemeMode.light);
             },
           ),
-          _NotificationsToggle(),
+          const SizedBox(height: 8),
+          const Divider(height: 1),
 
-          const SizedBox(height: 12),
-          const Divider(),
-          const SizedBox(height: 12),
-          // Placeholders for upcoming items (we’ll wire these next):
-          ListTile(
-            title: const Text('Notifications'),
-            subtitle: const Text('7 AM, 12 PM, 6 PM reminders'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              // to be implemented
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Notifications settings coming soon')),
-              );
-            },
+          const SizedBox(height: 16),
+
+          // Reminders section
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text('Reminders', style: Theme.of(context).textTheme.labelLarge),
+          ),
+          _NotificationsToggle(), // toggle already handles scheduling/cancel
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+
+          const SizedBox(height: 16),
+
+          // About section
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text('About', style: Theme.of(context).textTheme.labelLarge),
           ),
           ListTile(
+            leading: const Icon(Icons.privacy_tip),
             title: const Text('Privacy Policy'),
             subtitle: const Text('Read our privacy policy'),
             trailing: const Icon(Icons.chevron_right),
@@ -716,6 +727,7 @@ class SettingsPage extends StatelessWidget {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.gavel),
             title: const Text('Terms & Conditions'),
             subtitle: const Text('View app terms'),
             trailing: const Icon(Icons.chevron_right),
@@ -726,6 +738,7 @@ class SettingsPage extends StatelessWidget {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.star_rate),
             title: const Text('Rate on Play Store'),
             subtitle: const Text('“Your one rating will take you towards sadhna”'),
             trailing: const Icon(Icons.chevron_right),
@@ -736,8 +749,7 @@ class SettingsPage extends StatelessWidget {
             },
           ),
         ],
-      ),
-      bottomNavigationBar: const _BannerReserve(),
+      ),     bottomNavigationBar: const _BannerReserve(),
     );
   }
 }
