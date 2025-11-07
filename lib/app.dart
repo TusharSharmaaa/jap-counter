@@ -5,6 +5,8 @@ import 'ads/rewarded.dart';
 import 'content/content_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
+import 'ads/rewarded_share.dart';
+import 'stats/share_gate.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -16,7 +18,22 @@ class App extends StatefulWidget {
   State<App> createState() => _AppState();
 }
 
-class _AppState extends State<App> {
+class _AppState extends State<App> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    // Preload the rewarded ad used for "Share My Streak"
+    RewardedShareAd().preload();
+    // Observe app lifecycle to keep the ad warmed up on resume
+    WidgetsBinding.instance.addObserver(this);
+  }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Ensure a rewarded ad is queued when user comes back to the app
+      RewardedShareAd().ensureWarm();
+    }
+  }
   int _index = 0;
 
   final _pages = const [
@@ -47,6 +64,11 @@ class _AppState extends State<App> {
       ),
       debugShowCheckedModeBanner: false,
     );
+  }
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 }
 
@@ -394,37 +416,26 @@ class _StatsPageState extends State<_StatsPage> {
             height: 48,
             child: FilledButton.icon(
               onPressed: () async {
-                final todayMalas = _today ~/ 108;
-                final lifetimeMalas = _lifetime ~/ 108;
+                await gateShareMyStreak(
+                  context,
+                  onEarned: () async {
+                    final todayMalas = _today ~/ 108;
+                    final lifetimeMalas = _lifetime ~/ 108;
 
-                // Tiny loading dialog while we try to load the ad
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (_) => const Center(child: CircularProgressIndicator()),
-                );
-
-                // Try to load within 4 seconds
-                final loaded = await _gate.load(timeout: const Duration(seconds: 4));
-
-                if (mounted) Navigator.of(context).pop(); // close loader
-
-                // If loaded, try to show; if not, we just skip gracefully
-                if (loaded) {
-                  await _gate.showIfReady();
-                }
-
-                if (!mounted) return;
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => StreakSharePreviewPage(
-                      todayJaps: _today,
-                      lifetimeMalas: lifetimeMalas,
-                      streakDays: 0, // placeholder; real streak calc coming soon
-                    ),
-                  ),
+                    if (!mounted) return;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StreakSharePreviewPage(
+                          todayJaps: _today,
+                          lifetimeMalas: lifetimeMalas,
+                          streakDays: 0, // placeholder; real streak calc coming soon
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
+
               icon: const Icon(Icons.ios_share),
               label: const Text("Share My Streak"),
             )
