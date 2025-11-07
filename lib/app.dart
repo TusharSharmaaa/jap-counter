@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'stats/streak_share_preview.dart';
+import 'ads/rewarded.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -260,6 +261,8 @@ class _StatsPage extends StatefulWidget {
 }
 
 class _StatsPageState extends State<_StatsPage> {
+  final RewardedGate _gate = RewardedGate();
+
   CounterStore? _store;
   bool _loading = true;
   int _today = 0;
@@ -269,7 +272,12 @@ class _StatsPageState extends State<_StatsPage> {
   void initState() {
     super.initState();
     _init();
+
+    // Warm up the rewarded ad in the background
+    // ignore: unawaited_futures
+    _gate.load();
   }
+
 
   Future<void> _init() async {
     final s = await CounterStore.create(); // uses same prefs + new-day reset
@@ -331,10 +339,28 @@ class _StatsPageState extends State<_StatsPage> {
           SizedBox(
             height: 48,
             child: FilledButton.icon(
-              onPressed: () {
+              onPressed: () async {
                 final todayMalas = _today ~/ 108;
                 final lifetimeMalas = _lifetime ~/ 108;
 
+                // Tiny loading dialog while we try to load the ad
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const Center(child: CircularProgressIndicator()),
+                );
+
+                // Try to load within 4 seconds
+                final loaded = await _gate.load(timeout: const Duration(seconds: 4));
+
+                if (mounted) Navigator.of(context).pop(); // close loader
+
+                // If loaded, try to show; if not, we just skip gracefully
+                if (loaded) {
+                  await _gate.showIfReady();
+                }
+
+                if (!mounted) return;
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => StreakSharePreviewPage(
@@ -347,7 +373,8 @@ class _StatsPageState extends State<_StatsPage> {
               },
               icon: const Icon(Icons.ios_share),
               label: const Text("Share My Streak"),
-            ),
+            )
+
 
           ),
 
