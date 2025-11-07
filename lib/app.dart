@@ -70,7 +70,12 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       darkTheme: _darkTheme,
       themeMode: _themeMode,
       home: Scaffold(
-        body: _pages[_index],
+        body: _index == 4
+            ? SettingsPage(
+          themeMode: _themeMode,
+          onThemeModeChanged: (mode) => setState(() => _themeMode = mode),
+        )
+            : _pages[_index],
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: (i) {
@@ -562,6 +567,84 @@ class _SettingsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: const Center(child: Text('Settings UI stub')),
+      bottomNavigationBar: const _BannerReserve(),
+    );
+  }
+}
+class SettingsPage extends StatelessWidget {
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  const SettingsPage({
+    super.key,
+    required this.themeMode,
+    required this.onThemeModeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = themeMode == ThemeMode.dark;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SwitchListTile(
+            title: const Text('Dark Mode'),
+            subtitle: const Text('Use plum & gold theme'),
+            value: isDark,
+            onChanged: (v) {
+              onThemeModeChanged(v ? ThemeMode.dark : ThemeMode.light);
+            },
+          ),
+          const SizedBox(height: 12),
+          const Divider(),
+          const SizedBox(height: 12),
+          // Placeholders for upcoming items (we’ll wire these next):
+          ListTile(
+            title: const Text('Notifications'),
+            subtitle: const Text('7 AM, 12 PM, 6 PM reminders'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              // to be implemented
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Notifications settings coming soon')),
+              );
+            },
+          ),
+          ListTile(
+            title: const Text('Privacy Policy'),
+            subtitle: const Text('Read our privacy policy'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Privacy Policy screen coming soon')),
+              );
+            },
+          ),
+          ListTile(
+            title: const Text('Terms & Conditions'),
+            subtitle: const Text('View app terms'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Terms & Conditions screen coming soon')),
+              );
+            },
+          ),
+          ListTile(
+            title: const Text('Rate on Play Store'),
+            subtitle: const Text('“Your one rating will take you towards sadhna”'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Play Store rating flow coming soon')),
+              );
+            },
+          ),
+        ],
+      ),
       bottomNavigationBar: const _BannerReserve(),
     );
   }
