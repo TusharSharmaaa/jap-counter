@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // for light haptics on taps (optional)
 import 'timer_sound_controller.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import '../ads/interstitial_timer.dart';
 
 enum _TimerState { idle, running, paused, completed }
 
@@ -29,9 +31,19 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
   DateTime? _lastTickAt;
 
   @override
+  void initState() {
+    super.initState();
+    _sound.setSound(_selectedSound); // already there
+    // preload interstitial for post-completion
+    TimerInterstitialGate.instance.preload();
+  }
+
+
+  @override
   void dispose() {
     _ticker?.cancel();
-    _sound.dispose(); // stop & release audio
+    WakelockPlus.disable();      // ensure screen can sleep
+    _sound.dispose();            // stop & release audio
     super.dispose();
   }
 
@@ -65,6 +77,9 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       _lastTickAt = DateTime.now();
     });
 
+    // Keep the screen awake while running
+    WakelockPlus.enable();
+
     // 🔊 start ambience if not muted
     _sound.start();
 
@@ -90,6 +105,10 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     if (_state != _TimerState.running) return;
     HapticFeedback.selectionClick();
     _ticker?.cancel();
+
+    // Allow screen to sleep when paused
+    WakelockPlus.disable();
+
     // 🔊 pause sound
     _sound.pause();
     setState(() {
@@ -104,6 +123,9 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       _state = _TimerState.running;
       _lastTickAt = DateTime.now();
     });
+
+    // Keep screen awake again
+    WakelockPlus.enable();
 
     // 🔊 resume sound
     _sound.resume();
@@ -129,6 +151,10 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
   void _reset() {
     HapticFeedback.selectionClick();
     _ticker?.cancel();
+
+    // Allow screen to sleep on reset
+    WakelockPlus.disable();
+
     // 🔊 stop sound
     _sound.stop();
     setState(() {
@@ -140,6 +166,10 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
 
   Future<void> _onComplete() async {
     HapticFeedback.mediumImpact();
+
+    // Allow screen to sleep after completion
+    WakelockPlus.disable();
+
     // 🔊 stop sound on completion
     _sound.stop();
 
@@ -171,9 +201,11 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       );
     }
 
-    // ✅ Interstitial hook (to be wired in Step 3D when ads are finalized for Timer)
-    // TODO: call your centralized Ad service here (e.g., AdService.instance.maybeShowTimerInterstitial());
-  }
+    // After dialog: try interstitial once per session
+    await TimerInterstitialGate.instance.maybeShow();
+
+
+}
 
   double get _progress {
     if (_total.inMilliseconds == 0) return 0;
@@ -284,9 +316,9 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: (_state == _TimerState.running)
+                      onPressed: (isRunning)
                           ? _pause
-                          : (_state == _TimerState.paused ? _resume : _start),
+                          : (isPaused ? _resume : _start),
                       child: Text(
                         isRunning
                             ? 'Pause'
