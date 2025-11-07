@@ -9,6 +9,7 @@ import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
 import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -28,6 +29,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     RewardedShareAd().preload();
     // Observe app lifecycle to keep the ad warmed up on resume
     WidgetsBinding.instance.addObserver(this);
+
+    _loadThemeMode();
   }
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -39,6 +42,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   int _index = 0;
   // Theme state (will be wired to Settings toggle next)
   ThemeMode _themeMode = ThemeMode.light;
+  static const _themeKey = 'themeMode';
+
 
   // Minimal Material 3 themes
   final ThemeData _lightTheme = ThemeData(
@@ -62,6 +67,23 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     _SettingsPage(),
   ];
 
+  Future<void> _loadThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(_themeKey);
+    if (saved == 'dark') {
+      setState(() => _themeMode = ThemeMode.dark);
+    } else if (saved == 'light') {
+      setState(() => _themeMode = ThemeMode.light);
+    } else {
+      setState(() => _themeMode = ThemeMode.light);
+    }
+  }
+
+  Future<void> _saveThemeMode(ThemeMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = mode == ThemeMode.dark ? 'dark' : 'light';
+    await prefs.setString(_themeKey, value);
+  }
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -73,8 +95,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         body: _index == 4
             ? SettingsPage(
           themeMode: _themeMode,
-          onThemeModeChanged: (mode) => setState(() => _themeMode = mode),
-        )
+          onThemeModeChanged: (mode) {
+            setState(() => _themeMode = mode);
+            _saveThemeMode(mode);
+          },        )
             : _pages[_index],
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
