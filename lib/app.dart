@@ -14,6 +14,7 @@ import 'notifications/notification_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'legal/privacy_policy.dart';
 import 'legal/terms_conditions.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -744,10 +745,16 @@ class SettingsPage extends StatelessWidget {
             title: const Text('Rate on Play Store'),
             subtitle: const Text('“Your one rating will take you towards sadhna”'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Play Store rating flow coming soon')),
-              );
+            onTap: () async {
+              const pkg = 'com.example.jap_counter'; // current applicationId
+              final marketUri = Uri.parse('market://details?id=$pkg');
+              final webUri = Uri.parse('https://play.google.com/store/apps/details?id=$pkg');
+
+              if (await canLaunchUrl(marketUri)) {
+                await launchUrl(marketUri);
+              } else {
+                await launchUrl(webUri, mode: LaunchMode.externalApplication);
+              }
             },
           ),
         ],
