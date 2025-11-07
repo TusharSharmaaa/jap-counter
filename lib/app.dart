@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'stats/streak_share_preview.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -330,10 +331,24 @@ class _StatsPageState extends State<_StatsPage> {
           SizedBox(
             height: 48,
             child: FilledButton.icon(
-              onPressed: null, // disabled for now; we’ll enable after rewarded flow
+              onPressed: () {
+                final todayMalas = _today ~/ 108;
+                final lifetimeMalas = _lifetime ~/ 108;
+
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => StreakSharePreviewPage(
+                      todayJaps: _today,
+                      lifetimeMalas: lifetimeMalas,
+                      streakDays: 0, // placeholder; real streak calc coming soon
+                    ),
+                  ),
+                );
+              },
               icon: const Icon(Icons.ios_share),
               label: const Text("Share My Streak"),
             ),
+
           ),
 
           const SizedBox(height: 24),
