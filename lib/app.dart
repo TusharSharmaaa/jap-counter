@@ -383,6 +383,11 @@ class _StatsPageState extends State<_StatsPage> {
 
     final todayMalas = _today ~/ 108;
     final lifetimeMalas = _lifetime ~/ 108;
+    final cooling = RewardedShareAd().isCoolingDown;
+    final rem = RewardedShareAd().cooldownRemaining;
+    final remLabel = (rem != null && rem > Duration.zero)
+        ? (rem.inMinutes > 0 ? '${rem.inMinutes}m ${rem.inSeconds % 60}s' : '${rem.inSeconds % 60}s')
+        : null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Stats')),
@@ -436,7 +441,7 @@ class _StatsPageState extends State<_StatsPage> {
           SizedBox(
             height: 48,
             child: FilledButton.icon(
-              onPressed: _shareBusy ? null : () async {
+              onPressed: (_shareBusy || cooling) ? null : () async {
                 setState(() => _shareBusy = true);
                 try {
                   await gateShareMyStreak(
@@ -463,8 +468,11 @@ class _StatsPageState extends State<_StatsPage> {
               },
 
               icon: const Icon(Icons.ios_share),
-              label: Text(_shareBusy ? "Preparing…" : "Share My Streak"),
-            )
+              label: Text(
+                _shareBusy
+                    ? "Preparing…"
+                    : (cooling ? "Wait ${remLabel ?? ''}" : "Share My Streak"),
+              ),            )
 
 
           ),
