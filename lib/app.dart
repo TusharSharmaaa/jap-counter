@@ -10,6 +10,7 @@ import 'data/meditation_store.dart';
 import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'notifications/notification_service.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -31,7 +32,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     _loadThemeMode();
+    _initNotifications(); // fire-and-forget
   }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -84,6 +87,18 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     final value = mode == ThemeMode.dark ? 'dark' : 'light';
     await prefs.setString(_themeKey, value);
   }
+
+  Future<void> _initNotifications() async {
+    final ns = NotificationService();
+    await ns.init();
+    final allowed = await ns.requestPermission();
+    if (allowed) {
+      await ns.scheduleDefaults();
+    } else {
+      // Optional: You can show a SnackBar later if you add a UI toggle.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
