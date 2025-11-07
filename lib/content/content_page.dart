@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:jap_counter/ads/test_native.dart';
 
 class ContentPage extends StatefulWidget {
   const ContentPage({super.key});
@@ -119,7 +120,14 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
               ),
               const SizedBox(height: 16),
               // Native Ad reserved slot (we'll wire the real native ad later)
-              _NativeAdReserve(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: const TestNativeAd(),
+                ),
+              ),
+
             ],
           ),
 
