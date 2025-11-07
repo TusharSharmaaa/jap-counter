@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../ads/rewarded_share.dart';
+import '../widgets/ad_loading_overlay.dart';
 
 /// Shows the rewarded ad for the "Share My Streak" flow.
 /// Returns true if the user earned the reward; false otherwise.
 /// On failure to load/show, it shows a gentle SnackBar asking the user to try again.
 Future<bool> gateShareMyStreak(BuildContext context, {required Future<void> Function() onEarned}) async {
-  // Ensure MobileAds is initialized (should already be, but harmless if repeated)
-  await MobileAds.instance.initialize();
+  showAdLoadingOverlay(context);
 
+  await MobileAds.instance.initialize();
   final earned = await RewardedShareAd().showIfAvailable(onEarned: onEarned);
+
+  hideAdLoadingOverlay(context);
 
   if (!earned && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
