@@ -37,6 +37,22 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     }
   }
   int _index = 0;
+  // Theme state (will be wired to Settings toggle next)
+  ThemeMode _themeMode = ThemeMode.light;
+
+  // Minimal Material 3 themes
+  final ThemeData _lightTheme = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    colorSchemeSeed: const Color(0xFFFF6F00), // saffron accent vibe
+  );
+
+  final ThemeData _darkTheme = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorSchemeSeed: const Color(0xFF6A1B9A), // plum/gold vibe base
+  );
+
 
   final _pages = const [
     _CounterPage(),
@@ -50,6 +66,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Radha Jap Counter',
+      theme: _lightTheme,
+      darkTheme: _darkTheme,
+      themeMode: _themeMode,
       home: Scaffold(
         body: _pages[_index],
         bottomNavigationBar: NavigationBar(
