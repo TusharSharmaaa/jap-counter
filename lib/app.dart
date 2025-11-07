@@ -15,6 +15,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'legal/privacy_policy.dart';
 import 'legal/terms_conditions.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -755,6 +756,17 @@ class SettingsPage extends StatelessWidget {
               } else {
                 await launchUrl(webUri, mode: LaunchMode.externalApplication);
               }
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.share),
+            title: const Text('Share App'),
+            subtitle: const Text('“साधना में साथ—दोस्तों को भेजें”'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              const pkg = 'com.example.jap_counter';
+              final link = 'https://play.google.com/store/apps/details?id=$pkg';
+              await Share.share('मैं Radha Jap Counter ऐप इस्तेमाल कर रहा/रही हूँ — $link');
             },
           ),
         ],
