@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // for light haptics on taps (optional)
+import 'timer_sound_controller.dart';
 
 enum _TimerState { idle, running, paused, completed }
 
@@ -20,12 +21,17 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
   Timer? _ticker;
   _TimerState _state = _TimerState.idle;
 
+  // 🔊 Sound controller + current ambience selection
+  final TimerSoundController _sound = TimerSoundController();
+  TimerSoundType _selectedSound = TimerSoundType.mute;
+
   // Keep last tick time for drift-free countdown
   DateTime? _lastTickAt;
 
   @override
   void dispose() {
     _ticker?.cancel();
+    _sound.dispose(); // stop & release audio
     super.dispose();
   }
 
@@ -40,6 +46,14 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     });
   }
 
+  void _selectSound(TimerSoundType t) {
+    if (_selectedSound == t) return;
+    HapticFeedback.selectionClick();
+    setState(() => _selectedSound = t);
+    // Preload the chosen sound; no auto-play
+    _sound.setSound(t);
+  }
+
   void _start() {
     if (_state == _TimerState.running) return;
     HapticFeedback.lightImpact();
@@ -50,6 +64,9 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       _state = _TimerState.running;
       _lastTickAt = DateTime.now();
     });
+
+    // 🔊 start ambience if not muted
+    _sound.start();
 
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(milliseconds: 200), (t) {
@@ -73,6 +90,8 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     if (_state != _TimerState.running) return;
     HapticFeedback.selectionClick();
     _ticker?.cancel();
+    // 🔊 pause sound
+    _sound.pause();
     setState(() {
       _state = _TimerState.paused;
     });
@@ -85,6 +104,9 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       _state = _TimerState.running;
       _lastTickAt = DateTime.now();
     });
+
+    // 🔊 resume sound
+    _sound.resume();
 
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(milliseconds: 200), (t) {
@@ -107,6 +129,8 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
   void _reset() {
     HapticFeedback.selectionClick();
     _ticker?.cancel();
+    // 🔊 stop sound
+    _sound.stop();
     setState(() {
       _total = Duration(minutes: _selectedMinutes);
       _remaining = _total;
@@ -116,6 +140,9 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
 
   Future<void> _onComplete() async {
     HapticFeedback.mediumImpact();
+    // 🔊 stop sound on completion
+    _sound.stop();
+
     setState(() {
       _remaining = Duration.zero;
       _state = _TimerState.completed;
@@ -197,6 +224,24 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
                 }).toList(),
               ),
 
+              const SizedBox(height: 16),
+
+              // 🔊 Ambience selector (Mute / Om / Birds / Water / Flute / Bell)
+              Text('Ambience', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _soundChip('Mute',  TimerSoundType.mute),
+                  _soundChip('Om',    TimerSoundType.om),
+                  _soundChip('Birds', TimerSoundType.birds),
+                  _soundChip('Water', TimerSoundType.water),
+                  _soundChip('Flute', TimerSoundType.flute),
+                  _soundChip('Bell',  TimerSoundType.bell),
+                ],
+              ),
+
               const SizedBox(height: 24),
 
               // Time readout
@@ -239,7 +284,9 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: (_state == _TimerState.running) ? _pause : (_state == _TimerState.paused ? _resume : _start),
+                      onPressed: (_state == _TimerState.running)
+                          ? _pause
+                          : (_state == _TimerState.paused ? _resume : _start),
                       child: Text(
                         isRunning
                             ? 'Pause'
@@ -262,6 +309,16 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
           ),
         ),
       ),
+    );
+  }
+
+  // Helper to build a sound ChoiceChip
+  Widget _soundChip(String label, TimerSoundType t) {
+    final selected = _selectedSound == t;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => _selectSound(t),
     );
   }
 }
