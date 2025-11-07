@@ -52,8 +52,14 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         body: _pages[_index],
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: const [
+          onDestinationSelected: (i) {
+            // If user navigates to Stats tab, preload rewarded ad
+            if (i == 1) { // 0=Counter, 1=Stats, 2=Content, 3=Timer, 4=Settings
+              RewardedShareAd().preload();
+            }
+
+            setState(() => _index = i);
+          },          destinations: const [
             NavigationDestination(icon: Icon(Icons.touch_app), label: 'Counter'),
             NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Stats'),
             NavigationDestination(icon: Icon(Icons.menu_book), label: 'Content'),
@@ -299,6 +305,7 @@ class _StatsPage extends StatefulWidget {
 
 class _StatsPageState extends State<_StatsPage> {
   final RewardedGate _gate = RewardedGate();
+  bool _shareBusy = false;
 
   CounterStore? _store;
   bool _loading = true;
@@ -415,29 +422,34 @@ class _StatsPageState extends State<_StatsPage> {
           SizedBox(
             height: 48,
             child: FilledButton.icon(
-              onPressed: () async {
-                await gateShareMyStreak(
-                  context,
-                  onEarned: () async {
-                    final todayMalas = _today ~/ 108;
-                    final lifetimeMalas = _lifetime ~/ 108;
+              onPressed: _shareBusy ? null : () async {
+                setState(() => _shareBusy = true);
+                try {
+                  await gateShareMyStreak(
+                    context,
+                    onEarned: () async {
+                      final todayMalas = _today ~/ 108;
+                      final lifetimeMalas = _lifetime ~/ 108;
 
-                    if (!mounted) return;
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => StreakSharePreviewPage(
-                          todayJaps: _today,
-                          lifetimeMalas: lifetimeMalas,
-                          streakDays: 0, // placeholder; real streak calc coming soon
+                      if (!mounted) return;
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StreakSharePreviewPage(
+                            todayJaps: _today,
+                            lifetimeMalas: lifetimeMalas,
+                            streakDays: 0, // placeholder; real streak calc coming soon
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                );
+                      );
+                    },
+                  );
+                } finally {
+                  if (mounted) setState(() => _shareBusy = false);
+                }
               },
 
               icon: const Icon(Icons.ios_share),
-              label: const Text("Share My Streak"),
+              label: Text(_shareBusy ? "Preparing…" : "Share My Streak"),
             )
 
 
