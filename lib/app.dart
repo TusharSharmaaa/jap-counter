@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+
 import 'stats/streak_share_preview.dart';
 import 'ads/rewarded.dart';
 import 'content/content_page.dart';
@@ -56,10 +58,22 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             // If user navigates to Stats tab, preload rewarded ad
             if (i == 1) { // 0=Counter, 1=Stats, 2=Content, 3=Timer, 4=Settings
               RewardedShareAd().preload();
+
+              // DEV ONLY: print remaining cooldown to console for quick checks
+              if (kDebugMode) {
+                final rem = RewardedShareAd().cooldownRemaining;
+                if (rem != null && rem > Duration.zero) {
+                  debugPrint('[RewardedShareAd] Cooldown remaining: ${rem.inMinutes}m ${rem.inSeconds % 60}s');
+                } else {
+                  debugPrint('[RewardedShareAd] No cooldown active.');
+                }
+              }
             }
 
             setState(() => _index = i);
-          },          destinations: const [
+          },
+          destinations: const [
+
             NavigationDestination(icon: Icon(Icons.touch_app), label: 'Counter'),
             NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Stats'),
             NavigationDestination(icon: Icon(Icons.menu_book), label: 'Content'),
