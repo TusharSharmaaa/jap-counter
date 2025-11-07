@@ -4,6 +4,7 @@ import 'stats/streak_share_preview.dart';
 import 'ads/rewarded.dart';
 import 'content/content_page.dart';
 import 'timer/timer_page.dart';
+import 'data/meditation_store.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -281,6 +282,8 @@ class _StatsPageState extends State<_StatsPage> {
   bool _loading = true;
   int _today = 0;
   int _lifetime = 0;
+  int _todayMin = 0;
+  int _lifetimeMin = 0;
 
   @override
   void initState() {
@@ -292,14 +295,36 @@ class _StatsPageState extends State<_StatsPage> {
     _gate.load();
   }
 
+  Future<void> _refresh() async {
+    final s = await CounterStore.create();
+    final mstore = await MeditationStore.create();
+
+    if (!mounted) return;
+    setState(() {
+      _store = s;
+      _today = s.todayJaps;
+      _lifetime = s.lifetimeJaps;
+
+      _todayMin = mstore.todayMinutes;
+      _lifetimeMin = mstore.lifetimeMinutes;
+    });
+  }
 
   Future<void> _init() async {
     final s = await CounterStore.create(); // uses same prefs + new-day reset
+
+    // NEW: meditation store
+    final mstore = await MeditationStore.create();
+
     setState(() {
       _store = s;
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
       _loading = false;
+
+      // NEW:
+      _todayMin = mstore.todayMinutes;
+      _lifetimeMin = mstore.lifetimeMinutes;
     });
   }
 
@@ -318,10 +343,13 @@ class _StatsPageState extends State<_StatsPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Stats')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Top tiles
+        body: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+
+              // Top tiles
           Row(
             children: [
               Expanded(child: _StatTile(title: "Today's Japs", value: _today.toString())),
@@ -333,6 +361,18 @@ class _StatsPageState extends State<_StatsPage> {
           ),
 
           const SizedBox(height: 16),
+
+          // Meditation minutes tiles
+          Row(
+            children: [
+              Expanded(child: _StatTile(title: "Today's Meditation (min)", value: _todayMin.toString())),
+              const SizedBox(width: 8),
+              Expanded(child: _StatTile(title: "Lifetime Meditation (min)", value: _lifetimeMin.toString())),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
 
           // Dedication note placeholder (read-only for now)
           Container(
@@ -400,6 +440,7 @@ class _StatsPageState extends State<_StatsPage> {
           const _CalendarStub(),
         ],
       ),
+        ),
       bottomNavigationBar: const _BannerReserve(), // reserved; no real ad here yet
     );
   }
