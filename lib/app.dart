@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'stats/streak_share_preview.dart';
 import 'ads/rewarded.dart';
+import 'content/content_page.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -77,6 +78,7 @@ class _CounterPageState extends State<_CounterPage> {
   bool _loading = true;
   int _today = 0;
   int _lifetime = 0;
+  bool _pulse = false;
 
   @override
   void initState() {
@@ -110,6 +112,12 @@ class _CounterPageState extends State<_CounterPage> {
     // Stronger feedback + toast on completing a mala (108, 216, 324, ...)
     if (willBe % 108 == 0) {
       HapticFeedback.mediumImpact();
+      // Trigger pulse animation
+      setState(() => _pulse = true);
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) setState(() => _pulse = false);
+      });
+
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -181,7 +189,12 @@ class _CounterPageState extends State<_CounterPage> {
                     children: [
                       Text('Tap to Count', style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 12),
-                      Text('$_today', style: Theme.of(context).textTheme.displaySmall),
+                      AnimatedScale(
+                        scale: _pulse ? 1.12 : 1.0,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOut,
+                        child: Text('$_today', style: Theme.of(context).textTheme.displaySmall),
+                      ),
                     ],
                   ),
                 ),
@@ -428,13 +441,10 @@ class _ContentPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Content')),
-      body: const Center(child: Text('Content UI stub')),
-      bottomNavigationBar: const _BannerReserve(),
-    );
+    return const ContentPage(); // uses the new tabs screen
   }
 }
+
 
 class _TimerPage extends StatelessWidget {
   const _TimerPage();
