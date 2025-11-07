@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'stats/streak_share_preview.dart';
 import 'ads/rewarded.dart';
 import 'content/content_page.dart';
+import 'timer/timer_page.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -21,7 +22,7 @@ class _AppState extends State<App> {
     _CounterPage(),
     _StatsPage(),
     _ContentPage(),
-    _TimerPage(),
+    TimerPage(),
     _SettingsPage(),
   ];
 
@@ -446,18 +447,7 @@ class _ContentPage extends StatelessWidget {
 }
 
 
-class _TimerPage extends StatelessWidget {
-  const _TimerPage();
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Timer')),
-      body: const Center(child: Text('Timer UI stub')),
-      bottomNavigationBar: const _BannerReserve(),
-    );
-  }
-}
 
 class _SettingsPage extends StatelessWidget {
   const _SettingsPage();
