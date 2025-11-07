@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+
+// Ads + API
 import 'package:jap_counter/ads/test_native.dart';
 import 'package:jap_counter/content/gita_service.dart';
 
@@ -13,9 +15,8 @@ class ContentPage extends StatefulWidget {
 class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin {
   late final TabController _tabs;
 
-  // Quotes state
+  // ---------------- QUOTES STATE ----------------
   int _quoteIndex = 0;
-
   static const _quotes = [
     "ख़ामोशी में ही सबसे गहरी प्रार्थना होती है।",
     "जप की डोरी पकड़ लो, मन अपने आप शांत हो जाएगा।",
@@ -24,17 +25,9 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     "चलते-फिरते, उठते-बैठते — जप रुकना नहीं चाहिए।",
   ];
 
-  // Gita state
+  // ---------------- GITA STATE ----------------
   int _chapter = 1;
   int _verse = 1;
-  Future<GitaVerse?> _fetchCurrentVerse() {
-    return GitaService.fetchVerse(_chapter, _verse);
-  }
-
-  void _prefetchNext() {
-    // naive prefetch: next verse in same chapter
-    GitaService.prefetch(_chapter, _verse + 1);
-  }
 
   @override
   void initState() {
@@ -48,7 +41,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     super.dispose();
   }
 
-  // Quotes helpers
+  // -------- QUOTES HELPERS --------
   void _prevQuote() {
     setState(() => _quoteIndex = (_quoteIndex - 1) < 0 ? _quotes.length - 1 : _quoteIndex - 1);
   }
@@ -62,22 +55,29 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     await Share.share(text);
   }
 
-  // Gita nav
+  // -------- GITA HELPERS (cached service + prefetch) --------
+  Future<GitaVerse?> _fetchCurrentVerse() {
+    return GitaService.fetchVerse(_chapter, _verse);
+  }
+
+  void _prefetchNext() {
+    // naive prefetch: next verse in same chapter
+    GitaService.prefetch(_chapter, _verse + 1);
+  }
+
   void _prevVerse() {
     setState(() {
       if (_verse > 1) {
         _verse--;
       } else {
-        // stay at 1 for now; later we can move to previous chapter’s last verse
-        _verse = 1;
+        _verse = 1; // later: roll to previous chapter's last verse
       }
     });
   }
 
   void _nextVerse() {
     setState(() {
-      // naive next; later we can bound by chapter length and roll chapter
-      _verse++;
+      _verse++; // later: add bounds + chapter roll
     });
   }
 
@@ -97,7 +97,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
       body: TabBarView(
         controller: _tabs,
         children: [
-          // ---------------- QUOTES TAB ----------------
+          // ================= QUOTES TAB =================
           Column(
             children: [
               const SizedBox(height: 12),
@@ -164,13 +164,12 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
             ],
           ),
 
-          // ---------------- GITA TAB (LIVE) ----------------
-          // ---------------- GITA TAB (LIVE + CACHED) ----------------
+          // ================= GITA TAB (LIVE + CACHED) =================
           FutureBuilder<GitaVerse?>(
             future: _fetchCurrentVerse(),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
-                return const _VerseSkeleton(); // ✅ nicer loading
+                return const _VerseSkeleton(); // smoother than spinner
               }
               if (!snap.hasData || snap.data == null) {
                 return Padding(
@@ -183,7 +182,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                       SizedBox(
                         height: 44,
                         child: OutlinedButton.icon(
-                          onPressed: () => setState(() {}),
+                          onPressed: () => setState(() {}), // retry
                           icon: const Icon(Icons.refresh),
                           label: const Text("Retry"),
                         ),
@@ -194,9 +193,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
               }
 
               final v = snap.data!;
-
-              // Prefetch the next verse in background to feel instant on next tap
-              _prefetchNext();
+              _prefetchNext(); // warm the next verse
 
               return ListView(
                 padding: const EdgeInsets.all(16),
@@ -250,7 +247,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const _NativeAdReserve(),
+                  const _NativeAdReserve(), // keep a slot here too (optional)
                 ],
               );
             },
@@ -278,6 +275,7 @@ class _NativeAdReserve extends StatelessWidget {
     );
   }
 }
+
 class _VerseSkeleton extends StatelessWidget {
   const _VerseSkeleton();
 
