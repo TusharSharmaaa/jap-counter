@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/notification_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'legal/privacy_policy.dart';
+import 'legal/terms_conditions.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -733,8 +734,8 @@ class SettingsPage extends StatelessWidget {
             subtitle: const Text('View app terms'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Terms & Conditions screen coming soon')),
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TermsConditionsPage()),
               );
             },
           ),
