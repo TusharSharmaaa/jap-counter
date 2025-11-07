@@ -27,6 +27,14 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   // Gita state
   int _chapter = 1;
   int _verse = 1;
+  Future<GitaVerse?> _fetchCurrentVerse() {
+    return GitaService.fetchVerse(_chapter, _verse);
+  }
+
+  void _prefetchNext() {
+    // naive prefetch: next verse in same chapter
+    GitaService.prefetch(_chapter, _verse + 1);
+  }
 
   @override
   void initState() {
@@ -157,11 +165,12 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
           ),
 
           // ---------------- GITA TAB (LIVE) ----------------
+          // ---------------- GITA TAB (LIVE + CACHED) ----------------
           FutureBuilder<GitaVerse?>(
-            future: GitaService.fetchVerse(_chapter, _verse),
+            future: _fetchCurrentVerse(),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const _VerseSkeleton(); // ✅ nicer loading
               }
               if (!snap.hasData || snap.data == null) {
                 return Padding(
@@ -185,6 +194,10 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
               }
 
               final v = snap.data!;
+
+              // Prefetch the next verse in background to feel instant on next tap
+              _prefetchNext();
+
               return ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -237,7 +250,6 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Keep a native ad slot here too (optional)
                   const _NativeAdReserve(),
                 ],
               );
@@ -263,6 +275,36 @@ class _NativeAdReserve extends StatelessWidget {
         border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: const Center(child: Text("Native Ad (reserved)")),
+    );
+  }
+}
+class _VerseSkeleton extends StatelessWidget {
+  const _VerseSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    Widget bar(double h) => Container(
+      height: h,
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          bar(18),
+          const SizedBox(height: 8),
+          bar(80),
+          bar(80),
+          const SizedBox(height: 8),
+          bar(60),
+        ],
+      ),
     );
   }
 }
