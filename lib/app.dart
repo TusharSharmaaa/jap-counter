@@ -565,7 +565,24 @@ class _StatsPageState extends State<_StatsPage> {
                   );
                 },
               ),
-          // Calendar stub block (we'll wire real data/colors later)
+
+              FutureBuilder<int>(
+                future: ActivityStore.currentStreak(),
+                builder: (context, snap) {
+                  final streak = snap.data ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      streak > 0
+                          ? "🔥 Current Streak: $streak day${streak == 1 ? '' : 's'}"
+                          : "No active streak yet",
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  );
+                },
+              ),
+
+              // Calendar stub block (we'll wire real data/colors later)
               // Calendar (last 35 days; colored when active)
               Text("Calendar", style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
