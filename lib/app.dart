@@ -11,6 +11,7 @@ import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/notification_service.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -610,6 +611,56 @@ class _SettingsPage extends StatelessWidget {
     );
   }
 }
+class _NotificationsToggle extends StatefulWidget {
+  const _NotificationsToggle();
+
+  @override
+  State<_NotificationsToggle> createState() => _NotificationsToggleState();
+}
+
+class _NotificationsToggleState extends State<_NotificationsToggle> {
+  bool _enabled = true;
+  static const _key = 'notificationsEnabled';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _enabled = prefs.getBool(_key) ?? true);
+  }
+
+  Future<void> _toggle(bool value) async {
+    setState(() => _enabled = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key, value);
+
+    final ns = NotificationService();
+    if (value) {
+      await ns.init();
+      final allowed = await ns.requestPermission();
+      if (allowed) await ns.scheduleDefaults();
+    } else {
+      // Cancel all scheduled notifications
+      final plugin = FlutterLocalNotificationsPlugin();
+      await plugin.cancelAll();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      title: const Text('Daily Reminders'),
+      subtitle: const Text('7 AM, 12 PM, and 6 PM devotional alerts'),
+      value: _enabled,
+      onChanged: _toggle,
+    );
+  }
+}
+
 class SettingsPage extends StatelessWidget {
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
@@ -637,6 +688,8 @@ class SettingsPage extends StatelessWidget {
               onThemeModeChanged(v ? ThemeMode.dark : ThemeMode.light);
             },
           ),
+          _NotificationsToggle(),
+
           const SizedBox(height: 12),
           const Divider(),
           const SizedBox(height: 12),
