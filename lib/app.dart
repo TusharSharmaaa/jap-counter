@@ -1,5 +1,6 @@
 import 'dart:ui' show Rect;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -15,6 +16,7 @@ import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
 import 'stats/dedication_store.dart';
 import 'stats/stats_ambience.dart';
+import 'settings/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/notification_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -28,6 +30,7 @@ import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
 import 'theme/neumorph.dart';
 import 'gamify/gamify_store.dart';
+import 'theme/theme.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'ads/interstitial_timer.dart';
 
@@ -72,49 +75,30 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   }
   int _index = 0;
   final GlobalKey<_StatsPageState> _statsKey = GlobalKey<_StatsPageState>();
-  // Theme state (will be wired to Settings toggle next)
-  ThemeMode _themeMode = ThemeMode.light;
-  static const _themeKey = 'themeMode';
-
-
-  // Minimal Material 3 themes
-  final ThemeData _lightTheme = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
-    colorSchemeSeed: const Color(0xFFFF6F00), // saffron accent vibe
-  );
-
-  final ThemeData _darkTheme = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
-    colorSchemeSeed: const Color(0xFF6A1B9A), // plum/gold vibe base
-  );
-
+  ThemeMode _themeMode = ThemeMode.system;
 
   late final List<Widget> _pages = [
     const _CounterPage(),
     _StatsPage(key: _statsKey),
     const _ContentPage(),
     const TimerPage(),
-    const _SettingsPage(),
   ];
 
   Future<void> _loadThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_themeKey);
-    if (saved == 'dark') {
-      setState(() => _themeMode = ThemeMode.dark);
-    } else if (saved == 'light') {
-      setState(() => _themeMode = ThemeMode.light);
+    final stored = prefs.getInt('themeMode') ?? ThemeMode.system.index;
+    final values = ThemeMode.values;
+    final mode = (stored >= 0 && stored < values.length) ? values[stored] : ThemeMode.system;
+    if (mounted) {
+      setState(() => _themeMode = mode);
     } else {
-      setState(() => _themeMode = ThemeMode.light);
+      _themeMode = mode;
     }
   }
 
   Future<void> _saveThemeMode(ThemeMode mode) async {
     final prefs = await SharedPreferences.getInstance();
-    final value = mode == ThemeMode.dark ? 'dark' : 'light';
-    await prefs.setString(_themeKey, value);
+    await prefs.setInt('themeMode', mode.index);
   }
 
   Future<void> _initNotifications() async {
@@ -132,8 +116,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Radha Jap Counter',
-      theme: _lightTheme,
-      darkTheme: _darkTheme,
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
       themeMode: _themeMode,
       home: Scaffold(
         body: AnimatedSwitcher(
@@ -1158,206 +1142,4 @@ class _ContentPage extends StatelessWidget {
 
 
 
-class _SettingsPage extends StatelessWidget {
-  const _SettingsPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: const Center(child: Text('Settings UI stub')),
-      bottomNavigationBar: const _BannerReserve(),
-    );
-  }
-}
-class _NotificationsToggle extends StatefulWidget {
-  const _NotificationsToggle();
-
-  @override
-  State<_NotificationsToggle> createState() => _NotificationsToggleState();
-}
-
-class _NotificationsToggleState extends State<_NotificationsToggle> {
-  bool _enabled = true;
-  static const _key = 'notificationsEnabled';
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _enabled = prefs.getBool(_key) ?? true);
-  }
-
-  Future<void> _toggle(bool value) async {
-    setState(() => _enabled = value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_key, value);
-
-    final ns = NotificationService();
-    if (value) {
-      await ns.init();
-      final allowed = await ns.requestPermission();
-      if (allowed) await ns.scheduleDefaults();
-    } else {
-      // Cancel all scheduled notifications
-      final plugin = FlutterLocalNotificationsPlugin();
-      await plugin.cancelAll();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      title: const Text('Daily Reminders'),
-      subtitle: const Text('7 AM, 12 PM, and 6 PM devotional alerts'),
-      value: _enabled,
-      onChanged: _toggle,
-    );
-  }
-}
-class _AboutFooter extends StatelessWidget {
-  const _AboutFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall;
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snap) {
-        final ver = snap.data?.version ?? '';
-        final build = snap.data?.buildNumber ?? '';
-        final versionLabel = ver.isEmpty ? '' : ' • v$ver+$build';
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Column(
-            children: [
-              Text('Radha Jap Counter$versionLabel', style: style),
-              const SizedBox(height: 4),
-              Text('Made with devotion in India', style: style),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-class SettingsPage extends StatelessWidget {
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
-
-  const SettingsPage({
-    super.key,
-    required this.themeMode,
-    required this.onThemeModeChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = themeMode == ThemeMode.dark;
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Appearance section
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text('Appearance', style: Theme.of(context).textTheme.labelLarge),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.dark_mode),
-            title: const Text('Dark Mode'),
-            subtitle: const Text('Use plum & gold theme'),
-            value: isDark,
-            onChanged: (v) {
-              onThemeModeChanged(v ? ThemeMode.dark : ThemeMode.light);
-            },
-          ),
-          const SizedBox(height: 8),
-          const Divider(height: 1),
-
-          const SizedBox(height: 16),
-
-          // Reminders section
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text('Reminders', style: Theme.of(context).textTheme.labelLarge),
-          ),
-          _NotificationsToggle(), // toggle already handles scheduling/cancel
-          const SizedBox(height: 8),
-          const Divider(height: 1),
-
-          const SizedBox(height: 16),
-
-          // About section
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text('About', style: Theme.of(context).textTheme.labelLarge),
-          ),
-          ListTile(
-            leading: const Icon(Icons.privacy_tip),
-            title: const Text('Privacy Policy'),
-            subtitle: const Text('Read our privacy policy'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.gavel),
-            title: const Text('Terms & Conditions'),
-            subtitle: const Text('View app terms'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const TermsConditionsPage()),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.star_rate),
-            title: const Text('Rate on Play Store'),
-            subtitle: const Text('“Your one rating will take you towards sadhna”'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              const pkg = 'com.example.jap_counter'; // current applicationId
-              final marketUri = Uri.parse('market://details?id=$pkg');
-              final webUri = Uri.parse('https://play.google.com/store/apps/details?id=$pkg');
-
-              if (await canLaunchUrl(marketUri)) {
-                await launchUrl(marketUri);
-              } else {
-                await launchUrl(webUri, mode: LaunchMode.externalApplication);
-              }
-            },
-          ),
-          const SizedBox(height: 24),
-          const _AboutFooter(),
-
-          ListTile(
-            leading: const Icon(Icons.share),
-            title: const Text('Share App'),
-            subtitle: const Text('“साधना में साथ—दोस्तों को भेजें”'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              const pkg = 'com.example.jap_counter';
-              final link = 'https://play.google.com/store/apps/details?id=$pkg';
-              await Share.share(
-                'मैं Radha Jap Counter ऐप इस्तेमाल कर रहा/रही हूँ — $link',
-                subject: 'Radha Jap Counter',
-                sharePositionOrigin: const Rect.fromLTWH(0, 0, 100, 100),
-              );
-            },
-          ),
-        ],
-      ),     bottomNavigationBar: const _BannerReserve(),
-    );
-  }
-}
+// Legacy settings classes removed. Latest settings UI lives in lib/settings/settings_page.dart
