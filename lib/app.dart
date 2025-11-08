@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:confetti/confetti.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'stats/streak_share_preview.dart';
 import 'stats/streak_badge.dart';
@@ -27,6 +28,7 @@ import 'gamify/gamify_store.dart';
 import 'theme/theme.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'sync/sync_service.dart';
+import 'utils/streak_image_generator.dart';
 
 
 class App extends StatefulWidget {
@@ -900,6 +902,21 @@ class _StatsPageState extends State<_StatsPage> {
                     child: Text(
                       streakMessage,
                       style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.share),
+                      label: const Text('Share Streak'),
+                      onPressed: () async {
+                        final path = await StreakImageGenerator.generate();
+                        await Share.shareXFiles(
+                          [XFile(path)],
+                          text: '🔥 मेरी साधना: $path',
+                        );
+                      },
                     ),
                   ),
                 ],

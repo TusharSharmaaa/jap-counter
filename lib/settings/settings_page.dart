@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -9,6 +12,7 @@ import '../notifications/notification_service.dart';
 import '../legal/privacy_policy.dart';
 import '../legal/terms_conditions.dart';
 import '../ui/glow_card.dart';
+import '../utils/backup_manager.dart';
 
 class SettingsPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -182,6 +186,46 @@ class _SettingsPageState extends State<SettingsPage> {
                     label: 'Terms & Conditions',
                     onTap: () => Navigator.of(context)
                         .push(MaterialPageRoute(builder: (_) => const TermsConditionsPage())),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    leading: const Icon(Icons.backup),
+                    title: const Text('Export Backup'),
+                    subtitle: const Text('Save your jap progress locally'),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onTap: () async {
+                      final path = await BackupManager.exportBackup();
+                      await Share.shareXFiles(
+                        [XFile(path)],
+                        text: 'मेरा Radha Jap Counter बैकअप',
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.restore),
+                    title: const Text('Import Backup'),
+                    subtitle: const Text('Restore from a saved JSON file'),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onTap: () async {
+                      final picker = FilePicker.platform;
+                      final file = await picker.pickFiles(type: FileType.any);
+                      if (file != null && file.files.single.path != null) {
+                        try {
+                          await BackupManager.importBackup(File(file.files.single.path!));
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Backup restored successfully 🌸')),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Backup restore failed: $e')),
+                            );
+                          }
+                        }
+                      }
+                    },
                   ),
                   const SizedBox(height: 16),
                   _rateCard(context),
