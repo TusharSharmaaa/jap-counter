@@ -104,7 +104,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     const CounterPage(),
     _StatsPage(key: _statsKey),
     const _ContentPage(),
-    const TimerPage(),
+    TimerPage(),
   ];
 
   Future<void> _loadThemeMode() async {
@@ -522,7 +522,7 @@ class _StatsPageState extends State<_StatsPage> {
       body: Stack(
         children: [
           RefreshIndicator(
-          onRefresh: _refresh,
+            onRefresh: _refresh,
             child: _buildStatsList(
               context,
               cooling,
@@ -560,8 +560,8 @@ class _StatsPageState extends State<_StatsPage> {
     int lifetimeMalas,
   ) {
     return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
+      padding: const EdgeInsets.all(16),
+      children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
@@ -620,8 +620,8 @@ class _StatsPageState extends State<_StatsPage> {
                         child: Text(
                           '🔥 $streak',
                           style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
@@ -678,49 +678,49 @@ class _StatsPageState extends State<_StatsPage> {
           },
         ),
         const SizedBox(height: 16),
-          Row(
-            children: [
+        Row(
+          children: [
             Expanded(
               child: _NeoTile(
                 title: context.tr('stats.metric.todayJaps'),
                 value: _today.toString(),
               ),
             ),
-              const SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: _NeoTile(
                 title: context.tr('stats.metric.todayMalas'),
                 value: todayMalas.toString(),
               ),
             ),
-              const SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: _NeoTile(
                 title: context.tr('stats.metric.lifetimeMalas'),
                 value: lifetimeMalas.toString(),
               ),
             ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
             Expanded(
               child: _NeoTile(
                 title: context.tr('stats.metric.todayMeditation'),
                 value: _todayMin.toString(),
               ),
             ),
-              const SizedBox(width: 8),
+            const SizedBox(width: 8),
             Expanded(
               child: _NeoTile(
                 title: context.tr('stats.metric.lifetimeMeditation'),
                 value: _lifetimeMin.toString(),
               ),
             ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          ],
+        ),
+        const SizedBox(height: 16),
         FutureBuilder<int>(
           future: (() async {
             final gs = await GoalStore.create();
@@ -748,7 +748,7 @@ class _StatsPageState extends State<_StatsPage> {
                   Expanded(
                     child: Text(
                       context.tr(
-                      reached
+                        reached
                             ? 'stats.dailyGoal.met'
                             : 'stats.dailyGoal.pending',
                         args: {'todayMalas': '$todayMalas', 'goal': '$goal'},
@@ -804,15 +804,15 @@ class _StatsPageState extends State<_StatsPage> {
                         return Expanded(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Container(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 6,
                                     vertical: 2,
                                   ),
-                                decoration: BoxDecoration(
+                                  decoration: BoxDecoration(
                                     color: theme.colorScheme.surfaceVariant
                                         .withOpacity(0.7),
                                     borderRadius: BorderRadius.circular(8),
@@ -846,7 +846,7 @@ class _StatsPageState extends State<_StatsPage> {
                                             .withOpacity(0.2),
                                         blurRadius: 4,
                                         offset: const Offset(0, 3),
-                                ),
+                                      ),
                                     ],
                                   ),
                                   alignment: Alignment.topCenter,
@@ -857,9 +857,9 @@ class _StatsPageState extends State<_StatsPage> {
                                           color: theme.colorScheme.onPrimary,
                                         )
                                       : null,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
                                   dayLabel,
                                   style: theme.textTheme.labelSmall?.copyWith(
                                     fontWeight: FontWeight.w600,
@@ -870,8 +870,8 @@ class _StatsPageState extends State<_StatsPage> {
                                   style: theme.textTheme.labelSmall?.copyWith(
                                     fontSize: 10,
                                   ),
-                              ),
-                            ],
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -891,22 +891,22 @@ class _StatsPageState extends State<_StatsPage> {
                 ? context.tr('stats.dedication.empty')
                 : context.tr('stats.dedication.title', args: {'note': note});
             return Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).dividerColor),
-            ),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(Icons.favorite, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
-            child: Text(
+                    child: Text(
                       dedicationText,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: () async {
@@ -951,17 +951,17 @@ class _StatsPageState extends State<_StatsPage> {
             );
           },
         ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 48,
-            child: FilledButton.icon(
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 48,
+          child: FilledButton.icon(
             onPressed: _shareBusy
                 ? null
                 : () async {
-                setState(() => _shareBusy = true);
-                try {
-                  final counter = await CounterStore.create();
-                  final int todayJaps = counter.todayJaps;
+                    setState(() => _shareBusy = true);
+                    try {
+                      final counter = await CounterStore.create();
+                      final int todayJaps = counter.todayJaps;
                       final int lifetimeMalasLocal = counter.lifetimeMalas;
                       final int streakDays =
                           await ActivityStore.currentStreak();
@@ -969,11 +969,11 @@ class _StatsPageState extends State<_StatsPage> {
                         '[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
                       );
                       await openShareMyStreak(
-                    context,
-                    todayJaps: todayJaps,
+                        context,
+                        todayJaps: todayJaps,
                         lifetimeMalas: lifetimeMalasLocal,
-                    streakDays: streakDays,
-                  );
+                        streakDays: streakDays,
+                      );
                     } finally {
                       if (context.mounted) setState(() => _shareBusy = false);
                     }
@@ -987,19 +987,19 @@ class _StatsPageState extends State<_StatsPage> {
                 '[Stats][DEV] Long-press bypass → opening preview directly',
               );
               if (!context.mounted) return;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => StreakSharePreviewPage(
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StreakSharePreviewPage(
                     todayJaps: todayJaps,
                     lifetimeMalas: lifetimeMalasLocal,
                     streakDays: streakDays,
-                        ),
-                      ),
-                    );
+                  ),
+                ),
+              );
             },
-              icon: const Icon(Icons.ios_share),
-              label: Text(
-                _shareBusy
+            icon: const Icon(Icons.ios_share),
+            label: Text(
+              _shareBusy
                   ? context.tr('stats.sharePreparing')
                   : (cooling
                         ? context.tr(
@@ -1010,27 +1010,27 @@ class _StatsPageState extends State<_StatsPage> {
             ),
           ),
         ),
-          const SizedBox(height: 24),
-              FutureBuilder<int>(
-                future: ActivityStore.totalActiveDays(),
-                builder: (context, snap) {
-                  final count = snap.data ?? 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
+        const SizedBox(height: 24),
+        FutureBuilder<int>(
+          future: ActivityStore.totalActiveDays(),
+          builder: (context, snap) {
+            final count = snap.data ?? 0;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
                 context.tr('stats.daysActive', args: {'count': '$count'}),
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  );
-                },
+                style: Theme.of(context).textTheme.bodyLarge,
               ),
+            );
+          },
+        ),
         Text(
           context.tr('stats.calendar'),
           style: Theme.of(context).textTheme.titleMedium,
         ),
-              const SizedBox(height: 6),
+        const SizedBox(height: 6),
         _ActivityCalendar(todayJaps: _today, todayMalas: todayMalas),
-            ],
+      ],
     );
   }
 
@@ -1231,14 +1231,14 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
         const SizedBox(height: 8),
         AspectRatio(
           aspectRatio: 7 / 6,
-      child: GridView.builder(
+          child: GridView.builder(
             padding: EdgeInsets.zero,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 7,
-          mainAxisSpacing: 6,
-          crossAxisSpacing: 6,
-        ),
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+            ),
             itemCount: dates.length,
             itemBuilder: (context, index) {
               final date = dates[index];
@@ -1271,8 +1271,8 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              color: fill,
+                  decoration: BoxDecoration(
+                    color: fill,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: borderColor,
@@ -1287,10 +1287,10 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
                       color: textColor,
                     ),
                   ),
-            ),
-          );
-        },
-      ),
+                ),
+              );
+            },
+          ),
         ),
         const SizedBox(height: 12),
         _buildLegend(context),
