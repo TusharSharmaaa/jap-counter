@@ -1,6 +1,4 @@
 import 'package:audioplayers/audioplayers.dart';
-import 'timer_sound_controller.dart';
-
 enum TimerSoundType { mute, om, birds, water, flute, bell }
 
 String _assetFor(TimerSoundType t) {
@@ -16,7 +14,6 @@ String _assetFor(TimerSoundType t) {
     case TimerSoundType.bell:
       return 'assets/sounds/bell.mp3';
     case TimerSoundType.mute:
-    default:
       return '';
   }
 }

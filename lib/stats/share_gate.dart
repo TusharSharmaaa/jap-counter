@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:async' show unawaited;
-
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../ads/rewarded_share.dart';

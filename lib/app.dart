@@ -9,6 +9,7 @@ import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
 import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
+import 'stats/dedication_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/notification_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -18,8 +19,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'data/activity_store.dart';
-import 'package:jap_counter/data/counter_store.dart';
-import 'package:jap_counter/data/meditation_store.dart';
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
 
@@ -522,16 +521,70 @@ class _StatsPageState extends State<_StatsPage> {
 
 
           // Dedication note placeholder (read-only for now)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).dividerColor),
-            ),
-            child: Text(
-              "Dedication: (coming soon)",
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+          FutureBuilder<String>(
+            future: DedicationStore.get(),
+            builder: (context, snap) {
+              final note = snap.data ?? '';
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.favorite, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        note.isEmpty
+                            ? 'Dedication: (tap edit to add)'
+                            : 'Dedication: $note',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () async {
+                        final controller = TextEditingController(text: note);
+                        final updated = await showDialog<String>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Edit Dedication'),
+                            content: TextField(
+                              controller: controller,
+                              maxLines: 3,
+                              textInputAction: TextInputAction.done,
+                              decoration: const InputDecoration(
+                                hintText: 'e.g., माता-पिता के नाम',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, null),
+                                child: const Text('Cancel'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                                child: const Text('Save'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (updated != null) {
+                          await DedicationStore.set(updated);
+                          if (context.mounted) setState(() {});
+                        }
+                      },
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('Edit'),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
 
           const SizedBox(height: 16),

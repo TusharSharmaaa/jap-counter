@@ -359,32 +359,31 @@ class _TimerPageState extends State<TimerPage> {
     final isPaused = _state == _TimerState.paused;
     final isIdle = _state == _TimerState.idle;
 
-    return WillPopScope(
-      onWillPop: () async {
-        if (_state == _TimerState.running) {
-          final confirm = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('साधना चल रही है'),
-              content: const Text('क्या आप ध्यान रोककर बाहर जाना चाहेंगे?'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('नहीं'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    _stop(); // ensure your stop logic runs
-                    Navigator.pop(ctx, true);
-                  },
-                  child: const Text('हाँ, रोकें'),
-                ),
-              ],
-            ),
-          );
-          return confirm ?? false;
-        }
-        return true;
+    return PopScope(
+      canPop: _state != _TimerState.running,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('साधना चल रही है'),
+            content: const Text('क्या आप ध्यान रोककर बाहर जाना चाहेंगे?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('नहीं'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  _stop();
+                  Navigator.pop(ctx, true);
+                },
+                child: const Text('हाँ, रोकें'),
+              ),
+            ],
+          ),
+        );
+        if (confirm == true && mounted) Navigator.of(context).maybePop();
       },
       child: Scaffold(
         appBar: AppBar(

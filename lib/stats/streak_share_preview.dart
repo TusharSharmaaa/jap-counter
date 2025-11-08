@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dedication_store.dart';
 
 class StreakSharePreviewPage extends StatefulWidget {
   final int todayJaps;
@@ -123,6 +124,24 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage> {
                 Text("Today’s Japs: $todayJaps"),
                 Text("Lifetime Malas: $lifetimeMalas"),
                 Text("Streak: $streakDays days"),
+                FutureBuilder<String>(
+                  future: DedicationStore.get(),
+                  builder: (context, snap) {
+                    final dedication = snap.data ?? '';
+                    if (dedication.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        '💠 समर्पण: $dedication',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontStyle: FontStyle.italic,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 8),
                 const Text(
                   "Preview — share opens image",
