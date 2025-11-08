@@ -252,6 +252,33 @@ class _CounterPageState extends State<_CounterPage> {
     });
   }
 
+  Future<void> _showLevelUpDialog(int newLevel) async {
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.emoji_events, size: 26),
+              const SizedBox(width: 8),
+              const Text('Level Up!'),
+            ],
+          ),
+          content: Text('You reached Level $newLevel.\nKeep the साधना flowing ✨'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('जय राधे'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _inc() async {
     final s = _store;
     if (s == null) return;
@@ -261,9 +288,16 @@ class _CounterPageState extends State<_CounterPage> {
     await s.increment();
 
     try {
-      await GamifyStore.addXp(1);
-      if ((willBe % 108) == 0) {
-        await GamifyStore.addXp(20);
+      final xpRes = await GamifyStore.addXp(1);
+      if (xpRes['leveledUp'] == true) {
+        try {
+          HapticFeedback.mediumImpact();
+        } catch (_) {}
+        try {
+          final bell = AudioPlayer();
+          await bell.play(AssetSource('sounds/bell.mp3'));
+        } catch (_) {}
+        await _showLevelUpDialog(xpRes['level'] as int? ?? 1);
       }
     } catch (_) {}
 // If this was the first jap of the day, mark today as active
@@ -304,22 +338,35 @@ class _CounterPageState extends State<_CounterPage> {
 
     // Stronger feedback + toast on completing a mala (108, 216, 324, ...)
     if (willBe % 108 == 0) {
-      HapticFeedback.mediumImpact();
-      // Trigger pulse animation
+      try {
+        HapticFeedback.mediumImpact();
+      } catch (_) {}
       setState(() => _pulse = true);
       Future.delayed(const Duration(milliseconds: 250), () {
         if (mounted) setState(() => _pulse = false);
       });
-
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('🎯 Mala completed!'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      try {
+        final xpRes = await GamifyStore.addXp(20);
+        final next = xpRes['nextThreshold'] as int? ?? 0;
+        final xp = xpRes['xp'] as int? ?? 0;
+        final level = xpRes['level'] as int? ?? 1;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('🎯 Mala completed!  +20 XP  •  Level $level  ($xp/$next)'),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        if (xpRes['leveledUp'] == true) {
+          try {
+            final bell = AudioPlayer();
+            await bell.play(AssetSource('sounds/bell.mp3'));
+          } catch (_) {}
+          await _showLevelUpDialog(level);
+        }
+      } catch (_) {}
     }
 
     setState(() {

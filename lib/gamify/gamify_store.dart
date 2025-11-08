@@ -21,6 +21,7 @@ class GamifyStore {
     final prefs = await SharedPreferences.getInstance();
     var currentXp = prefs.getInt(_kXp) ?? 0;
     var level = prefs.getInt(_kLevel) ?? 1;
+    final previousLevel = level;
 
     currentXp += delta;
     var leveled = false;
@@ -38,6 +39,8 @@ class GamifyStore {
       'xp': currentXp,
       'level': level,
       'leveledUp': leveled,
+      'prevLevel': previousLevel,
+      'nextThreshold': _xpForNext(level),
     };
   }
 
