@@ -30,6 +30,7 @@ import 'gamify/gamify_store.dart';
 import 'theme/theme.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'sync/sync_service.dart';
+import 'analytics/local_summary.dart';
 import 'utils/streak_image_generator.dart';
 import 'utils/weekly_chart_data.dart';
 
@@ -1012,6 +1013,30 @@ class _StatsPageState extends State<_StatsPage> {
             },
           ),
         ),
+        FutureBuilder<LocalSummary>(
+          future: LocalSummary.load(),
+          builder: (context, snap) {
+            final data = snap.data;
+            if (data == null) return const SizedBox.shrink();
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _summaryItem('Total Japs', '${data.totalJaps}'),
+                  _summaryItem('Total Malas', '${data.totalMalas}'),
+                  _summaryItem('Minutes', '${data.totalMinutes}'),
+                  _summaryItem('Streak', '${data.streakDays}d'),
+                ],
+              ),
+            );
+          },
+        ),
         FutureBuilder<Map<String, dynamic>>(
           future: _loadInsightSummary(),
           builder: (context, snapshot) {
@@ -1353,6 +1378,23 @@ class _StatsPageState extends State<_StatsPage> {
               const SizedBox(height: 6),
               const _ActivityCalendar(days: 35),
             ],
+    );
+  }
+
+  Widget _summaryItem(String title, String value) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Text(
+          value,
+          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          title,
+          style: theme.textTheme.labelSmall,
+        ),
+      ],
     );
   }
 }

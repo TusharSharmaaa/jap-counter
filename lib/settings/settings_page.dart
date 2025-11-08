@@ -1,6 +1,3 @@
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -9,10 +6,16 @@ import 'package:share_plus/share_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../notifications/notification_service.dart';
+import '../data/goal_store.dart';
+import '../data/counter_store.dart';
+import '../data/activity_store.dart';
+import '../data/meditation_store.dart';
+import '../data/session_store.dart';
+import '../data/dedication_store.dart';
+import '../data/backup_service.dart';
 import '../legal/privacy_policy.dart';
 import '../legal/terms_conditions.dart';
 import '../ui/glow_card.dart';
-import '../utils/backup_manager.dart';
 
 class SettingsPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -31,6 +34,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _reminders = false;
   bool _soundHaptics = true; // UI only; wire up when preferences exist
+  int _goalMalas = 1;
 
   static const _keyReminders = 'notificationsEnabled';
 
@@ -42,9 +46,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    final gs = await GoalStore.create();
     if (!mounted) return;
     setState(() {
       _reminders = prefs.getBool(_keyReminders) ?? true;
+      _goalMalas = gs.dailyMalasGoal;
     });
   }
 
@@ -147,6 +153,58 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _sectionHeader(context, Icons.flag, 'Daily Goal'),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Target Malas per Day',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Set a simple, consistent daily target',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text('$_goalMalas'),
+                    ],
+                  ),
+                  Slider(
+                    min: 1,
+                    max: 20,
+                    divisions: 19,
+                    value: _goalMalas.toDouble(),
+                    label: '$_goalMalas',
+                    onChanged: (v) => setState(() => _goalMalas = v.round()),
+                    onChangeEnd: (v) async {
+                      final gs = await GoalStore.create();
+                      await gs.setDailyMalasGoal(v.round());
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Daily goal updated'),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: GlowCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   _sectionHeader(context, Icons.volume_up, 'Sound'),
                   const SizedBox(height: 8),
                   Row(
@@ -187,48 +245,65 @@ class _SettingsPageState extends State<SettingsPage> {
                     onTap: () => Navigator.of(context)
                         .push(MaterialPageRoute(builder: (_) => const TermsConditionsPage())),
                   ),
-                  const SizedBox(height: 12),
-                  ListTile(
-                    leading: const Icon(Icons.backup),
-                    title: const Text('Export Backup'),
-                    subtitle: const Text('Save your jap progress locally'),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    onTap: () async {
-                      final path = await BackupManager.exportBackup();
-                      await Share.shareXFiles(
-                        [XFile(path)],
-                        text: 'मेरा Radha Jap Counter बैकअप',
+                  const SizedBox(height: 16),
+                  _rateCard(context),
+                ],
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: GlowCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionHeader(context, Icons.backup, 'Data Management'),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.cloud_upload),
+                    label: const Text('Export Backup'),
+                    onPressed: () async {
+                      await BackupService.exportToJson();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.delete_forever),
+                    label: const Text('Reset All Data'),
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text('Confirm Reset'),
+                          content: const Text(
+                            'This will erase all jap, meditation, and streak data permanently. Continue?',
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Reset')),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true) return;
+
+                      final counter = await CounterStore.create();
+                      await counter.resetAll();
+                      await ActivityStore.resetAll();
+                      final meditation = await MeditationStore.create();
+                      await meditation.resetAll();
+                      final sessions = await SessionStore.create();
+                      await sessions.clear();
+                      final goal = await GoalStore.create();
+                      await goal.setDailyMalasGoal(1);
+                      final dedication = await DedicationStore.create();
+                      await dedication.setNote('');
+
+                      if (!mounted) return;
+                      await _load();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('All data reset successfully.')),
                       );
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.restore),
-                    title: const Text('Import Backup'),
-                    subtitle: const Text('Restore from a saved JSON file'),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    onTap: () async {
-                      final picker = FilePicker.platform;
-                      final file = await picker.pickFiles(type: FileType.any);
-                      if (file != null && file.files.single.path != null) {
-                        try {
-                          await BackupManager.importBackup(File(file.files.single.path!));
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Backup restored successfully 🌸')),
-                            );
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Backup restore failed: $e')),
-                            );
-                          }
-                        }
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _rateCard(context),
                 ],
               ),
             ),
