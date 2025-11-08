@@ -5,6 +5,8 @@ import 'timer_sound_controller.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../ads/interstitial_timer.dart';
 import '../data/meditation_store.dart';
+import 'package:share_plus/share_plus.dart';
+
 import 'timer_prefs.dart';
 import '../data/meditation_store.dart'; // keep this if not already added
 enum _TimerState { idle, running, paused, completed }
@@ -209,25 +211,31 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     });
 
     if (mounted) {
-      await showDialog<void>(
+      await showDialog(
         context: context,
-        barrierDismissible: true,
+        barrierDismissible: false,
         builder: (context) {
+          final minutes = _selectedMinutes; // or your session duration variable
           return AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            title: const Text('साधना पूर्ण हुई'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('🌼 साधना पूर्ण हुई', textAlign: TextAlign.center),
             content: Text(
-              'आपने ${_formatDuration(_total)} ध्यान पूर्ण किया।',
-              style: Theme
-                  .of(context)
-                  .textTheme
-                  .bodyMedium,
+              'आपने $minutes मिनट ध्यान किया।',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge,
             ),
+            actionsAlignment: MainAxisAlignment.center,
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).maybePop(),
-                child: const Text('ठीक है'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  // TODO: add sharing functionality here later
+                },
+                child: const Text('Share Blessing'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Done'),
               ),
             ],
           );
