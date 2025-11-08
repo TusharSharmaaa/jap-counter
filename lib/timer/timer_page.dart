@@ -227,9 +227,10 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
             actionsAlignment: MainAxisAlignment.center,
             actions: [
               TextButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(context);
-                  // TODO: add sharing functionality here later
+                  final minutes = _selectedMinutes; // uses your current session duration
+                  await Share.share('साधना पूर्ण हुई — मैंने $minutes मिनट ध्यान किया। Radha Jap Counter के साथ।');
                 },
                 child: const Text('Share Blessing'),
               ),
