@@ -12,6 +12,23 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'dedication_store.dart';
+import '../theme/brand.dart';
+
+String _toHindiDigits(int number) {
+  const mapping = {
+    '0': '०',
+    '1': '१',
+    '2': '२',
+    '3': '३',
+    '4': '४',
+    '5': '५',
+    '6': '६',
+    '7': '७',
+    '8': '८',
+    '9': '९',
+  };
+  return number.toString().split('').map((d) => mapping[d] ?? d).join();
+}
 
 class StreakSharePreviewPage extends StatefulWidget {
   final int todayJaps;
@@ -169,11 +186,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(24),
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFFFD54F), Color(0xFFFFB300)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
+                              gradient: BrandGradients.shareCard(),
                               border: Border.all(color: Colors.amber, width: 2),
                               boxShadow: [
                                 BoxShadow(
@@ -184,92 +197,95 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                                 ),
                               ],
                             ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.max,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '🌸 मेरा साधना सफर 🌸',
-                                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.brown.shade800,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.center,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '🌸 मेरा साधना सफर 🌸',
+                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.brown.shade800,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.20),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: Colors.amber.withValues(alpha: 0.6),
+                                        width: 1,
                                       ),
-                                ),
-                                const SizedBox(height: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.20),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: Colors.amber.withValues(alpha: 0.6),
-                                      width: 1,
+                                    ),
+                                    child: Text(
+                                      '🔥 ${_toHindiDigits(widget.streakDays)} दिन की साधना',
+                                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.brown.shade800,
+                                            letterSpacing: 0.3,
+                                          ),
                                     ),
                                   ),
-                                  child: Text(
-                                    '🔥 ${widget.streakDays} day streak',
-                                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.brown.shade800,
-                                          letterSpacing: 0.3,
-                                        ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _localeReady
-                                      ? DateFormat('d MMMM yyyy', 'hi_IN').format(DateTime.now())
-                                      : DateFormat.yMMMMd().format(DateTime.now()),
-                                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                        color: Colors.brown.shade700,
-                                      ),
-                                ),
-                                const Divider(thickness: 1, height: 24),
-                                _statRow('आज के जाप', widget.todayJaps.toString()),
-                                _statRow('जीवन भर के माला', widget.lifetimeMalas.toString()),
-                                _statRow('अभ्यास के दिन', widget.streakDays.toString()),
-                                const SizedBox(height: 16),
-                                if (_dedication != null && _dedication!.isNotEmpty)
+                                  const SizedBox(height: 8),
                                   Text(
-                                    '💠 समर्पण: ${_dedication!}',
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                          color: Colors.deepOrange.shade900,
-                                          fontStyle: FontStyle.italic,
+                                    _localeReady
+                                        ? DateFormat('d MMMM yyyy', 'hi_IN').format(DateTime.now())
+                                        : DateFormat.yMMMMd().format(DateTime.now()),
+                                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                          color: Colors.brown.shade700,
                                         ),
                                   ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'साधना निरंतर 🌼',
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.brown.shade700,
-                                      ),
-                                ),
-                                const SizedBox(height: 16),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.temple_hindu,
-                                        size: 14,
-                                        color: Colors.brown.shade800.withValues(alpha: 0.55),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Radha Jap Counter',
-                                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                              color: Colors.brown.shade800.withValues(alpha: 0.55),
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.3,
-                                            ),
-                                      ),
-                                    ],
+                                  const Divider(thickness: 1, height: 24),
+                                  _statRow('आज के जाप', widget.todayJaps),
+                                  _statRow('जीवन भर के माला', widget.lifetimeMalas),
+                                  _statRow('अभ्यास के दिन', widget.streakDays),
+                                  const SizedBox(height: 16),
+                                  if (_dedication != null && _dedication!.isNotEmpty)
+                                    Text(
+                                      '💠 समर्पण: ${_dedication!}',
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                            color: Colors.deepOrange.shade900,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                    ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'साधना निरंतर 🌼',
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.brown.shade700,
+                                        ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 16),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.temple_hindu,
+                                          size: 14,
+                                          color: Colors.brown.shade800.withValues(alpha: 0.55),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Radha Jap Counter',
+                                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                                color: Colors.brown.shade800.withValues(alpha: 0.55),
+                                                fontWeight: FontWeight.w600,
+                                                letterSpacing: 0.3,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -323,7 +339,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
     );
   }
 
-  Widget _statRow(String label, String value) {
+  Widget _statRow(String label, int value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -334,7 +350,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           ),
           Text(
-            value,
+            _toHindiDigits(value),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
         ],

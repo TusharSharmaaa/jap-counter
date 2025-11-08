@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 
 // Ads + API
 import 'package:jap_counter/ads/test_native.dart';
@@ -53,6 +56,63 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   Future<void> _shareQuote() async {
     final text = "🌸 ${_quotes[_quoteIndex]}\n— Radha Jap Counter";
     await Share.share(text);
+  }
+
+  Future<void> _shareQuoteImage(String quote, String reference) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    const size = ui.Size(1080, 1080);
+
+    final background = ui.Paint()..color = const Color(0xFFFFF8E1);
+    canvas.drawRect(ui.Offset.zero & size, background);
+
+    final quotePainter = TextPainter(
+      text: TextSpan(
+        text: quote,
+        style: const TextStyle(
+          fontSize: 44,
+          color: Colors.black87,
+          height: 1.5,
+          fontFamily: 'NotoSansDevanagari',
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )
+      ..layout(maxWidth: size.width - 160);
+    quotePainter.paint(canvas, const ui.Offset(80, 260));
+
+    final refPainter = TextPainter(
+      text: TextSpan(
+        text: reference,
+        style: const TextStyle(fontSize: 36, color: Colors.black54),
+      ),
+      textDirection: TextDirection.ltr,
+    )
+      ..layout(maxWidth: size.width - 160);
+    refPainter.paint(canvas, const ui.Offset(80, 920));
+
+    final footerPainter = TextPainter(
+      text: const TextSpan(
+        text: 'Radha Jap Counter',
+        style: TextStyle(fontSize: 34, color: Colors.brown, fontWeight: FontWeight.w600),
+      ),
+      textDirection: TextDirection.ltr,
+    )
+      ..layout();
+    footerPainter.paint(canvas, const ui.Offset(80, 980));
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(size.width.toInt(), size.height.toInt());
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final pngBytes = byteData!.buffer.asUint8List();
+
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/gita_quote_${DateTime.now().millisecondsSinceEpoch}.png');
+    await file.writeAsBytes(pngBytes);
+
+    await Share.shareXFiles([
+      XFile(file.path),
+    ], text: '📖 श्रीमद् भगवद् गीता से प्रेरणा');
   }
 
   // -------- GITA HELPERS (cached service + prefetch) --------
@@ -152,6 +212,19 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                   ),
                 ),
               ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.image),
+                    tooltip: 'Share as Image',
+                    onPressed: () async {
+                      final quote = _quotes[_quoteIndex];
+                      await _shareQuoteImage(quote, 'Radha Jap Counter');
+                    },
+                  ),
+                ],
+              ),
               const SizedBox(height: 16),
               // Native Ad below quotes
               Padding(
@@ -245,6 +318,19 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                       icon: const Icon(Icons.share),
                       label: const Text("Share"),
                     ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.image),
+                        tooltip: 'Share as Image',
+                        onPressed: () async {
+                          final reference = "अध्याय ${v.chapter}, श्लोक ${v.verse}";
+                          await _shareQuoteImage(v.hindi, reference);
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   const _NativeAdReserve(), // keep a slot here too (optional)

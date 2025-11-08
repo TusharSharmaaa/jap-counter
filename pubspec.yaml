@@ -45,6 +45,7 @@ dependencies:
   path_provider: ^2.1.5
   http: ^1.5.0
   font_awesome_flutter: ^10.7.0
+  confetti: ^0.7.0
 
   # Icons
   cupertino_icons: ^1.0.8

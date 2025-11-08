@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:confetti/confetti.dart';
 
 import 'stats/streak_share_preview.dart';
 import 'ads/rewarded.dart';
@@ -409,8 +410,7 @@ class _StatsPage extends StatefulWidget {
 class _StatsPageState extends State<_StatsPage> {
   final RewardedGate _gate = RewardedGate();
   bool _shareBusy = false;
-
-  CounterStore? _store;
+  late final ConfettiController _confetti;
   bool _loading = true;
   int _today = 0;
   int _lifetime = 0;
@@ -420,11 +420,18 @@ class _StatsPageState extends State<_StatsPage> {
   @override
   void initState() {
     super.initState();
+    _confetti = ConfettiController(duration: const Duration(seconds: 3));
     _init();
 
     // Warm up the rewarded ad in the background
     // ignore: unawaited_futures
     _gate.load();
+  }
+
+  @override
+  void dispose() {
+    _confetti.dispose();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -433,7 +440,6 @@ class _StatsPageState extends State<_StatsPage> {
 
     if (!mounted) return;
     setState(() {
-      _store = s;
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
 
@@ -444,6 +450,11 @@ class _StatsPageState extends State<_StatsPage> {
     if (s.todayJaps > 0) {
       await ActivityStore.markTodayActive();
     }
+
+    final streak = await ActivityStore.currentStreak();
+    if ([7, 21, 40].contains(streak)) {
+      _confetti.play();
+    }
   }
 
   Future<void> _init() async {
@@ -453,7 +464,6 @@ class _StatsPageState extends State<_StatsPage> {
     final mstore = await MeditationStore.create();
 
     setState(() {
-      _store = s;
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
       _loading = false;
@@ -467,6 +477,11 @@ class _StatsPageState extends State<_StatsPage> {
       await ActivityStore.markTodayActive();
     }
 
+    final streak = await ActivityStore.currentStreak();
+    if ([7, 21, 40].contains(streak)) {
+      _confetti.play();
+    }
+
   }
 
   @override
@@ -475,7 +490,7 @@ class _StatsPageState extends State<_StatsPage> {
       return Scaffold(
         appBar: AppBar(title: const Text('Stats')),
         body: const Center(child: CircularProgressIndicator()),
-        bottomNavigationBar: const _BannerReserve(), // keep reserved for now
+        bottomNavigationBar: const _BannerReserve(),
       );
     }
 
@@ -489,242 +504,227 @@ class _StatsPageState extends State<_StatsPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Stats')),
-        body: RefreshIndicator(
-          onRefresh: _refresh,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                ),
-                child: FutureBuilder<int>(
-                  future: ActivityStore.currentStreak(),
-                  builder: (context, snap) {
-                    final streak = snap.data ?? 0;
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Current Streak',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '🔥 $streak',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Top tiles
-          Row(
-            children: [
-              Expanded(child: _StatTile(title: "Today's Japs", value: _today.toString())),
-              const SizedBox(width: 8),
-              Expanded(child: _StatTile(title: "Today's Malas", value: todayMalas.toString())),
-              const SizedBox(width: 8),
-              Expanded(child: _StatTile(title: "Lifetime Malas", value: lifetimeMalas.toString())),
-            ],
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _refresh,
+            child: _buildStatsList(context, cooling, remLabel, todayMalas, lifetimeMalas),
           ),
-
-          const SizedBox(height: 16),
-
-          // Meditation minutes tiles
-          Row(
-            children: [
-              Expanded(child: _StatTile(title: "Today's Meditation (min)", value: _todayMin.toString())),
-              const SizedBox(width: 8),
-              Expanded(child: _StatTile(title: "Lifetime Meditation (min)", value: _lifetimeMin.toString())),
-            ],
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confetti,
+              blastDirectionality: BlastDirectionality.explosive,
+              emissionFrequency: 0.05,
+              numberOfParticles: 20,
+              colors: const [Colors.orange, Colors.yellow, Colors.pink, Colors.white],
+            ),
           ),
+        ],
+      ),
+      bottomNavigationBar: const _BannerReserve(),
+    );
+  }
 
-          const SizedBox(height: 16),
-
-
-          // Dedication note placeholder (read-only for now)
-          FutureBuilder<String>(
-            future: DedicationStore.get(),
+  Widget _buildStatsList(
+    BuildContext context,
+    bool cooling,
+    String? remLabel,
+    int todayMalas,
+    int lifetimeMalas,
+  ) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Theme.of(context).dividerColor),
+          ),
+          child: FutureBuilder<int>(
+            future: ActivityStore.currentStreak(),
             builder: (context, snap) {
-              final note = snap.data ?? '';
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.favorite, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        note.isEmpty
-                            ? 'Dedication: (tap edit to add)'
-                            : 'Dedication: $note',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
+              final streak = snap.data ?? 0;
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Current Streak',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    const SizedBox(width: 8),
-                    TextButton.icon(
-                      onPressed: () async {
-                        final controller = TextEditingController(text: note);
-                        final updated = await showDialog<String>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Edit Dedication'),
-                            content: TextField(
-                              controller: controller,
-                              maxLines: 3,
-                              textInputAction: TextInputAction.done,
-                              decoration: const InputDecoration(
-                                hintText: 'e.g., माता-पिता के नाम',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, null),
-                                child: const Text('Cancel'),
-                              ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                                child: const Text('Save'),
-                              ),
-                            ],
+                    child: Text(
+                      '🔥 $streak',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
-                        );
-                        if (updated != null) {
-                          await DedicationStore.set(updated);
-                          if (context.mounted) setState(() {});
-                        }
-                      },
-                      icon: const Icon(Icons.edit, size: 18),
-                      label: const Text('Edit'),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               );
             },
           ),
-
-          const SizedBox(height: 16),
-
-          // Share My Streak (no rewarded, no image yet)
-          SizedBox(
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: _shareBusy ? null : () async {
-                setState(() => _shareBusy = true);
-                try {
-                  // Fresh numbers at tap time
-                  final counter = await CounterStore.create();
-                  final int todayJaps = counter.todayJaps;
-                  final int lifetimeMalas = counter.lifetimeMalas;
-                  final int streakDays = await ActivityStore.currentStreak();
-                  debugPrint('[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalas streakDays=$streakDays');
-                  await openShareMyStreak(
-                    context,
-                    todayJaps: todayJaps,
-                    lifetimeMalas: lifetimeMalas,
-                    streakDays: streakDays,
-                  );
-                } finally {
-                  if (mounted) setState(() => _shareBusy = false);
-                }
-              },
-              onLongPress: () async {
-                // DEV BYPASS: open preview without ad for debugging UI quickly
-                final counter = await CounterStore.create();
-                final int todayJaps = counter.todayJaps;
-                final int lifetimeMalas = counter.lifetimeMalas;
-                final int streakDays = await ActivityStore.currentStreak();
-                debugPrint('[Stats][DEV] Long-press bypass → opening preview directly');
-                if (!context.mounted) return;
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => StreakSharePreviewPage(
-                      todayJaps: todayJaps,
-                      lifetimeMalas: lifetimeMalas,
-                      streakDays: streakDays,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(child: _StatTile(title: "Today's Japs", value: _today.toString())),
+            const SizedBox(width: 8),
+            Expanded(child: _StatTile(title: "Today's Malas", value: todayMalas.toString())),
+            const SizedBox(width: 8),
+            Expanded(child: _StatTile(title: "Lifetime Malas", value: lifetimeMalas.toString())),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(child: _StatTile(title: "Today's Meditation (min)", value: _todayMin.toString())),
+            const SizedBox(width: 8),
+            Expanded(child: _StatTile(title: "Lifetime Meditation (min)", value: _lifetimeMin.toString())),
+          ],
+        ),
+        const SizedBox(height: 16),
+        FutureBuilder<String>(
+          future: DedicationStore.get(),
+          builder: (context, snap) {
+            final note = snap.data ?? '';
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.favorite, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      note.isEmpty ? 'Dedication: (tap edit to add)' : 'Dedication: $note',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
-                );
-              },
-
-              icon: const Icon(Icons.ios_share),
-              label: Text(
-                _shareBusy
-                    ? "Preparing…"
-                    : (cooling ? "Wait ${remLabel ?? ''}" : "Share My Streak"),
-              ),            )
-
-
-          ),
-
-          const SizedBox(height: 24),
-// Days active count
-              FutureBuilder<int>(
-                future: ActivityStore.totalActiveDays(),
-                builder: (context, snap) {
-                  final count = snap.data ?? 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      "Days Active: $count",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  );
-                },
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final controller = TextEditingController(text: note);
+                      final updated = await showDialog<String>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Edit Dedication'),
+                          content: TextField(
+                            controller: controller,
+                            maxLines: 3,
+                            textInputAction: TextInputAction.done,
+                            decoration: const InputDecoration(
+                              hintText: 'e.g., माता-पिता के नाम',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, null),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                              child: const Text('Save'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (updated != null) {
+                        await DedicationStore.set(updated);
+                        if (context.mounted) setState(() {});
+                      }
+                    },
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('Edit'),
+                  ),
+                ],
               ),
-
-              FutureBuilder<int>(
-                future: ActivityStore.currentStreak(),
-                builder: (context, snap) {
-                  final streak = snap.data ?? 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      streak > 0
-                          ? "🔥 Current Streak: $streak day${streak == 1 ? '' : 's'}"
-                          : "No active streak yet",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  );
-                },
-              ),
-
-              // Calendar stub block (we'll wire real data/colors later)
-// Calendar (last 35 days; colored when active)
-              Text("Calendar", style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 6),
-              const _CalendarHeader(),
-              const SizedBox(height: 6),
-              const _WeekdayRow(),
-              const SizedBox(height: 6),
-              const _ActivityCalendar(days: 35),
-            ],
-      ),
+            );
+          },
         ),
-      bottomNavigationBar: const _BannerReserve(), // reserved; no real ad here yet
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 48,
+          child: FilledButton.icon(
+            onPressed: _shareBusy
+                ? null
+                : () async {
+                    setState(() => _shareBusy = true);
+                    try {
+                      final counter = await CounterStore.create();
+                      final int todayJaps = counter.todayJaps;
+                      final int lifetimeMalasLocal = counter.lifetimeMalas;
+                      final int streakDays = await ActivityStore.currentStreak();
+                      debugPrint('[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays');
+                      await openShareMyStreak(
+                        context,
+                        todayJaps: todayJaps,
+                        lifetimeMalas: lifetimeMalasLocal,
+                        streakDays: streakDays,
+                      );
+                    } finally {
+                      if (context.mounted) setState(() => _shareBusy = false);
+                    }
+                  },
+            onLongPress: () async {
+              final counter = await CounterStore.create();
+              final int todayJaps = counter.todayJaps;
+              final int lifetimeMalasLocal = counter.lifetimeMalas;
+              final int streakDays = await ActivityStore.currentStreak();
+              debugPrint('[Stats][DEV] Long-press bypass → opening preview directly');
+              if (!context.mounted) return;
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StreakSharePreviewPage(
+                    todayJaps: todayJaps,
+                    lifetimeMalas: lifetimeMalasLocal,
+                    streakDays: streakDays,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.ios_share),
+            label: Text(
+              _shareBusy
+                  ? 'Preparing…'
+                  : (cooling ? 'Wait ${remLabel ?? ''}' : 'Share My Streak'),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        FutureBuilder<int>(
+          future: ActivityStore.totalActiveDays(),
+          builder: (context, snap) {
+            final count = snap.data ?? 0;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Days Active: $count',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            );
+          },
+        ),
+        Text('Calendar', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        const _CalendarHeader(),
+        const SizedBox(height: 6),
+        const _WeekdayRow(),
+        const SizedBox(height: 6),
+        const _ActivityCalendar(days: 35),
+      ],
     );
   }
 }
