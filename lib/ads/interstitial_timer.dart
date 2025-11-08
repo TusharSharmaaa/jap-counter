@@ -1,60 +1,90 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-/// Shows a single interstitial per app session after a meditation completes.
-/// Uses Google's TEST interstitial ID during development.
+/// Shows one interstitial after a completed meditation session,
+/// with a soft cooldown to avoid spamming.
 class TimerInterstitialGate {
   TimerInterstitialGate._();
+
   static final TimerInterstitialGate instance = TimerInterstitialGate._();
+  static const String _testUnitId = 'ca-app-pub-3940256099942544/1033173712';
 
   InterstitialAd? _ad;
+  bool _loading = false;
   bool _shownThisSession = false;
+  DateTime? _lastShownAt;
+  static const _cooldown = Duration(minutes: 3);
 
-  static const String _testInterstitialId =
-      'ca-app-pub-3940256099942544/1033173712'; // test ID
-  static const String _adUnitId = _testInterstitialId;
+  bool get _inCooldown {
+    if (_lastShownAt == null) return false;
+    return DateTime.now().difference(_lastShownAt!) < _cooldown;
+  }
 
-  /// Preload if we don't already have one and haven't shown this session.
   Future<void> preload() async {
-    if (_shownThisSession) return;
-    if (_ad != null) return;
+    if (_ad != null || _loading) return;
+    _loading = true;
 
     await InterstitialAd.load(
-      adUnitId: _adUnitId,
+      adUnitId: _testUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _ad = ad;
+          _loading = false;
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdShowedFullScreenContent: (ad) {
+              if (kDebugMode) debugPrint('[TimerInterstitial] shown');
+            },
+            onAdDismissedFullScreenContent: (ad) {
+              if (kDebugMode) debugPrint('[TimerInterstitial] dismissed');
+              _dispose();
+            },
+            onAdFailedToShowFullScreenContent: (ad, err) {
+              if (kDebugMode) debugPrint('[TimerInterstitial] failed: $err');
+              _dispose();
+            },
+          );
+          if (kDebugMode) debugPrint('[TimerInterstitial] loaded');
         },
         onAdFailedToLoad: (err) {
+          _loading = false;
           _ad = null;
+          if (kDebugMode) debugPrint('[TimerInterstitial] load failed: $err');
         },
       ),
     );
   }
 
-  /// Show if ready and not already shown this session.
   Future<void> maybeShow() async {
-    if (_shownThisSession) return;
+    if (_shownThisSession || _inCooldown) {
+      if (kDebugMode) debugPrint('[TimerInterstitial] skip (session or cooldown)');
+      return;
+    }
+
     final ad = _ad;
-    if (ad == null) return;
+    if (ad == null) {
+      if (kDebugMode) debugPrint('[TimerInterstitial] no ad → preload');
+      unawaited(preload());
+      return;
+    }
 
-    _ad = null; // consume it
     _shownThisSession = true;
-
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (ad) {
-        ad.dispose();
-      },
-      onAdFailedToShowFullScreenContent: (ad, err) {
-        ad.dispose();
-      },
-    );
+    _lastShownAt = DateTime.now();
 
     await ad.show();
+
+    unawaited(preload());
   }
 
-  /// (Optional for dev/testing) Call this to allow another show in same session.
-  void resetForTesting() {
+  void resetSession() {
     _shownThisSession = false;
+  }
+
+  void _dispose() {
+    try {
+      _ad?.dispose();
+    } catch (_) {}
+    _ad = null;
   }
 }

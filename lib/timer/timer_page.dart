@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../theme/brand.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:lottie/lottie.dart';
@@ -110,6 +111,7 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     if (_state == _TimerState.running) return;
     HapticFeedback.lightImpact();
 
+    TimerInterstitialGate.instance.resetSession();
     _completionShown = false; // reset completion guard for new session
 
     setState(() {
@@ -363,7 +365,7 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
 
     return PopScope(
       canPop: _state != _TimerState.running,
-      onPopInvoked: (didPop) async {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         final confirm = await showDialog<bool>(
           context: context,
@@ -395,21 +397,7 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
         body: AnimatedContainer(
           duration: const Duration(milliseconds: 600),
           curve: Curves.easeInOut,
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: const Alignment(0, -0.4),
-              radius: 1.2,
-              colors: isRunning
-                  ? [
-                theme.colorScheme.primary.withValues(alpha: 0.15),
-                theme.colorScheme.surface,
-              ]
-                  : [
-                theme.colorScheme.surface,
-                theme.colorScheme.surface,
-              ],
-            ),
-          ),
+          decoration: BrandGradients.timerBackground(context, isRunning: isRunning),
           child: SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -550,6 +538,16 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     );
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (_state == _TimerState.running) {
+        _pause();
+        if (kDebugMode) debugPrint('[Timer] Auto-paused on background.');
+      }
+    }
+  }
+
   // Helper to build a sound ChoiceChip
   Widget _soundChip(String label, TimerSoundType t) {
     final selected = _selectedSound == t;
@@ -560,13 +558,4 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     );
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      if (_state == _TimerState.running) {
-        _pause();
-        if (kDebugMode) debugPrint('[Timer] Auto-paused on background.');
-      }
-    }
-  }
 }
