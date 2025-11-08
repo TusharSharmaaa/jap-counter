@@ -26,6 +26,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'data/activity_store.dart';
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
+import 'theme/neumorph.dart';
+import 'gamify/gamify_store.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'ads/interstitial_timer.dart';
 
@@ -134,14 +136,34 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       darkTheme: _darkTheme,
       themeMode: _themeMode,
       home: Scaffold(
-        body: _index == 4
-            ? SettingsPage(
-          themeMode: _themeMode,
-          onThemeModeChanged: (mode) {
-            setState(() => _themeMode = mode);
-            _saveThemeMode(mode);
-          },        )
-            : _pages[_index],
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final offset = Tween<Offset>(
+              begin: const Offset(0.03, 0.02),
+              end: Offset.zero,
+            ).animate(animation);
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(position: offset, child: child),
+            );
+          },
+          child: (_index == 4)
+              ? SettingsPage(
+                  key: const ValueKey('settings'),
+                  themeMode: _themeMode,
+                  onThemeModeChanged: (mode) {
+                    setState(() => _themeMode = mode);
+                    _saveThemeMode(mode);
+                  },
+                )
+              : KeyedSubtree(
+                  key: ValueKey('tab-$_index'),
+                  child: _pages[_index],
+                ),
+        ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: (i) {
@@ -237,6 +259,13 @@ class _CounterPageState extends State<_CounterPage> {
     final wasZero = _today == 0;            // track 0 → 1 transition
     final willBe = _today + 1; // value after this tap
     await s.increment();
+
+    try {
+      await GamifyStore.addXp(1);
+      if ((willBe % 108) == 0) {
+        await GamifyStore.addXp(20);
+      }
+    } catch (_) {}
 // If this was the first jap of the day, mark today as active
     if (wasZero) {
       await ActivityStore.markTodayActive();
@@ -246,6 +275,10 @@ class _CounterPageState extends State<_CounterPage> {
       final streak = await ActivityStore.currentStreak();
       if (!mounted) return;
       if (streak == 7 || streak == 21 || streak == 40) {
+        try {
+          await GamifyStore.awardBadge('streak_$streak');
+          await GamifyStore.addXp(30);
+        } catch (_) {}
         try {
           HapticFeedback.mediumImpact();
         } catch (_) {}
@@ -397,6 +430,33 @@ class _StatTile extends StatelessWidget {
   }
 }
 
+class _NeoTile extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _NeoTile({required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 72,
+      decoration: Neo.card(context),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.labelMedium),
+          const Spacer(),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MalaProgress extends StatelessWidget {
   final int todayJaps;
   const _MalaProgress({required this.todayJaps});
@@ -476,6 +536,12 @@ class _StatsPageState extends State<_StatsPage> {
   Future<void> _saveAmbiencePref(bool v) async {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_ambienceKey, v);
+  }
+
+  Future<Map<String, dynamic>> _loadLevelSnapshot() async {
+    final xp = await GamifyStore.xp();
+    final level = await GamifyStore.level();
+    return {'xp': xp, 'level': level};
   }
 
   void onBecameVisible() {
@@ -666,22 +732,79 @@ class _StatsPageState extends State<_StatsPage> {
             },
           ),
         ),
+        FutureBuilder<Map<String, dynamic>>(
+          future: _loadLevelSnapshot(),
+          builder: (context, snapshot) {
+            final xp = (snapshot.data?['xp'] ?? 0) as int;
+            final level = (snapshot.data?['level'] ?? 1) as int;
+            final next = 100 + (level - 1) * 50;
+            final progress = (xp / next).clamp(0.0, 1.0);
+
+            return Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: Neo.pill(context),
+              child: Row(
+                children: [
+                  Text('Level $level', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(value: progress, minHeight: 8),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('$xp/$next', style: Theme.of(context).textTheme.labelMedium),
+                ],
+              ),
+            );
+          },
+        ),
+        FutureBuilder<Set<String>>(
+          future: GamifyStore.badges(),
+          builder: (context, snapshot) {
+            final badges = snapshot.data ?? <String>{};
+            if (badges.isEmpty) return const SizedBox.shrink();
+
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: badges.map((badge) {
+                  final label = switch (badge) {
+                    'streak_7' => '🔥 7-day Streak',
+                    'streak_21' => '🔥 21-day Streak',
+                    'streak_40' => '🔥 40-day Streak',
+                    _ => badge,
+                  };
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: Neo.pill(context),
+                    child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+                  );
+                }).toList(),
+              ),
+            );
+          },
+        ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _StatTile(title: "Today's Japs", value: _today.toString())),
+            Expanded(child: _NeoTile(title: "Today's Japs", value: _today.toString())),
             const SizedBox(width: 8),
-            Expanded(child: _StatTile(title: "Today's Malas", value: todayMalas.toString())),
+            Expanded(child: _NeoTile(title: "Today's Malas", value: todayMalas.toString())),
             const SizedBox(width: 8),
-            Expanded(child: _StatTile(title: "Lifetime Malas", value: lifetimeMalas.toString())),
+            Expanded(child: _NeoTile(title: "Lifetime Malas", value: lifetimeMalas.toString())),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _StatTile(title: "Today's Meditation (min)", value: _todayMin.toString())),
+            Expanded(child: _NeoTile(title: "Today's Meditation (min)", value: _todayMin.toString())),
             const SizedBox(width: 8),
-            Expanded(child: _StatTile(title: "Lifetime Meditation (min)", value: _lifetimeMin.toString())),
+            Expanded(child: _NeoTile(title: "Lifetime Meditation (min)", value: _lifetimeMin.toString())),
           ],
         ),
         const SizedBox(height: 16),
