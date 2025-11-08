@@ -1,8 +1,9 @@
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+
+import '../data/dedication_store.dart';
 
 class NotificationService {
   NotificationService._();
@@ -11,20 +12,6 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
-
-  // Devotional lines (Hindi) — short, respectful, non-intrusive
-  static final List<String> _messages = [
-    'हर मंत्र एक कदम है — साधना जारी रखें।',
-    'ख़ामोशी में शक्ति है — आज का ध्यान पूरा करें।',
-    '108 नहीं भी हो तो क्या — आज की शुरुआत यहीं से।',
-    'माला गिनती नहीं, मन गवाही देता है — जुड़िए।',
-    'थोड़ा-थोड़ा, रोज़-रोज़ — यही है तप।',
-    'नियत पक्की हो, तो समय खुद जगह देता है।',
-    'श्वासों की गिनती छोड़िए, जाप पकड़िए।',
-    'जहां ध्यान, वहीं धाम — 5 मिनट अभी।',
-    'धीरे-धीरे, पर ठहरे रहें — साधना वहीं खिलती है।',
-    'आज की शांति, कल की शक्ति बनती है।',
-  ];
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'bhakti_daily_channel',
@@ -86,9 +73,24 @@ class NotificationService {
   Future<void> scheduleDefaults() async {
     await cancelAll(); // idempotent: clear then schedule
 
-    await _scheduleDailyAt(hour: 7, minute: 0, id: 700);
-    await _scheduleDailyAt(hour: 12, minute: 0, id: 1200);
-    await _scheduleDailyAt(hour: 18, minute: 0, id: 1800);
+    final dstore = await DedicationStore.create();
+    final userNote = dstore.note.isEmpty ? 'आपकी साधना जारी रहे 🌼' : dstore.note;
+
+    final notifications = [
+      {'id': 700, 'hour': 7, 'minute': 0, 'title': 'सुप्रभात', 'body': 'दिन की शुरुआत करें — $userNote'},
+      {'id': 1200, 'hour': 12, 'minute': 0, 'title': 'मध्याह्न साधना', 'body': 'थोड़ा विराम लें, ध्यान करें 🌸'},
+      {'id': 1800, 'hour': 18, 'minute': 0, 'title': 'संध्या साधना', 'body': 'रात से पहले कुछ पल शांति के 🌙'},
+    ];
+
+    for (final n in notifications) {
+      await _scheduleDailyAt(
+        id: n['id'] as int,
+        hour: n['hour'] as int,
+        minute: n['minute'] as int,
+        title: n['title'] as String,
+        body: n['body'] as String,
+      );
+    }
   }
 
   Future<void> scheduleDynamicJapReminder(int todayJaps) async {
@@ -126,19 +128,23 @@ class NotificationService {
     }
   }
 
-  Future<void> _scheduleDailyAt({required int hour, required int minute, required int id}) async {
+  Future<void> _scheduleDailyAt({
+    required int hour,
+    required int minute,
+    required int id,
+    required String title,
+    required String body,
+  }) async {
     final now = tz.TZDateTime.now(tz.local);
     var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
     if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }
 
-    final msg = _pickMessage();
-
     await _plugin.zonedSchedule(
       id,
-      'भक्ति स्मरण',
-      msg,
+      title,
+      body,
       scheduled,
       NotificationDetails(
         android: AndroidNotificationDetails(
@@ -158,14 +164,7 @@ class NotificationService {
     );
 
     if (kDebugMode) {
-      debugPrint('[Notifications] Scheduled $hour:${minute.toString().padLeft(2, '0')} with: $msg');
+      debugPrint('[Notifications] Scheduled $hour:${minute.toString().padLeft(2, '0')} with: $title');
     }
-  }
-
-  String _pickMessage() {
-    // Random devotional line; could be enhanced with streak/context later
-    final rnd = Random();
-    return _messages[rnd.nextInt(_messages.length)];
-    // Optional: attach a soft CTA like "आज 5 मिनट ध्यान करें"
   }
 }

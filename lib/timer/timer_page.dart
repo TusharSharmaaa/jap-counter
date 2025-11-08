@@ -13,6 +13,7 @@ import 'timer_sound_controller.dart';
 import 'timer_prefs.dart';
 import '../ads/interstitial_timer.dart';
 import '../data/meditation_store.dart';
+import '../data/dedication_store.dart';
 
 enum _TimerState { idle, running, paused, completed }
 
@@ -336,6 +337,15 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
       final store = await MeditationStore.create();
       await store.addMinutes(_total.inMinutes);
     } catch (_) {}
+
+    try {
+      final dstore = await DedicationStore.create();
+      if (dstore.note.isEmpty) {
+        await dstore.setNote("Radha Radha 🙏");
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('[Timer] DedicationStore failed: $e');
+    }
 
     // After dialog: try interstitial once per session
     await TimerInterstitialGate.instance.maybeShow();

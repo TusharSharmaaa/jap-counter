@@ -362,6 +362,13 @@ class _CounterPageState extends State<_CounterPage> {
     // Stronger feedback + toast on completing a mala (108, 216, 324, ...)
     if (willBe % 108 == 0) {
       try {
+        final streak = await ActivityStore.currentStreak();
+        if (streak == 7 || streak == 21 || streak == 40) {
+          final ds = await DedicationStore.create();
+          await ds.setNote('🔥 $streak-Day Streak — साधना निरंतर जारी है!');
+        }
+      } catch (_) {}
+      try {
       HapticFeedback.mediumImpact();
       } catch (_) {}
       setState(() => _pulse = true);
@@ -823,6 +830,20 @@ class _StatsPageState extends State<_StatsPage> {
             builder: (context, snap) {
               final streak = snap.data ?? 0;
               final theme = Theme.of(context);
+              if (streak == 7 || streak == 21 || streak == 40) {
+                if (_confetti.state != ConfettiControllerState.playing) {
+                  _confetti.play();
+                }
+              }
+              final streakMessage = streak > 0
+                  ? (streak == 7
+                      ? '🌸 7-Day Streak — Discipline!'
+                      : streak == 21
+                          ? '🔥 21-Day Streak — Devotion!'
+                          : streak == 40
+                              ? '🌼 40-Day Tapasya — Rare!'
+                              : '✨ Current Streak: $streak days')
+                  : 'No active streak yet';
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -853,6 +874,13 @@ class _StatsPageState extends State<_StatsPage> {
                       padding: const EdgeInsets.only(top: 8),
                       child: StreakBadge(streakDays: streak),
                     ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      streakMessage,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
                 ],
               );
             },
