@@ -11,6 +11,7 @@ import 'content/content_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
 import 'data/dedication_store.dart';
+import 'data/insight_store.dart';
 import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
 import 'stats/stats_ambience.dart';
@@ -25,6 +26,7 @@ import 'theme/neumorph.dart';
 import 'gamify/gamify_store.dart';
 import 'theme/theme.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'sync/sync_service.dart';
 
 
 class App extends StatefulWidget {
@@ -63,6 +65,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       // Ensure a rewarded ad is queued when user comes back to the app
       RewardedShareAd().ensureWarm();
+    } else if (state == AppLifecycleState.paused) {
+      // ignore: unawaited_futures
+      SyncService.syncToday();
     }
   }
   int _index = 0;
@@ -309,6 +314,13 @@ class _CounterPageState extends State<_CounterPage> {
     final wasZero = _today == 0;            // track 0 → 1 transition
     final willBe = _today + 1; // value after this tap
     await s.increment();
+
+    try {
+      final insights = await InsightStore.create();
+      await insights.recordJap(count: 1, malas: willBe % 108 == 0 ? 1 : 0);
+    } catch (e) {
+      debugPrint('[Insights] Record failed: $e');
+    }
 
     try {
       final xpRes = await GamifyStore.addXp(1);
@@ -659,6 +671,15 @@ class _StatsPageState extends State<_StatsPage> {
     await p.setBool(_ambienceKey, v);
   }
 
+  Future<Map<String, dynamic>> _loadInsightSummary() async {
+    final store = await InsightStore.create();
+    return {
+      'todayJaps': store.getTodayJaps(),
+      'todayMalas': store.getTodayMalas(),
+      'tip': store.getRandomTip(),
+    };
+  }
+
   Future<Map<String, dynamic>> _loadLevelSnapshot() async {
     final xp = await GamifyStore.xp();
     final level = await GamifyStore.level();
@@ -885,6 +906,33 @@ class _StatsPageState extends State<_StatsPage> {
               );
             },
           ),
+        ),
+        FutureBuilder<Map<String, dynamic>>(
+          future: _loadInsightSummary(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SizedBox.shrink();
+            }
+            final data = snapshot.data!;
+            final theme = Theme.of(context);
+            final todayJaps = data['todayJaps'] as int? ?? 0;
+            final todayMalasValue = data['todayMalas'] as int? ?? 0;
+            final tip = data['tip'] as String? ?? '';
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const SizedBox(height: 16),
+                Text("📿 Today’s Jap: $todayJaps", style: theme.textTheme.titleMedium),
+                Text("🕉️ Total Malas Today: $todayMalasValue"),
+                const SizedBox(height: 8),
+                Text(
+                  "💡 $tip",
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+                ),
+              ],
+            );
+          },
         ),
         FutureBuilder<int>(
           future: XPStore.create().then((s) => s.totalXP),
