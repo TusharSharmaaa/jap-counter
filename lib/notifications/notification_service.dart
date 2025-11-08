@@ -3,7 +3,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../data/activity_store.dart';
 import '../data/dedication_store.dart';
+import '../data/insight_store.dart';
 
 class NotificationService {
   NotificationService._();
@@ -12,6 +14,8 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+
+  FlutterLocalNotificationsPlugin get plugin => _plugin;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'bhakti_daily_channel',
@@ -68,27 +72,47 @@ class NotificationService {
     await _plugin.cancelAll();
   }
 
-  /// Schedule 3 daily reminders (07:00, 12:00, 18:00 IST) with randomized devotional lines.
-  /// Keeps your previous Settings toggle flow unchanged.
   Future<void> scheduleDefaults() async {
-    await cancelAll(); // idempotent: clear then schedule
+    await cancelAll();
 
     final dstore = await DedicationStore.create();
-    final userNote = dstore.note.isEmpty ? 'आपकी साधना जारी रहे 🌼' : dstore.note;
+    final note = dstore.note.isEmpty ? 'Radha Jap Counter' : dstore.note;
+    final streakDays = await ActivityStore.currentStreak();
+    final streakMsg = (streakDays >= 21)
+        ? '🔥 21+ दिन की निरंतर साधना — अद्भुत है!'
+        : (streakDays >= 7)
+            ? '🌸 7 दिन का अनुशासन — स्थिरता बनाए रखें।'
+            : '🙏 आज भी कुछ पल शांत बैठें।';
+
+    final insights = await InsightStore.create();
+    final malas = insights.getTodayMalas();
+    final body = malas >= 1
+        ? 'आज आपने $malas माला जपी हैं — $streakMsg'
+        : 'आपकी साधना प्रतीक्षा कर रही है — $streakMsg';
 
     final notifications = [
-      {'id': 700, 'hour': 7, 'minute': 0, 'title': 'सुप्रभात', 'body': 'दिन की शुरुआत करें — $userNote'},
-      {'id': 1200, 'hour': 12, 'minute': 0, 'title': 'मध्याह्न साधना', 'body': 'थोड़ा विराम लें, ध्यान करें 🌸'},
-      {'id': 1800, 'hour': 18, 'minute': 0, 'title': 'संध्या साधना', 'body': 'रात से पहले कुछ पल शांति के 🌙'},
+      _dailyAt('सुप्रभात साधक', body, 7, 0, id: 700),
+      _dailyAt('मध्याह्न ध्यान', 'क्षणिक शांति लें — $note', 12, 0, id: 1200),
+      _dailyAt('संध्या साधना', 'दिवस की पूर्णता ध्यान में 🌙', 18, 0, id: 1800),
     ];
 
     for (final n in notifications) {
-      await _scheduleDailyAt(
-        id: n['id'] as int,
-        hour: n['hour'] as int,
-        minute: n['minute'] as int,
-        title: n['title'] as String,
-        body: n['body'] as String,
+      await _plugin.zonedSchedule(
+        n.id,
+        n.title,
+        n.body,
+        n.scheduledDate,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'daily_sadhana',
+            'Daily Reminders',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
       );
     }
   }
@@ -167,4 +191,27 @@ class NotificationService {
       debugPrint('[Notifications] Scheduled $hour:${minute.toString().padLeft(2, '0')} with: $title');
     }
   }
+}
+
+class _DailyNotification {
+  final int id;
+  final String title;
+  final String body;
+  final tz.TZDateTime scheduledDate;
+
+  const _DailyNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.scheduledDate,
+  });
+}
+
+_DailyNotification _dailyAt(String title, String body, int hour, int minute, {required int id}) {
+  final now = tz.TZDateTime.now(tz.local);
+  var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+  if (scheduled.isBefore(now)) {
+    scheduled = scheduled.add(const Duration(days: 1));
+  }
+  return _DailyNotification(id: id, title: title, body: body, scheduledDate: scheduled);
 }

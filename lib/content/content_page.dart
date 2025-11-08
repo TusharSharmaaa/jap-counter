@@ -8,6 +8,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/quote_image_generator.dart';
+
 // Ads + API
 import 'package:jap_counter/ads/test_native.dart';
 import 'package:jap_counter/content/gita_service.dart';
@@ -284,8 +286,11 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                     icon: const Icon(Icons.image),
                     tooltip: 'Share as Image',
                     onPressed: () async {
-                      final quote = _currentQuote;
-                      await _shareQuoteImage(quote, 'Radha Jap Counter');
+                      final path = await QuoteImageGenerator.generate(_currentQuote);
+                      await Share.shareXFiles(
+                        [XFile(path)],
+                        text: 'Radha Jap Counter से आज का प्रेरक संदेश 🌸',
+                      );
                     },
                   ),
                 ],

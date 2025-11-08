@@ -8,12 +8,14 @@ import 'package:lottie/lottie.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:confetti/confetti.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'timer_sound_controller.dart';
 import 'timer_prefs.dart';
 import '../ads/interstitial_timer.dart';
 import '../data/meditation_store.dart';
 import '../data/dedication_store.dart';
+import '../notifications/notification_service.dart';
 
 enum _TimerState { idle, running, paused, completed }
 
@@ -329,6 +331,26 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
             );
           },
         );
+      }
+    }
+
+    final note = '🌼 आपकी साधना पूर्ण हुई — ${_selectedMinutes} मिनट ध्यान किया।';
+    try {
+      await NotificationService().plugin.show(
+        999,
+        'साधना सारांश',
+        note,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'instant_sadhana',
+            'Instant Sadhana Alerts',
+            importance: Importance.high,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Timer] Instant reminder failed: $e');
       }
     }
 
