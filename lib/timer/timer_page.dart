@@ -453,6 +453,18 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
         appBar: AppBar(
           title: const Text('Timer'),
           centerTitle: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
           actions: [
             IconButton(
               icon: Icon(_isFocusMode ? Icons.visibility : Icons.visibility_off),

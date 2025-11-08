@@ -41,11 +41,14 @@ class _TestBannerState extends State<TestBanner> {
   Widget build(BuildContext context) {
     // Reserve banner height to avoid layout shift
     final reservedHeight = AdSize.banner.height.toDouble();
-    return SizedBox(
-      height: reservedHeight,
-      child: _banner == null
-          ? const SizedBox.shrink()
-          : AdWidget(ad: _banner!),
+    return SafeArea(
+      minimum: const EdgeInsets.only(bottom: 4),
+      child: SizedBox(
+        height: reservedHeight,
+        child: _banner == null
+            ? const SizedBox.shrink()
+            : AdWidget(ad: _banner!),
+      ),
     );
   }
 }

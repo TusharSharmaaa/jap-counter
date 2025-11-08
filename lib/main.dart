@@ -6,6 +6,7 @@ import 'app.dart';
 import 'firebase_options.dart';
 import 'data/streak_store.dart';
 import 'notifications/notification_service.dart';
+import 'splash/splash_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,5 +21,29 @@ Future<void> main() async {
       debugPrint('[Notifications] scheduleDailyMotivation failed: $e\n$st');
     }
   }
-  runApp(const App());
+  runApp(const RootApp());
+}
+
+class RootApp extends StatefulWidget {
+  const RootApp({super.key});
+
+  @override
+  State<RootApp> createState() => _RootAppState();
+}
+
+class _RootAppState extends State<RootApp> {
+  bool _done = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_done) {
+      return const App();
+    }
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: SplashPage(
+        onComplete: () => setState(() => _done = true),
+      ),
+    );
+  }
 }

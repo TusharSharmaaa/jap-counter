@@ -213,6 +213,18 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     return Scaffold(
       appBar: AppBar(
         title: const Text("Content"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                Colors.transparent,
+              ],
+            ),
+          ),
+        ),
         bottom: TabBar(
           controller: _tabs,
           tabs: const [
