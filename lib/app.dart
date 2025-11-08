@@ -1,3 +1,5 @@
+import 'dart:ui' show Rect;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -5,6 +7,7 @@ import 'package:confetti/confetti.dart';
 
 import 'stats/streak_share_preview.dart';
 import 'ads/rewarded.dart';
+import 'ads/interstitial_timer.dart';
 import 'content/content_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
@@ -24,6 +27,7 @@ import 'data/activity_store.dart';
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'ads/interstitial_timer.dart';
 
 
 class App extends StatefulWidget {
@@ -43,6 +47,18 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
     _loadThemeMode();
     _initNotifications(); // fire-and-forget
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final page in _pages) {
+        if (page is StatefulWidget) {
+          final key = page.key;
+          if (key is GlobalKey) {
+            key.currentState;
+          }
+        }
+      }
+      RewardedShareAd().preload();
+      TimerInterstitialGate.instance.preload();
+    });
   }
 
   @override
@@ -277,6 +293,9 @@ class _CounterPageState extends State<_CounterPage> {
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
     });
+
+    final ns = NotificationService();
+    await ns.scheduleDynamicJapReminder(_today);
   }
 
   int get _malas => _today ~/ 108;
@@ -589,6 +608,28 @@ class _StatsPageState extends State<_StatsPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            children: [
+              AnimatedScale(
+                duration: const Duration(milliseconds: 1500),
+                curve: Curves.easeInOutCubic,
+                scale: _ambienceEnabled ? 1.2 : 1.0,
+                child: Icon(
+                  Icons.self_improvement,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _ambienceEnabled ? "ॐ की ध्वनि गूंज रही है…" : "शांति का अनुभव करें",
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
@@ -1138,7 +1179,11 @@ class SettingsPage extends StatelessWidget {
             onTap: () async {
               const pkg = 'com.example.jap_counter';
               final link = 'https://play.google.com/store/apps/details?id=$pkg';
-              await Share.share('मैं Radha Jap Counter ऐप इस्तेमाल कर रहा/रही हूँ — $link');
+              await Share.share(
+                'मैं Radha Jap Counter ऐप इस्तेमाल कर रहा/रही हूँ — $link',
+                subject: 'Radha Jap Counter',
+                sharePositionOrigin: const Rect.fromLTWH(0, 0, 100, 100),
+              );
             },
           ),
         ],

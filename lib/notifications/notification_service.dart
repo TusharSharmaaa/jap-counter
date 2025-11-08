@@ -91,6 +91,41 @@ class NotificationService {
     await _scheduleDailyAt(hour: 18, minute: 0, id: 1800);
   }
 
+  Future<void> scheduleDynamicJapReminder(int todayJaps) async {
+    final notificationDetails = const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'daily_jap_count',
+        'Daily Jap Count',
+        importance: Importance.high,
+        priority: Priority.high,
+        styleInformation: BigTextStyleInformation(''),
+      ),
+      iOS: DarwinNotificationDetails(),
+    );
+
+    final now = DateTime.now();
+    DateTime time = DateTime(now.year, now.month, now.day, 20, 0);
+    if (time.isBefore(now)) {
+      time = time.add(const Duration(days: 1));
+    }
+
+    await _plugin.zonedSchedule(
+      4,
+      'आज का जप संख्याः $todayJaps',
+      '“राधे राधे” के संग साधना पूर्ण करें 🌸',
+      tz.TZDateTime.from(time, tz.local),
+      notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidAllowWhileIdle: true,
+      matchDateTimeComponents: DateTimeComponents.time,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    );
+
+    if (kDebugMode) {
+      debugPrint('[Notifications] Dynamic reminder scheduled for $time with count $todayJaps');
+    }
+  }
+
   Future<void> _scheduleDailyAt({required int hour, required int minute, required int id}) async {
     final now = tz.TZDateTime.now(tz.local);
     var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);

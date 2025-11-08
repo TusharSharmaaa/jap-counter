@@ -147,7 +147,11 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
       }
     } catch (_) {}
 
-    await Share.share('🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।');
+    await Share.share(
+      '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
+      subject: 'Radha Jap Counter',
+      sharePositionOrigin: const Rect.fromLTWH(0, 0, 100, 100),
+    );
   }
 
   @override

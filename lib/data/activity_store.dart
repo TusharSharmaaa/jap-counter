@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'streak_store.dart';
+
 /// Stores which dates the user was "active" (did at least 1 jap).
 /// Dates are saved as ISO "yyyy-MM-dd" strings in a StringList.
 class ActivityStore {
@@ -45,7 +47,10 @@ class ActivityStore {
   /// Returns the length of the current consecutive-day streak (ending today).
   static Future<int> currentStreak() async {
     final active = await getAll();
-    if (active.isEmpty) return 0;
+    if (active.isEmpty) {
+      await StreakStore.saveStreak(0, 0);
+      return 0;
+    }
 
     int streak = 0;
     final today = DateTime.now();
@@ -58,6 +63,7 @@ class ActivityStore {
         break; // streak ended
       }
     }
+    await StreakStore.saveStreak(streak, active.length);
     return streak;
   }
   static String _isoDate(DateTime d) {

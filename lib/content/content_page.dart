@@ -1,8 +1,13 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Ads + API
 import 'package:jap_counter/ads/test_native.dart';
@@ -16,11 +21,13 @@ class ContentPage extends StatefulWidget {
 }
 
 class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin {
+  static const _quotesPrefKey = 'content.daily_quotes';
+
   late final TabController _tabs;
 
   // ---------------- QUOTES STATE ----------------
   int _quoteIndex = 0;
-  static const _quotes = [
+  final List<String> _quotes = [
     "ख़ामोशी में ही सबसे गहरी प्रार्थना होती है।",
     "जप की डोरी पकड़ लो, मन अपने आप शांत हो जाएगा।",
     "जो मिला है, वही प्रभु का प्रसाद है — कृतज्ञ रहो।",
@@ -36,6 +43,8 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    _loadLocalQuotes();
+    _maybeRefreshFromFirebase();
   }
 
   @override
@@ -45,17 +54,27 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   }
 
   // -------- QUOTES HELPERS --------
+  String get _currentQuote => _quotes.isEmpty
+      ? 'साधना की शुरुआत अभी भी सुंदर है।'
+      : _quotes[_quoteIndex % _quotes.length];
+
   void _prevQuote() {
+    if (_quotes.isEmpty) return;
     setState(() => _quoteIndex = (_quoteIndex - 1) < 0 ? _quotes.length - 1 : _quoteIndex - 1);
   }
 
   void _nextQuote() {
+    if (_quotes.isEmpty) return;
     setState(() => _quoteIndex = (_quoteIndex + 1) % _quotes.length);
   }
 
   Future<void> _shareQuote() async {
-    final text = "🌸 ${_quotes[_quoteIndex]}\n— Radha Jap Counter";
-    await Share.share(text);
+    final text = "🌸 ${_currentQuote}\n— Radha Jap Counter";
+    await Share.share(
+      text,
+      subject: 'Radha Jap Counter',
+      sharePositionOrigin: const ui.Rect.fromLTWH(0, 0, 100, 100),
+    );
   }
 
   Future<void> _shareQuoteImage(String quote, String reference) async {
@@ -110,9 +129,55 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     final file = File('${dir.path}/gita_quote_${DateTime.now().millisecondsSinceEpoch}.png');
     await file.writeAsBytes(pngBytes);
 
-    await Share.shareXFiles([
-      XFile(file.path),
-    ], text: '📖 श्रीमद् भगवद् गीता से प्रेरणा');
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: '📖 श्रीमद् भगवद् गीता से प्रेरणा',
+    );
+  }
+  Future<void> _loadLocalQuotes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList(_quotesPrefKey);
+    if (stored != null && stored.isNotEmpty) {
+      setState(() {
+        _quotes
+          ..clear()
+          ..addAll(stored);
+        _quoteIndex = 0;
+      });
+    }
+  }
+
+  Future<void> _maybeRefreshFromFirebase() async {
+    final conn = await Connectivity().checkConnectivity();
+    if (conn == ConnectivityResult.none) return;
+    try {
+      final snap = await FirebaseFirestore.instance.collection('daily_quotes').limit(10).get();
+      for (final doc in snap.docs) {
+        await _saveQuoteLocally(doc.data());
+      }
+      await _loadLocalQuotes();
+      if (kDebugMode) {
+        debugPrint('[Content] Quotes refreshed from Firebase');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Content] Firebase refresh failed: $e');
+      }
+    }
+  }
+
+  Future<void> _saveQuoteLocally(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    final text = (data['text'] ?? data['quote'] ?? data['message'] ?? '').toString().trim();
+    if (text.isEmpty) return;
+    final current = prefs.getStringList(_quotesPrefKey) ?? <String>[];
+    if (!current.contains(text)) {
+      current.insert(0, text);
+      if (current.length > 20) {
+        current.removeRange(20, current.length);
+      }
+      await prefs.setStringList(_quotesPrefKey, current);
+    }
   }
 
   // -------- GITA HELPERS (cached service + prefetch) --------
@@ -170,7 +235,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                     border: Border.all(color: Theme.of(context).dividerColor),
                   ),
                   child: Text(
-                    _quotes[_quoteIndex],
+                    _currentQuote,
                     style: Theme.of(context).textTheme.titleMedium,
                     textAlign: TextAlign.center,
                   ),
@@ -219,7 +284,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                     icon: const Icon(Icons.image),
                     tooltip: 'Share as Image',
                     onPressed: () async {
-                      final quote = _quotes[_quoteIndex];
+                      final quote = _currentQuote;
                       await _shareQuoteImage(quote, 'Radha Jap Counter');
                     },
                   ),
@@ -313,7 +378,11 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                     height: 44,
                     child: FilledButton.icon(
                       onPressed: () async {
-                        await Share.share("अध्याय ${v.chapter}, श्लोक ${v.verse} — Radha Jap Counter");
+                        await Share.share(
+                          "अध्याय ${v.chapter}, श्लोक ${v.verse} — Radha Jap Counter",
+                          subject: 'Radha Jap Counter',
+                          sharePositionOrigin: const ui.Rect.fromLTWH(0, 0, 100, 100),
+                        );
                       },
                       icon: const Icon(Icons.share),
                       label: const Text("Share"),
