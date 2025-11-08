@@ -643,56 +643,6 @@ class _StatsPageState extends State<_StatsPage> {
             },
           ),
         ),
-        FutureBuilder<LocalSummary>(
-          future: LocalSummary.load(),
-          builder: (context, snap) {
-            final data = snap.data;
-            if (data == null) return const SizedBox.shrink();
-            return Container(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.surface.withOpacity(0.8),
-                    Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  ],
-                ),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withOpacity(0.15),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _metricTile(
-                    context.tr('stats.summary.malas'),
-                    '${data.totalMalas}',
-                  ),
-                  _metricTile(
-                    context.tr('stats.summary.meditation'),
-                    '${data.totalMinutes}',
-                  ),
-                  _metricTile(
-                    context.tr('stats.summary.streak'),
-                    '${data.streakDays}',
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
         FutureBuilder<Set<String>>(
           future: GamifyStore.badges(),
           builder: (context, snapshot) {
