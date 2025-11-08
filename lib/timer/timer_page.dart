@@ -21,7 +21,7 @@ class TimerPage extends StatefulWidget {
   State<TimerPage> createState() => _TimerPageState();
 }
 
-class _TimerPageState extends State<TimerPage> {
+class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
   // ---- State & prefs ----
   final List<int> _presets = const [5, 10, 15, 20, 30, 45, 60, 90];
   int _selectedMinutes = 10;
@@ -44,6 +44,7 @@ class _TimerPageState extends State<TimerPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _bootstrap();
   }
 
@@ -78,6 +79,7 @@ class _TimerPageState extends State<TimerPage> {
     _ticker?.cancel();
     WakelockPlus.disable();   // allow screen sleep
     _sound.dispose();         // stop & release audio
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -399,7 +401,7 @@ class _TimerPageState extends State<TimerPage> {
               radius: 1.2,
               colors: isRunning
                   ? [
-                theme.colorScheme.primary.withOpacity(0.15),
+                theme.colorScheme.primary.withValues(alpha: 0.15),
                 theme.colorScheme.surface,
               ]
                   : [
@@ -556,5 +558,15 @@ class _TimerPageState extends State<TimerPage> {
       selected: selected,
       onSelected: (_) => _selectSound(t),
     );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (_state == _TimerState.running) {
+        _pause();
+        if (kDebugMode) debugPrint('[Timer] Auto-paused on background.');
+      }
+    }
   }
 }

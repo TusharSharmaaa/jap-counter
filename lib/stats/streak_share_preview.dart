@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -121,7 +120,6 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
   }
 
   Future<void> _shareWhatsAppText() async {
-    const pkg = 'com.whatsapp';
     final msg = Uri.encodeComponent('🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।');
     final waUri = Uri.parse('whatsapp://send?text=$msg');
     try {
@@ -179,7 +177,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                               border: Border.all(color: Colors.amber, width: 2),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.amber.withOpacity(0.25 + 0.25 * _glowCtl.value),
+                                  color: Colors.amber.withValues(alpha: 0.25 + 0.25 * _glowCtl.value),
                                   blurRadius: 14 + 6 * _glowCtl.value,
                                   spreadRadius: 1 + 1 * _glowCtl.value,
                                   offset: const Offset(0, 6),
@@ -201,10 +199,10 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.20),
+                                    color: Colors.white.withValues(alpha: 0.20),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                      color: Colors.amber.withOpacity(0.6),
+                                      color: Colors.amber.withValues(alpha: 0.6),
                                       width: 1,
                                     ),
                                   ),
@@ -257,13 +255,13 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                                       Icon(
                                         Icons.temple_hindu,
                                         size: 14,
-                                        color: Colors.brown.shade800.withOpacity(0.55),
+                                        color: Colors.brown.shade800.withValues(alpha: 0.55),
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
                                         'Radha Jap Counter',
                                         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                              color: Colors.brown.shade800.withOpacity(0.55),
+                                              color: Colors.brown.shade800.withValues(alpha: 0.55),
                                               fontWeight: FontWeight.w600,
                                               letterSpacing: 0.3,
                                             ),

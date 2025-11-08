@@ -31,7 +31,7 @@ class _AdLoadingOverlay extends StatelessWidget {
         return Opacity(
           opacity: opacity,
           child: Dialog(
-            backgroundColor: theme.colorScheme.surface.withOpacity(0.95),
+            backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.95),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
               padding: const EdgeInsets.all(24),

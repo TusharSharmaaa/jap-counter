@@ -315,7 +315,7 @@ class _CounterPageState extends State<_CounterPage> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.25)),
+                    border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.25)),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -494,6 +494,45 @@ class _StatsPageState extends State<_StatsPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                ),
+                child: FutureBuilder<int>(
+                  future: ActivityStore.currentStreak(),
+                  builder: (context, snap) {
+                    final streak = snap.data ?? 0;
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Current Streak',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '🔥 $streak',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               // Top tiles
           Row(
@@ -793,10 +832,10 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
           // Active days are filled; streak days get a stronger fill + thicker border.
           final base = Theme.of(context).colorScheme.primary;
           final fill = active
-              ? (isStreak ? base.withOpacity(0.95) : base.withOpacity(0.65))
+              ? (isStreak ? base.withValues(alpha: 0.95) : base.withValues(alpha: 0.65))
               : Colors.transparent;
           final borderColor = isStreak
-              ? base.withOpacity(0.9)
+              ? base.withValues(alpha: 0.9)
               : Theme.of(context).dividerColor;
           final borderWidth = isStreak ? 2.0 : 1.0;
 
