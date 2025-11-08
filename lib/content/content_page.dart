@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/quote_image_generator.dart';
+import 'quote_theme.dart';
 
 // Ads + API
 import 'package:jap_counter/ads/test_native.dart';
@@ -35,6 +37,10 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     "हर साँस में राधा-नाम, हर क्षण में माधुर्य।",
     "चलते-फिरते, उठते-बैठते — जप रुकना नहीं चाहिए।",
   ];
+  late final PageController _quoteController;
+  late final List<QuoteTheme> _themes;
+  int _selectedThemeIndex = 0;
+  final TextEditingController _noteController = TextEditingController();
 
   // ---------------- GITA STATE ----------------
   final int _chapter = 1;
@@ -44,6 +50,8 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    _quoteController = PageController(viewportFraction: 0.88);
+    _themes = QuoteTheme.presets();
     _loadLocalQuotes();
     _maybeRefreshFromFirebase();
   }
@@ -51,6 +59,8 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   @override
   void dispose() {
     _tabs.dispose();
+    _quoteController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
@@ -59,80 +69,215 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
       ? 'साधना की शुरुआत अभी भी सुंदर है।'
       : _quotes[_quoteIndex % _quotes.length];
 
+  String get _currentShareLink =>
+      'https://play.google.com/store/apps/details?id=com.example.jap_counter';
+
   void _prevQuote() {
     if (_quotes.isEmpty) return;
-    setState(() => _quoteIndex = (_quoteIndex - 1) < 0 ? _quotes.length - 1 : _quoteIndex - 1);
+    final target = (_quoteIndex - 1) < 0 ? _quotes.length - 1 : _quoteIndex - 1;
+    _quoteController.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+    );
   }
 
   void _nextQuote() {
     if (_quotes.isEmpty) return;
-    setState(() => _quoteIndex = (_quoteIndex + 1) % _quotes.length);
-  }
-
-  Future<void> _shareQuote() async {
-    final text = "🌸 $_currentQuote\n— Radha Jap Counter";
-    await SharePlus.instance.share(
-      ShareParams(text: text),
+    final target = (_quoteIndex + 1) % _quotes.length;
+    _quoteController.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
     );
   }
 
-  Future<void> _shareQuoteImage(String quote, String reference) async {
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(recorder);
-    const size = ui.Size(1080, 1080);
+  Future<void> _shareQuoteText({String? note, bool includeLink = true}) async {
+    final buffer = StringBuffer('🌸 $_currentQuote');
+    if (note != null && note.trim().isNotEmpty) {
+      buffer.writeln('\n$note');
+    }
+    buffer.writeln('\n— Radha Jap Counter');
+    if (includeLink) {
+      buffer.writeln('\n$_currentShareLink');
+    }
+    await SharePlus.instance.share(ShareParams(text: buffer.toString()));
+  }
 
-    final background = ui.Paint()..color = const Color(0xFFFFF8E1);
-    canvas.drawRect(ui.Offset.zero & size, background);
-
-    final quotePainter = TextPainter(
-      text: TextSpan(
-        text: quote,
-        style: const TextStyle(
-          fontSize: 44,
-          color: Colors.black87,
-          height: 1.5,
-          fontFamily: 'NotoSansDevanagari',
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )
-      ..layout(maxWidth: size.width - 160);
-    quotePainter.paint(canvas, const ui.Offset(80, 260));
-
-    final refPainter = TextPainter(
-      text: TextSpan(
-        text: reference,
-        style: const TextStyle(fontSize: 36, color: Colors.black54),
-      ),
-      textDirection: TextDirection.ltr,
-    )
-      ..layout(maxWidth: size.width - 160);
-    refPainter.paint(canvas, const ui.Offset(80, 920));
-
-    final footerPainter = TextPainter(
-      text: const TextSpan(
-        text: 'Radha Jap Counter',
-        style: TextStyle(fontSize: 34, color: Colors.brown, fontWeight: FontWeight.w600),
-      ),
-      textDirection: TextDirection.ltr,
-    )
-      ..layout();
-    footerPainter.paint(canvas, const ui.Offset(80, 980));
-
-    final picture = recorder.endRecording();
-    final image = await picture.toImage(size.width.toInt(), size.height.toInt());
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    final pngBytes = byteData!.buffer.asUint8List();
-
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/gita_quote_${DateTime.now().millisecondsSinceEpoch}.png');
-    await file.writeAsBytes(pngBytes);
-
+  Future<void> _shareQuoteImage({
+    required QuoteTheme theme,
+    String? note,
+    bool includeLink = true,
+  }) async {
+    final path = await QuoteImageGenerator.generate(
+      _currentQuote,
+      theme: theme,
+      note: note,
+      includeLink: includeLink,
+      shareLink: _currentShareLink,
+    );
     await SharePlus.instance.share(
       ShareParams(
-        files: [XFile(file.path)],
-        text: '📖 श्रीमद् भगवद् गीता से प्रेरणा',
+        files: [XFile(path)],
+        text: '${note != null && note.trim().isNotEmpty ? '$note\n\n' : ''}${_currentShareLink}',
       ),
+    );
+  }
+
+  Future<void> _saveQuoteImage({
+    required QuoteTheme theme,
+    String? note,
+    bool includeLink = true,
+  }) async {
+    final path = await QuoteImageGenerator.generate(
+      _currentQuote,
+      theme: theme,
+      note: note,
+      includeLink: includeLink,
+      shareLink: _currentShareLink,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Saved share card to $path'),
+        action: SnackBarAction(
+          label: 'Share',
+          onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(path)])),
+        ),
+      ),
+    );
+  }
+
+  void _copyQuoteToClipboard() {
+    Clipboard.setData(ClipboardData(text: _currentQuote));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Quote copied to clipboard')),
+    );
+  }
+
+  void _openShareSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (ctx) {
+        int themeIndex = _selectedThemeIndex;
+        bool includeLink = true;
+        final controller = TextEditingController(text: _noteController.text);
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Customize Share Card',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 42,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _themes.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final theme = _themes[index];
+                        final selected = themeIndex == index;
+                        return ChoiceChip(
+                          label: Text(theme.name),
+                          selected: selected,
+                          onSelected: (_) {
+                            setModalState(() => themeIndex = index);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Add a personal note (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: includeLink,
+                    onChanged: (value) => setModalState(() => includeLink = value),
+                    title: const Text('Include Play Store link'),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            _selectedThemeIndex = themeIndex;
+                            _noteController.text = controller.text;
+                            await _shareQuoteImage(
+                              theme: _themes[themeIndex],
+                              note: controller.text.trim().isEmpty ? null : controller.text.trim(),
+                              includeLink: includeLink,
+                            );
+                          },
+                          icon: const Icon(Icons.image),
+                          label: const Text('Share as Image'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            _selectedThemeIndex = themeIndex;
+                            _noteController.text = controller.text;
+                            await _shareQuoteText(
+                              note: controller.text.trim().isEmpty ? null : controller.text.trim(),
+                              includeLink: includeLink,
+                            );
+                          },
+                          icon: const Icon(Icons.text_fields),
+                          label: const Text('Share as Text'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Save Image',
+                        onPressed: () async {
+                          _selectedThemeIndex = themeIndex;
+                          _noteController.text = controller.text;
+                          await _saveQuoteImage(
+                            theme: _themes[themeIndex],
+                            note: controller.text.trim().isEmpty ? null : controller.text.trim(),
+                            includeLink: includeLink,
+                          );
+                        },
+                        icon: const Icon(Icons.download),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
   Future<void> _loadLocalQuotes() async {
@@ -237,94 +382,120 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
         controller: _tabs,
         children: [
           // ================= QUOTES TAB =================
-          Column(
-            children: [
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 500),
-                    transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
-                    child: Text(
-                      _currentQuote,
-                      key: ValueKey(_quoteIndex),
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            height: 1.4,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _prevQuote,
-                        icon: const Icon(Icons.chevron_left),
-                        label: const Text("Previous"),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _nextQuote,
-                        icon: const Icon(Icons.chevron_right),
-                        label: const Text("Next"),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: FilledButton.icon(
-                    onPressed: _shareQuote,
-                    icon: const Icon(Icons.share),
-                    label: const Text("Share on WhatsApp"),
-                  ),
-                ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final safeTop = 16.0;
+              final availableHeight = constraints.maxHeight - safeTop - 220;
+              final cardHeight = availableHeight.clamp(220.0, 320.0);
+              return Column(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.image),
-                    tooltip: 'Share as Image',
-                    onPressed: () async {
-                      final path = await QuoteImageGenerator.generate(_currentQuote);
-                      await Share.shareXFiles(
-                        [XFile(path)],
-                        text: 'Radha Jap Counter से आज का प्रेरक संदेश 🌸',
-                      );
-                    },
+                  SizedBox(
+                    height: cardHeight,
+                    child: PageView.builder(
+                  controller: _quoteController,
+                  itemCount: _quotes.isEmpty ? 1 : _quotes.length,
+                  onPageChanged: (index) {
+                    setState(() => _quoteIndex = _quotes.isEmpty ? 0 : index % _quotes.length);
+                  },
+                  itemBuilder: (context, index) {
+                    final quote = _quotes.isEmpty ? _currentQuote : _quotes[index % _quotes.length];
+                    return Align(
+                      alignment: Alignment.topCenter,
+                      child: _QuotePreviewCard(
+                        quote: quote,
+                        theme: _themes[_selectedThemeIndex],
+                      ),
+                    );
+                  },
+                ),
+              ),
+                  if (_quotes.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(_quotes.length, (i) {
+                          final active = i == (_quoteIndex % _quotes.length);
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: active ? 12 : 8,
+                            height: active ? 12 : 8,
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                              shape: BoxShape.circle,
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    height: 42,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _themes.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final theme = _themes[index];
+                        final selected = index == _selectedThemeIndex;
+                        return ChoiceChip(
+                          label: Text(theme.name),
+                          selected: selected,
+                          onSelected: (_) {
+                            setState(() => _selectedThemeIndex = index);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton.icon(
+                        onPressed: _openShareSheet,
+                        icon: const Icon(Icons.auto_awesome),
+                        label: const Text('Create Share Card'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _copyQuoteToClipboard,
+                            icon: const Icon(Icons.copy),
+                            label: const Text('Copy'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _nextQuote,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Inspire me'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  const SizedBox(
+                    height: 60,
+                    child: _BannerReserve(),
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              // Native Ad below quotes
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: const TestNativeAd(),
-                ),
-              ),
-            ],
+              );
+            },
           ),
 
           // ================= GITA TAB (LIVE + CACHED) =================
@@ -421,13 +592,17 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                         tooltip: 'Share as Image',
                         onPressed: () async {
                           final reference = "अध्याय ${v.chapter}, श्लोक ${v.verse}";
-                          await _shareQuoteImage(v.hindi, reference);
+                          await _shareQuoteImage(
+                            theme: _themes[_selectedThemeIndex],
+                            note: reference,
+                            includeLink: true,
+                          );
                         },
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const _NativeAdReserve(), // keep a slot here too (optional)
+                  const _BannerReserve(),
                 ],
               );
             },
@@ -438,20 +613,144 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   }
 }
 
-class _NativeAdReserve extends StatelessWidget {
-  const _NativeAdReserve();
+class _BannerReserve extends StatelessWidget {
+  const _BannerReserve();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 60,
+          color: Theme.of(context).colorScheme.surfaceVariant,
+          alignment: Alignment.center,
+          child: Text(
+            'Banner Ad (reserved)',
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+        ),
+      ),
+    );
+  }
+}
+class _QuotePreviewCard extends StatelessWidget {
+  final QuoteTheme theme;
+  final String quote;
+
+  const _QuotePreviewCard({
+    required this.theme,
+    required this.quote,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 140,
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).dividerColor),
+        gradient: theme.background,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: theme.accentColor.withOpacity(0.2),
+            blurRadius: 22,
+            spreadRadius: 4,
+            offset: const Offset(0, 14),
+          ),
+        ],
       ),
-      child: const Center(child: Text("Native Ad (reserved)")),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.topRight,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: theme.badgeColor.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome, size: 16, color: theme.accentColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    theme.name,
+                    style: TextStyle(
+                      color: theme.textColor.withOpacity(0.75),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final textStyle = TextStyle(
+                      color: theme.textColor,
+                      fontSize: constraints.maxHeight < 140 ? 18 : 20,
+                      height: 1.4,
+                      fontWeight: FontWeight.w600,
+                    );
+                    final quoteText = quote.length > 90 && constraints.maxHeight < 150
+                        ? '${quote.substring(0, 90)}…'
+                        : quote;
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '“',
+                          style: TextStyle(
+                            color: theme.accentColor,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          quoteText,
+                          textAlign: TextAlign.center,
+                          style: textStyle,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '”',
+                          style: TextStyle(
+                            color: theme.accentColor,
+                            fontSize: 30,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+          Divider(color: theme.textColor.withOpacity(0.15)),
+          const SizedBox(height: 4),
+          Text(
+            'Radha Jap Counter',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: theme.textColor.withOpacity(0.7),
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -461,14 +461,14 @@ class _SettingsPageState extends State<SettingsPage> {
                         label: Text(context.tr('common.dark')),
                         icon: const Icon(Icons.dark_mode),
                       ),
-                    ],
-                    selected: {isDark},
-                    onSelectionChanged: (selection) {
-                      final dark = selection.first;
+                ],
+                selected: {isDark},
+                onSelectionChanged: (selection) {
+                  final dark = selection.first;
                       widget.onThemeModeChanged(
                         dark ? ThemeMode.dark : ThemeMode.light,
                       );
-                    },
+                },
                   ),
                 ],
               ),
