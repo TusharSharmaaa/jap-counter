@@ -10,9 +10,9 @@ import 'ads/interstitial_timer.dart';
 import 'content/content_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
+import 'data/dedication_store.dart';
 import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
-import 'stats/dedication_store.dart';
 import 'stats/stats_ambience.dart';
 import 'settings/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -609,12 +609,16 @@ class _StatsPage extends StatefulWidget {
 class _StatsPageState extends State<_StatsPage> {
   final RewardedGate _gate = RewardedGate();
   bool _shareBusy = false;
-  late final ConfettiController _confetti;
+  late ConfettiController _confetti;
+
+  CounterStore? _store;
   bool _loading = true;
   int _today = 0;
   int _lifetime = 0;
   int _todayMin = 0;
   int _lifetimeMin = 0;
+  // NEW: user’s dedication text (persisted via DedicationStore)
+  String _dedication = '';
   static const _ambienceKey = 'stats.ambience.enabled';
   bool _ambienceEnabled = false;
 
@@ -667,6 +671,7 @@ class _StatsPageState extends State<_StatsPage> {
   Future<void> _refresh() async {
     final s = await CounterStore.create();
     final mstore = await MeditationStore.create();
+    final dstore = await DedicationStore.create();
 
     if (!mounted) return;
     setState(() {
@@ -675,6 +680,7 @@ class _StatsPageState extends State<_StatsPage> {
 
       _todayMin = mstore.todayMinutes;
       _lifetimeMin = mstore.lifetimeMinutes;
+      _dedication = dstore.note;
     });
     // Also ensure today is marked active on manual refresh
     if (s.todayJaps > 0) {
@@ -689,18 +695,17 @@ class _StatsPageState extends State<_StatsPage> {
 
   Future<void> _init() async {
     final s = await CounterStore.create(); // uses same prefs + new-day reset
-
-    // NEW: meditation store
     final mstore = await MeditationStore.create();
+    final dstore = await DedicationStore.create();
 
     setState(() {
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
       _loading = false;
 
-      // NEW:
       _todayMin = mstore.todayMinutes;
       _lifetimeMin = mstore.lifetimeMinutes;
+      _dedication = dstore.note;
     });
     // Ensure today is recorded as active if user already has japs today
     if (s.todayJaps > 0) {
@@ -944,7 +949,7 @@ class _StatsPageState extends State<_StatsPage> {
           ),
           const SizedBox(height: 16),
         FutureBuilder<String>(
-          future: DedicationStore.get(),
+          future: DedicationStore.create().then((s) => s.note),
           builder: (context, snap) {
             final note = snap.data ?? '';
             return Container(
@@ -994,7 +999,8 @@ class _StatsPageState extends State<_StatsPage> {
                         ),
                       );
                       if (updated != null) {
-                        await DedicationStore.set(updated);
+                        final ds = await DedicationStore.create();
+                        await ds.setNote(updated);
                         if (context.mounted) setState(() {});
                       }
                     },
