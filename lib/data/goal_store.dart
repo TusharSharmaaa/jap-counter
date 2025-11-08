@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Stores user's daily mala goal (e.g., 1–10 malas).
 /// Also caches the last-completed date to avoid repetitive nudges.
 class GoalStore {
-  static const _kGoal = 'goal.daily_malas';
+  static const _kDailyMalasGoal = 'goal.daily_malas';
   static const _kLastCongrats = 'goal.last_congrats_date'; // yyyy-MM-dd
 
   final SharedPreferences _prefs;
@@ -13,10 +13,10 @@ class GoalStore {
   static Future<GoalStore> create() async =>
       GoalStore._(await SharedPreferences.getInstance());
 
-  int get dailyMalasGoal => _prefs.getInt(_kGoal) ?? 1; // default 1 mala/day
+  int get dailyMalasGoal => _prefs.getInt(_kDailyMalasGoal) ?? 0;
 
   Future<void> setDailyMalasGoal(int malas) async =>
-      _prefs.setInt(_kGoal, malas.clamp(1, 20));
+      _prefs.setInt(_kDailyMalasGoal, malas.clamp(0, 50));
 
   String? get lastCongratsDate => _prefs.getString(_kLastCongrats);
 

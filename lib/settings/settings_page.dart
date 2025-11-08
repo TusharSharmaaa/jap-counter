@@ -36,6 +36,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _reminders = false;
   bool _soundHaptics = true; // UI only; wire up when preferences exist
   int _goalMalas = 1;
+  bool _soundEnabled = true;
 
   static const _keyReminders = 'notificationsEnabled';
 
@@ -52,6 +53,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _reminders = prefs.getBool(_keyReminders) ?? true;
       _goalMalas = gs.dailyMalasGoal;
+      _soundEnabled = prefs.getBool('settings.soundEnabled') ?? true;
     });
   }
 
@@ -168,7 +170,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Set a simple, consistent daily target',
+                              'Set a simple, consistent daily target (0 to disable)',
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
@@ -178,9 +180,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                   Slider(
-                    min: 1,
+                    min: 0,
                     max: 20,
-                    divisions: 19,
+                    divisions: 20,
                     value: _goalMalas.toDouble(),
                     label: '$_goalMalas',
                     onChanged: (v) => setState(() => _goalMalas = v.round()),
@@ -221,6 +223,16 @@ class _SettingsPageState extends State<SettingsPage> {
                         onChanged: (value) => setState(() => _soundHaptics = value),
                       ),
                     ],
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('माला पूरी होने पर घंटी की ध्वनि'),
+                    value: _soundEnabled,
+                    onChanged: (v) async {
+                      setState(() => _soundEnabled = v);
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('settings.soundEnabled', v);
+                    },
                   ),
                 ],
               ),
