@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:intl/intl.dart';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -111,12 +112,14 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text("Radha Jap Counter",
-                    style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  '🔥 ${widget.streakDays} day${widget.streakDays == 1 ? '' : 's'} streak',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 8),
-                const Text("🌸 जप की ये लड़ी कभी टूटे ना 🌸",
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 12),
                 Text("Today’s Japs: $todayJaps"),
                 Text("Lifetime Malas: $lifetimeMalas"),
                 Text("Streak: $streakDays days"),

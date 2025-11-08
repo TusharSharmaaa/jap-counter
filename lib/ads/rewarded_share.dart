@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:async' show unawaited;
@@ -11,6 +12,14 @@ class RewardedShareAd {
   bool _invalidated = false;
   DateTime? _lastRewardTime;
   static const Duration _minGapBetweenRewards = Duration(minutes: 3);
+
+  static final RewardedShareAd _instance = RewardedShareAd._internal();
+  RewardedShareAd._internal();
+  factory RewardedShareAd() => _instance;
+  static RewardedShareAd get instance => _instance;
+
+  static const String _testUnitId = 'ca-app-pub-3940256099942544/5224354917';
+
   bool get isCoolingDown {
     if (_lastRewardTime == null) return false;
     return DateTime.now().difference(_lastRewardTime!) < _minGapBetweenRewards;
@@ -22,12 +31,6 @@ class RewardedShareAd {
     final remaining = _minGapBetweenRewards - elapsed;
     return remaining.isNegative ? Duration.zero : remaining;
   }
-
-  static final RewardedShareAd _instance = RewardedShareAd._internal();
-  RewardedShareAd._internal();
-  factory RewardedShareAd() => _instance;
-
-  static const String _testUnitId = 'ca-app-pub-3940256099942544/5224354917';
 
   /// Preload a rewarded ad (safe to call multiple times).
   Future<void> preload() async {
@@ -43,85 +46,81 @@ class RewardedShareAd {
           _ad = ad;
           _isLoading = false;
           _wireFullScreenCallbacks(ad);
-          if (kDebugMode) {
-            debugPrint('[RewardedShareAd] Loaded.');
-          }
+          if (kDebugMode) debugPrint('[RewardedShareAd] Loaded.');
         },
         onAdFailedToLoad: (error) {
           _isLoading = false;
           _ad = null;
-          if (kDebugMode) {
-            debugPrint('[RewardedShareAd] Failed to load: $error');
-          }
+          if (kDebugMode) debugPrint('[RewardedShareAd] Failed to load: $error');
         },
       ),
     );
   }
 
   /// Shows the ad if available. Returns true if the user earned the reward.
-  /// If no ad is available, returns false and does NOT call [onEarned].
-  Future<bool> showIfAvailable({required Future<void> Function() onEarned}) async {
-    // 1) Hard cooldown BEFORE any show
+  Future<bool> showIfAvailable(BuildContext context) async {
+    debugPrint('[RewardedShare] showIfAvailable() called');
+
     final now = DateTime.now();
-    if (_lastRewardTime != null && now.difference(_lastRewardTime!) < _minGapBetweenRewards) {
-      if (kDebugMode) {
-        final rem = _minGapBetweenRewards - now.difference(_lastRewardTime!);
-        debugPrint('[RewardedShareAd] Cooldown active: ${rem.inSeconds}s remaining.');
-      }
-      // Keep the pipeline warm for next time
+    if (_lastRewardTime != null &&
+        now.difference(_lastRewardTime!) < _minGapBetweenRewards) {
+      final rem = _minGapBetweenRewards - now.difference(_lastRewardTime!);
+      debugPrint('[RewardedShareAd] Cooldown active: ${rem.inSeconds}s remaining.');
       unawaited(preload());
       return false;
     }
 
-    // 2) Need an ad loaded
     final ad = _ad;
     if (ad == null) {
-      // Not ready—prep one and bail
+      debugPrint('[RewardedShareAd] No ad available to show.');
       unawaited(preload());
-      if (kDebugMode) {
-        debugPrint('[RewardedShareAd] No ad available to show.');
-      }
       return false;
     }
 
-    // 3) Mark the "show" moment as the start of cooldown (prevents immediate re-shows)
-    _lastRewardTime = DateTime.now();
-
     var earned = false;
+
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdShowedFullScreenContent: (ad) =>
+          debugPrint('[RewardedShareAd] Ad shown'),
+      onAdDismissedFullScreenContent: (ad) {
+        debugPrint('[RewardedShareAd] Ad dismissed (earned=$earned)');
+        _disposeCurrent(invalidate: true);
+        Navigator.of(context).pop(earned); // pass result to caller
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        debugPrint('[RewardedShareAd] Failed to show: $error');
+        _disposeCurrent(invalidate: true);
+        Navigator.of(context).pop(false);
+      },
+    );
+
     await ad.show(onUserEarnedReward: (adWithoutView, reward) async {
       earned = true;
-      if (kDebugMode) {
-        debugPrint('[RewardedShareAd] Reward earned: ${reward.amount} ${reward.type}');
-      }
-      await onEarned();
+      _lastRewardTime = DateTime.now();
+      debugPrint('[RewardedShareAd] onUserEarnedReward fired! → ${reward.type}');
     });
 
-    // 4) After show, the ad cannot be reused; clear and request next.
+    debugPrint('[RewardedShareAd] ad.show() finished, earned=$earned');
     _disposeCurrent(invalidate: true);
     unawaited(preload());
-
     return earned;
   }
 
   void _wireFullScreenCallbacks(RewardedAd ad) {
     ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdShowedFullScreenContent: (ad) {
-        if (kDebugMode) debugPrint('[RewardedShareAd] Ad showed.');
-      },
+      onAdShowedFullScreenContent: (ad) =>
+          debugPrint('[RewardedShareAd] Ad showed.'),
       onAdDismissedFullScreenContent: (ad) {
-        if (kDebugMode) debugPrint('[RewardedShareAd] Ad dismissed.');
+        debugPrint('[RewardedShareAd] Ad dismissed.');
         _disposeCurrent(invalidate: true);
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
-        if (kDebugMode) debugPrint('[RewardedShareAd] Failed to show: $error');
+        debugPrint('[RewardedShareAd] Failed to show: $error');
         _disposeCurrent(invalidate: true);
       },
-      onAdImpression: (ad) {
-        if (kDebugMode) debugPrint('[RewardedShareAd] Impression logged.');
-      },
-      onAdClicked: (ad) {
-        if (kDebugMode) debugPrint('[RewardedShareAd] Clicked.');
-      },
+      onAdImpression: (ad) =>
+          debugPrint('[RewardedShareAd] Impression logged.'),
+      onAdClicked: (ad) => debugPrint('[RewardedShareAd] Clicked.'),
     );
   }
 
@@ -133,15 +132,11 @@ class RewardedShareAd {
     if (invalidate) _invalidated = true;
   }
 
-  /// For lifecycle owners (optional): call on app resume to ensure an ad is queued.
   Future<void> ensureWarm() async {
     if (_ad == null && !_isLoading && !_invalidated) {
       await preload();
     }
   }
 
-  /// Manual dispose (usually not needed).
-  void dispose() {
-    _disposeCurrent();
-  }
+  void dispose() => _disposeCurrent();
 }

@@ -1,14 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // for light haptics on taps (optional)
-import 'timer_sound_controller.dart';
+import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:lottie/lottie.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
+
+import 'timer_sound_controller.dart';
+import 'timer_prefs.dart';
 import '../ads/interstitial_timer.dart';
 import '../data/meditation_store.dart';
-import 'package:share_plus/share_plus.dart';
 
-import 'timer_prefs.dart';
-import '../data/meditation_store.dart'; // keep this if not already added
 enum _TimerState { idle, running, paused, completed }
 
 class TimerPage extends StatefulWidget {
@@ -18,8 +21,9 @@ class TimerPage extends StatefulWidget {
   State<TimerPage> createState() => _TimerPageState();
 }
 
-class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
-  final List<int> _presets = const [5, 10, 15, 20, 30, 45, 60, 90]; // minutes
+class _TimerPageState extends State<TimerPage> {
+  // ---- State & prefs ----
+  final List<int> _presets = const [5, 10, 15, 20, 30, 45, 60, 90];
   int _selectedMinutes = 10;
 
   Duration _total = const Duration(minutes: 10);
@@ -27,12 +31,15 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
   Timer? _ticker;
   _TimerState _state = _TimerState.idle;
 
-  // 🔊 Sound controller + current ambience selection
+  // Ambience
   final TimerSoundController _sound = TimerSoundController();
   TimerSoundType _selectedSound = TimerSoundType.mute;
 
-  // Keep last tick time for drift-free countdown
+  // Ticker drift control
   DateTime? _lastTickAt;
+
+  // Completion UI guards
+  bool? _completionShown; // set to false when starting a new session
 
   @override
   void initState() {
@@ -66,15 +73,15 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     TimerInterstitialGate.instance.preload();
   }
 
-
   @override
   void dispose() {
     _ticker?.cancel();
-    WakelockPlus.disable();      // ensure screen can sleep
-    _sound.dispose();            // stop & release audio
+    WakelockPlus.disable();   // allow screen sleep
+    _sound.dispose();         // stop & release audio
     super.dispose();
   }
 
+  // ---- UI actions ----
   void _selectPreset(int minutes) {
     if (_state == _TimerState.running) return;
     HapticFeedback.selectionClick();
@@ -92,8 +99,7 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     if (_selectedSound == t) return;
     HapticFeedback.selectionClick();
     setState(() => _selectedSound = t);
-    // Preload the chosen sound; no auto-play
-    _sound.setSound(t);
+    _sound.setSound(t); // preload chosen sound
     // SAVE
     TimerPrefs.create().then((p) => p.setSoundIndex(t.index));
   }
@@ -102,6 +108,8 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     if (_state == _TimerState.running) return;
     HapticFeedback.lightImpact();
 
+    _completionShown = false; // reset completion guard for new session
+
     setState(() {
       _total = Duration(minutes: _selectedMinutes);
       _remaining = _total;
@@ -109,10 +117,10 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       _lastTickAt = DateTime.now();
     });
 
-    // Keep the screen awake while running
+    // Keep screen awake
     WakelockPlus.enable();
 
-    // 🔊 start ambience if not muted
+    // Start ambience if not muted
     _sound.start();
 
     _ticker?.cancel();
@@ -138,14 +146,10 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     HapticFeedback.selectionClick();
     _ticker?.cancel();
 
-    // Allow screen to sleep when paused
-    WakelockPlus.disable();
-
-    // 🔊 pause sound
+    WakelockPlus.disable(); // allow sleep
     _sound.pause();
-    setState(() {
-      _state = _TimerState.paused;
-    });
+
+    setState(() => _state = _TimerState.paused);
   }
 
   void _resume() {
@@ -156,10 +160,7 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       _lastTickAt = DateTime.now();
     });
 
-    // Keep screen awake again
     WakelockPlus.enable();
-
-    // 🔊 resume sound
     _sound.resume();
 
     _ticker?.cancel();
@@ -180,15 +181,28 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     });
   }
 
+  void _stop() {
+    if (_state == _TimerState.idle) return;
+    HapticFeedback.selectionClick();
+    _ticker?.cancel();
+
+    WakelockPlus.disable();
+    _sound.stop();
+
+    setState(() {
+      _total = Duration(minutes: _selectedMinutes);
+      _remaining = _total;
+      _state = _TimerState.idle;
+    });
+  }
+
   void _reset() {
     HapticFeedback.selectionClick();
     _ticker?.cancel();
 
-    // Allow screen to sleep on reset
     WakelockPlus.disable();
-
-    // 🔊 stop sound
     _sound.stop();
+
     setState(() {
       _total = Duration(minutes: _selectedMinutes);
       _remaining = _total;
@@ -197,12 +211,11 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
   }
 
   Future<void> _onComplete() async {
-    HapticFeedback.mediumImpact();
+    // haptic
+    try { await HapticFeedback.mediumImpact(); } catch (_) {}
 
-    // Allow screen to sleep after completion
+    // allow sleep & stop ambience
     WakelockPlus.disable();
-
-    // 🔊 stop sound on completion
     _sound.stop();
 
     setState(() {
@@ -210,57 +223,126 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
       _state = _TimerState.completed;
     });
 
-    if (mounted) {
-      await showDialog(
+    // Prevent duplicate completion popups
+    _completionShown ??= false;
+    if (mounted && _completionShown == false) {
+      _completionShown = true;
+
+      // Play a gentle bell on completion (one-shot)
+      try {
+        final bell = AudioPlayer();
+        await bell.play(AssetSource('sounds/bell.mp3'));
+      } catch (e) {
+        if (kDebugMode) debugPrint('[Timer] Bell sound failed: $e');
+      }
+
+      // 1) Gentle Lottie overlay (auto-dismiss ~1.5s)
+      final overlayFuture = showGeneralDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) {
-          final minutes = _selectedMinutes; // or your session duration variable
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('🌼 साधना पूर्ण हुई', textAlign: TextAlign.center),
-            content: Text(
-              'आपने $minutes मिनट ध्यान किया।',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge,
+        barrierLabel: 'sadhana_complete',
+        barrierColor: Colors.black54,
+        transitionDuration: const Duration(milliseconds: 250),
+        pageBuilder: (context, _, __) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 220,
+                  height: 220,
+                  child: Lottie.network(
+                    'https://assets9.lottiefiles.com/packages/lf20_jcikwtux.json',
+                    repeat: false,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '🌼 साधना पूर्ण हुई',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  final minutes = _selectedMinutes; // uses your current session duration
-                  await Share.share('साधना पूर्ण हुई — मैंने $minutes मिनट ध्यान किया। Radha Jap Counter के साथ।');
-                },
-                child: const Text('Share Blessing'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Done'),
-              ),
-            ],
           );
         },
       );
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop(); // close overlay
+      }
+      await overlayFuture;
+
+      // 2) Summary dialog with Share
+      if (mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            final minutes = _selectedMinutes;
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('🌼 साधना पूर्ण हुई', textAlign: TextAlign.center),
+              content: Text(
+                'आपने $minutes मिनट ध्यान किया।',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await Share.share('साधना पूर्ण हुई — मैंने $minutes मिनट ध्यान किया। Radha Jap Counter के साथ।');
+                  },
+                  child: const Text('Share Blessing'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Done'),
+                ),
+              ],
+            );
+          },
+        );
+      }
     }
 
-// Save completed meditation minutes (today + lifetime)
+    // Save completed meditation minutes (today + lifetime)
     try {
       final store = await MeditationStore.create();
       await store.addMinutes(_total.inMinutes);
     } catch (_) {}
 
-// After dialog: try interstitial once per session
+    // After dialog: try interstitial once per session
     await TimerInterstitialGate.instance.maybeShow();
   }
 
-    double get _progress {
+  // ---- Derived UI values ----
+  double get _progress {
     if (_total.inMilliseconds == 0) return 0;
     final done = _total.inMilliseconds - _remaining.inMilliseconds;
     return (done / _total.inMilliseconds).clamp(0, 1).toDouble();
   }
 
   String get _readout => _formatDuration(_remaining);
+
+  String get _ambienceLabel {
+    switch (_selectedSound) {
+      case TimerSoundType.mute:
+        return 'Mute';
+      case TimerSoundType.om:
+        return 'Om';
+      case TimerSoundType.birds:
+        return 'Birds';
+      case TimerSoundType.water:
+        return 'Water';
+      case TimerSoundType.flute:
+        return 'Flute';
+      case TimerSoundType.bell:
+        return 'Bell';
+    }
+  }
 
   static String _formatDuration(Duration d) {
     final totalSeconds = d.inSeconds.clamp(0, 24 * 60 * 60);
@@ -269,6 +351,7 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     return '$m:$s';
   }
 
+  // ---- UI ----
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -276,117 +359,192 @@ class _TimerPageState extends State<TimerPage> with TickerProviderStateMixin {
     final isPaused = _state == _TimerState.paused;
     final isIdle = _state == _TimerState.idle;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Timer'),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Preset selector
-              Text('Select Duration', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _presets.map((m) {
-                  final selected = m == _selectedMinutes;
-                  return ChoiceChip(
-                    label: Text('$m min'),
-                    selected: selected,
-                    onSelected: (_) => _selectPreset(m),
-                  );
-                }).toList(),
-              ),
-
-              const SizedBox(height: 16),
-
-              // 🔊 Ambience selector (Mute / Om / Birds / Water / Flute / Bell)
-              Text('Ambience', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+    return WillPopScope(
+      onWillPop: () async {
+        if (_state == _TimerState.running) {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('साधना चल रही है'),
+              content: const Text('क्या आप ध्यान रोककर बाहर जाना चाहेंगे?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('नहीं'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    _stop(); // ensure your stop logic runs
+                    Navigator.pop(ctx, true);
+                  },
+                  child: const Text('हाँ, रोकें'),
+                ),
+              ],
+            ),
+          );
+          return confirm ?? false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Timer'),
+          centerTitle: true,
+        ),
+        body: AnimatedContainer(
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeInOut,
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(0, -0.4),
+              radius: 1.2,
+              colors: isRunning
+                  ? [
+                theme.colorScheme.primary.withOpacity(0.15),
+                theme.colorScheme.surface,
+              ]
+                  : [
+                theme.colorScheme.surface,
+                theme.colorScheme.surface,
+              ],
+            ),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _soundChip('Mute',  TimerSoundType.mute),
-                  _soundChip('Om',    TimerSoundType.om),
-                  _soundChip('Birds', TimerSoundType.birds),
-                  _soundChip('Water', TimerSoundType.water),
-                  _soundChip('Flute', TimerSoundType.flute),
-                  _soundChip('Bell',  TimerSoundType.bell),
-                ],
-              ),
+                  // Advanced controls (collapsible)
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: theme.dividerColor),
+                    ),
+                    child: Theme(
+                      // keep it subtle in dark and light
+                      data: theme.copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+                        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        initiallyExpanded: false,
+                        title: Text('Advanced', style: theme.textTheme.titleMedium),
+                        subtitle: Text(
+                          '${_selectedMinutes} min • $_ambienceLabel',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        children: [
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('Select Duration', style: theme.textTheme.labelLarge),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _presets.map((m) {
+                              final selected = m == _selectedMinutes;
+                              return ChoiceChip(
+                                label: Text('$m min'),
+                                selected: selected,
+                                onSelected: (_) => _selectPreset(m),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 16),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('Ambience', style: theme.textTheme.labelLarge),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _soundChip('Mute', TimerSoundType.mute),
+                              _soundChip('Om', TimerSoundType.om),
+                              _soundChip('Birds', TimerSoundType.birds),
+                              _soundChip('Water', TimerSoundType.water),
+                              _soundChip('Flute', TimerSoundType.flute),
+                              _soundChip('Bell', TimerSoundType.bell),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
-              const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
-              // Time readout
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                  // Time readout
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _readout,
+                            style: theme.textTheme.displayLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          LinearProgressIndicator(
+                            value: _progress,
+                            minHeight: 10,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _state == _TimerState.completed
+                                ? 'Completed'
+                                : isRunning
+                                ? 'Running'
+                                : isPaused
+                                ? 'Paused'
+                                : 'Ready',
+                            style: theme.textTheme.labelLarge,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Controls
+                  Row(
                     children: [
-                      Text(
-                        _readout,
-                        style: theme.textTheme.displayLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: (isRunning)
+                              ? _pause
+                              : (isPaused ? _resume : _start),
+                          child: Text(
+                            isRunning
+                                ? 'Pause'
+                                : isPaused
+                                ? 'Resume'
+                                : 'Start',
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      LinearProgressIndicator(
-                        value: _progress,
-                        minHeight: 10,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _state == _TimerState.completed
-                            ? 'Completed'
-                            : isRunning
-                            ? 'Running'
-                            : isPaused
-                            ? 'Paused'
-                            : 'Ready',
-                        style: theme.textTheme.labelLarge,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.tonal(
+                          onPressed: (isIdle && _remaining == _total) ? null : _reset,
+                          child: const Text('Reset'),
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              // Controls
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: (isRunning)
-                          ? _pause
-                          : (isPaused ? _resume : _start),
-                      child: Text(
-                        isRunning
-                            ? 'Pause'
-                            : isPaused
-                            ? 'Resume'
-                            : 'Start',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.tonal(
-                      onPressed: (isIdle && _remaining == _total) ? null : _reset,
-                      child: const Text('Reset'),
-                    ),
-                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
+        bottomNavigationBar: const SizedBox(height: 52), // reserved for banner
       ),
     );
   }
