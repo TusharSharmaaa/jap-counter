@@ -22,6 +22,7 @@ import 'notifications/notification_service.dart';
 import 'data/activity_store.dart';
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
+import 'data/goal_store.dart';
 import 'data/xp_store.dart';
 import 'theme/neumorph.dart';
 import 'gamify/gamify_store.dart';
@@ -265,6 +266,8 @@ class _CounterPageState extends State<_CounterPage> {
   int _today = 0;
   int _lifetime = 0;
   bool _pulse = false;
+  int _goalMalas = 1; // daily target malas
+  bool _goalCongratulatedToday = false;
 
   @override
   void initState() {
@@ -422,6 +425,26 @@ class _CounterPageState extends State<_CounterPage> {
       _lifetime = s.lifetimeJaps;
     });
 
+    try {
+      // Congratulate exactly once per day when the goal is reached
+      if (_goalReached && !_goalCongratulatedToday) {
+        _goalCongratulatedToday = true;
+        final gs = await GoalStore.create();
+        await gs.setLastCongratsToday();
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text('🌟 Daily goal reached: $_goalMalas mala${_goalMalas == 1 ? '' : 's'}!'),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+        }
+      }
+    } catch (_) {}
+
     final ns = NotificationService();
     await ns.scheduleDynamicJapReminder(_today);
   }
@@ -464,6 +487,13 @@ class _CounterPageState extends State<_CounterPage> {
 
   int get _malas => _today ~/ 108;
   int get _lifetimeMalas => _lifetime ~/ 108;
+  double get _goalProgress {
+    if (_goalMalas <= 0) return 0;
+    final done = _malas;
+    return (done / _goalMalas).clamp(0, 1).toDouble();
+  }
+
+  bool get _goalReached => _malas >= _goalMalas;
 
   @override
   Widget build(BuildContext context) {
@@ -496,6 +526,38 @@ class _CounterPageState extends State<_CounterPage> {
           const SizedBox(height: 24),
           const SizedBox(height: 8),
           _MalaProgress(todayJaps: _today),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Daily Goal: $_goalMalas mala${_goalMalas == 1 ? '' : 's'}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: _goalProgress,
+                    minHeight: 10,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _goalReached
+                        ? '✅ Goal met for today'
+                        : 'Progress: $_malas / $_goalMalas mala${_goalMalas == 1 ? '' : 's'}',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 8),
           Expanded(
             child: Center(
@@ -727,6 +789,7 @@ class _StatsPageState extends State<_StatsPage> {
     final s = await CounterStore.create(); // uses same prefs + new-day reset
     final mstore = await MeditationStore.create();
     final dstore = await DedicationStore.create();
+    final g = await GoalStore.create();
 
     setState(() {
       _today = s.todayJaps;
@@ -736,6 +799,7 @@ class _StatsPageState extends State<_StatsPage> {
       _todayMin = mstore.todayMinutes;
       _lifetimeMin = mstore.lifetimeMinutes;
       _dedication = dstore.note;
+      // (removed — these belong to _CounterPageState, not _StatsPageState)
     });
     // Ensure today is recorded as active if user already has japs today
     if (s.todayJaps > 0) {
@@ -766,6 +830,7 @@ class _StatsPageState extends State<_StatsPage> {
     final remLabel = (rem != null && rem > Duration.zero)
         ? (rem.inMinutes > 0 ? '${rem.inMinutes}m ${rem.inSeconds % 60}s' : '${rem.inSeconds % 60}s')
         : null;
+    // Load goal (synchronously via FutureBuilder below to avoid blocking build)
 
     return Scaffold(
       appBar: AppBar(
@@ -1041,6 +1106,43 @@ class _StatsPageState extends State<_StatsPage> {
             ],
           ),
           const SizedBox(height: 16),
+        FutureBuilder<int>(
+          future: (() async {
+            final gs = await GoalStore.create();
+            return gs.dailyMalasGoal;
+          })(),
+          builder: (context, snap) {
+            final goal = snap.data ?? 1;
+            final reached = todayMalas >= goal;
+            return Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    reached ? Icons.check_circle : Icons.flag,
+                    color: reached
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.outline,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      reached
+                          ? 'Daily Goal met — $todayMalas / $goal malas'
+                          : 'Daily Goal: $goal malas • Today: $todayMalas',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
         FutureBuilder<String>(
           future: DedicationStore.create().then((s) => s.note),
           builder: (context, snap) {
