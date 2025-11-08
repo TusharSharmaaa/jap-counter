@@ -24,3 +24,4 @@ class DedicationStore {
 
   Future<void> clear() async => _prefs.remove(_kKey);
 }
+
