@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/app_localizations.dart';
 import 'dedication_store.dart';
 import '../theme/brand.dart';
 
@@ -67,7 +68,9 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
   }
 
   Future<void> _init() async {
-    await initializeDateFormatting('hi_IN');
+    final lang = AppLocalizationScope.of(context).language;
+    final locale = lang == 'hi' ? 'hi_IN' : 'en_US';
+    await initializeDateFormatting(locale);
     await _loadDedication();
     if (mounted) setState(() => _localeReady = true);
   }
@@ -84,6 +87,8 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
   }
 
   Future<void> _shareCard() async {
+    final shareText =
+        '${context.tr('share.shareText')}\n${context.tr('share.shareTextLink')}';
     try {
       setState(() => _sharing = true);
       final ctx = _cardKey.currentContext;
@@ -100,10 +105,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
       await file.writeAsBytes(pngBytes);
 
       await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          text: '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
-        ),
+        ShareParams(files: [XFile(file.path)], text: shareText),
       );
     } catch (e) {
       if (kDebugMode) debugPrint('[SharePreview] Share failed: $e');
@@ -123,13 +125,16 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
       final pngBytes = byteData!.buffer.asUint8List();
 
       final dir = await getTemporaryDirectory();
-      final file =
-          File('${dir.path}/rjc_streak_${DateTime.now().millisecondsSinceEpoch}.png');
+      final file = File(
+        '${dir.path}/rjc_streak_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
       await file.writeAsBytes(pngBytes);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved image to: ${file.path}')),
+        SnackBar(
+          content: Text(context.tr('share.saved', args: {'path': file.path})),
+        ),
       );
     } catch (e) {
       if (kDebugMode) debugPrint('[SharePreview] Save failed: $e');
@@ -139,7 +144,9 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
   }
 
   Future<void> _shareWhatsAppText() async {
-    final msg = Uri.encodeComponent('🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।');
+    final shareText =
+        '${context.tr('share.shareText')}\n${context.tr('share.shareTextLink')}';
+    final msg = Uri.encodeComponent(shareText);
     final waUri = Uri.parse('whatsapp://send?text=$msg');
     try {
       final can = await canLaunchUrl(waUri);
@@ -149,18 +156,16 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
       }
     } catch (_) {}
 
-    await SharePlus.instance.share(
-      ShareParams(
-        text: '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
-      ),
-    );
+    await SharePlus.instance.share(ShareParams(text: shareText));
   }
 
   @override
   Widget build(BuildContext context) {
+    final lang = AppLocalizationScope.of(context).language;
+    final locale = lang == 'hi' ? 'hi_IN' : 'en_US';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Share My Streak'),
+        title: Text(context.tr('share.appBar')),
         centerTitle: true,
       ),
       body: Container(
@@ -179,9 +184,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                 key: _cardKey,
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: 720,
-                    ),
+                    constraints: const BoxConstraints(maxWidth: 720),
                     child: AspectRatio(
                       aspectRatio: 4 / 5,
                       child: AnimatedBuilder(
@@ -192,14 +195,27 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(24),
-                              gradient: BrandGradients.shareCard(),
-                              border: Border.all(color: Colors.amber, width: 2),
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFFF6F1EB),
+                                  Color(0xFFE4D6C4),
+                                  Color(0xFFF6E7D8),
+                                ],
+                              ),
+                              border: Border.all(
+                                color: Colors.brown.shade200,
+                                width: 1.2,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.amber.withValues(alpha: 0.25 + 0.25 * _glowCtl.value),
-                                  blurRadius: 14 + 6 * _glowCtl.value,
-                                  spreadRadius: 1 + 1 * _glowCtl.value,
-                                  offset: const Offset(0, 6),
+                                  color: Colors.brown.withValues(
+                                    alpha: 0.12 + 0.10 * _glowCtl.value,
+                                  ),
+                                  blurRadius: 18 + 8 * _glowCtl.value,
+                                  spreadRadius: 2 + 2 * _glowCtl.value,
+                                  offset: const Offset(0, 10),
                                 ),
                               ],
                             ),
@@ -210,26 +226,47 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    '🌸 मेरा साधना सफर 🌸',
-                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    context.tr('share.title'),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(
                                           fontWeight: FontWeight.bold,
                                           color: Colors.brown.shade800,
                                         ),
                                   ),
                                   const SizedBox(height: 6),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.20),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.20,
+                                      ),
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: Colors.amber.withValues(alpha: 0.6),
+                                        color: Colors.amber.withValues(
+                                          alpha: 0.6,
+                                        ),
                                         width: 1,
                                       ),
                                     ),
                                     child: Text(
-                                      '🔥 ${_toHindiDigits(widget.streakDays)} दिन की साधना',
-                                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                      context.tr(
+                                        'share.streakLabel',
+                                        args: {
+                                          'days': _formatNumber(
+                                            widget.streakDays,
+                                            lang,
+                                          ),
+                                        },
+                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
                                             fontWeight: FontWeight.w600,
                                             color: Colors.brown.shade800,
                                             letterSpacing: 0.3,
@@ -239,30 +276,78 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                                   const SizedBox(height: 8),
                                   Text(
                                     _localeReady
-                                        ? DateFormat('d MMMM yyyy', 'hi_IN').format(DateTime.now())
-                                        : DateFormat.yMMMMd().format(DateTime.now()),
-                                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                        ? DateFormat(
+                                            'd MMMM yyyy',
+                                            locale,
+                                          ).format(DateTime.now())
+                                        : DateFormat.yMMMMd(
+                                            locale,
+                                          ).format(DateTime.now()),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(
                                           color: Colors.brown.shade700,
                                         ),
                                   ),
                                   const Divider(thickness: 1, height: 24),
-                                  _statRow('आज के जाप', widget.todayJaps),
-                                  _statRow('जीवन भर के माला', widget.lifetimeMalas),
-                                  _statRow('अभ्यास के दिन', widget.streakDays),
+                                  _statLine(
+                                    context.tr(
+                                      'share.todayJaps',
+                                      args: {
+                                        'value': _formatNumber(
+                                          widget.todayJaps,
+                                          lang,
+                                        ),
+                                      },
+                                    ),
+                                  ),
+                                  _statLine(
+                                    context.tr(
+                                      'share.lifetimeMalas',
+                                      args: {
+                                        'value': _formatNumber(
+                                          widget.lifetimeMalas,
+                                          lang,
+                                        ),
+                                      },
+                                    ),
+                                  ),
+                                  _statLine(
+                                    context.tr(
+                                      'share.streakDays',
+                                      args: {
+                                        'value': _formatNumber(
+                                          widget.streakDays,
+                                          lang,
+                                        ),
+                                      },
+                                    ),
+                                  ),
                                   const SizedBox(height: 16),
-                                  if (_dedication != null && _dedication!.isNotEmpty)
+                                  if (_dedication != null &&
+                                      _dedication!.isNotEmpty)
                                     Text(
-                                      '💠 समर्पण: ${_dedication!}',
+                                      context.tr(
+                                        'share.dedication',
+                                        args: {'note': _dedication!},
+                                      ),
                                       textAlign: TextAlign.center,
-                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.copyWith(
                                             color: Colors.deepOrange.shade900,
                                             fontStyle: FontStyle.italic,
                                           ),
                                     ),
                                   const SizedBox(height: 16),
                                   Text(
-                                    'साधना निरंतर 🌼',
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    context.tr('share.motto'),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
                                           fontWeight: FontWeight.w500,
                                           color: Colors.brown.shade700,
                                         ),
@@ -276,16 +361,40 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                                         Icon(
                                           Icons.temple_hindu,
                                           size: 14,
-                                          color: Colors.brown.shade800.withValues(alpha: 0.55),
+                                          color: Colors.brown.shade800
+                                              .withValues(alpha: 0.55),
                                         ),
                                         const SizedBox(width: 4),
-                                        Text(
-                                          'Radha Jap Counter',
-                                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                                color: Colors.brown.shade800.withValues(alpha: 0.55),
-                                                fontWeight: FontWeight.w600,
-                                                letterSpacing: 0.3,
-                                              ),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              context.tr('share.footer'),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelMedium
+                                                  ?.copyWith(
+                                                    color: Colors.brown.shade800
+                                                        .withValues(
+                                                          alpha: 0.55,
+                                                        ),
+                                                    fontWeight: FontWeight.w600,
+                                                    letterSpacing: 0.3,
+                                                  ),
+                                            ),
+                                            Text(
+                                              context.tr('share.footerSub'),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall
+                                                  ?.copyWith(
+                                                    color: Colors.brown.shade800
+                                                        .withValues(alpha: 0.4),
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -309,7 +418,11 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                       child: ElevatedButton.icon(
                         onPressed: _sharing ? null : _shareCard,
                         icon: const Icon(Icons.ios_share),
-                        label: Text(_sharing ? 'Preparing…' : 'Share Image'),
+                        label: Text(
+                          _sharing
+                              ? context.tr('stats.sharePreparing')
+                              : context.tr('common.share'),
+                        ),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           backgroundColor: Colors.deepOrangeAccent,
@@ -324,16 +437,19 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                     IconButton.filled(
                       onPressed: _sharing ? null : _saveCardPng,
                       icon: const Icon(Icons.download),
-                      tooltip: 'Save Image',
+                      tooltip: context.tr('share.saveTooltip'),
                     ),
                     const SizedBox(width: 6),
                     IconButton.filled(
                       onPressed: _sharing ? null : _shareWhatsAppText,
-                      icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.white),
+                      icon: const FaIcon(
+                        FontAwesomeIcons.whatsapp,
+                        color: Colors.white,
+                      ),
                       style: IconButton.styleFrom(
                         backgroundColor: const Color(0xFF25D366),
                       ),
-                      tooltip: 'WhatsApp (Text)',
+                      tooltip: context.tr('share.whatsappTooltip'),
                     ),
                   ],
                 ),
@@ -345,22 +461,27 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
     );
   }
 
-  Widget _statRow(String label, int value) {
+  Widget _statLine(String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            label,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-          ),
-          Text(
-            _toHindiDigits(value),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  String _formatNumber(int value, String language) {
+    return language == 'hi' ? _toHindiDigits(value) : value.toString();
   }
 }

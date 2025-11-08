@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:confetti/confetti.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'stats/streak_share_preview.dart';
 import 'stats/streak_badge.dart';
@@ -25,6 +26,8 @@ import 'data/goal_store.dart';
 import 'theme/neumorph.dart';
 import 'gamify/gamify_store.dart';
 import 'theme/theme.dart';
+import 'data/language_store.dart';
+import 'l10n/app_localizations.dart';
 import 'sync/sync_service.dart';
 import 'analytics/local_summary.dart';
 import 'utils/streak_image_generator.dart';
@@ -47,6 +50,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     _loadThemeMode();
+    _loadLanguage();
     _initNotifications(); // fire-and-forget
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       for (final page in _pages) {
@@ -61,9 +65,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       TimerInterstitialGate.instance.preload();
       final counter = await CounterStore.create();
       final today = counter.todayJaps ~/ 108;
+      await initializeDateFormatting(_language == 'hi' ? 'hi' : 'en');
       final msg = today > 0
-          ? 'आज की प्रगति: $today माला पूर्ण हुई। साधना जारी रखें 🙏'
-          : 'कल से नई साधना यात्रा प्रारंभ करें 🌸';
+          ? _translate('home.snackbar.progress', args: {'count': '$today'})
+          : _translate('home.snackbar.start');
       if (mounted) {
         final messenger = ScaffoldMessenger.maybeOf(context);
         messenger
@@ -93,6 +98,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   int _index = 0;
   final GlobalKey<_StatsPageState> _statsKey = GlobalKey<_StatsPageState>();
   ThemeMode _themeMode = ThemeMode.system;
+  String _language = 'en';
 
   late final List<Widget> _pages = [
     const CounterPage(),
@@ -113,6 +119,33 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     } else {
       _themeMode = mode;
     }
+  }
+
+  Future<void> _loadLanguage() async {
+    final lang = await LanguageStore.current();
+    if (mounted) {
+      setState(() => _language = lang);
+    } else {
+      _language = lang;
+    }
+  }
+
+  Future<void> _setLanguage(String language) async {
+    if (language == _language) return;
+    await LanguageStore.save(language);
+    if (!mounted) return;
+    await initializeDateFormatting(language == 'hi' ? 'hi' : 'en');
+    setState(() => _language = language);
+  }
+
+  String _translate(String key, {Map<String, String>? args}) {
+    var value = AppStrings.resolve(_language, key);
+    if (args != null) {
+      args.forEach((k, v) {
+        value = value.replaceAll('{$k}', v);
+      });
+    }
+    return value;
   }
 
   Future<void> _saveThemeMode(ThemeMode mode) async {
@@ -138,6 +171,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: _themeMode,
+      builder: (context, child) => AppLocalizationScope(
+        language: _language,
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -169,10 +206,12 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                 ? SettingsPage(
                     key: const ValueKey('settings'),
                     themeMode: _themeMode,
+                    language: _language,
                     onThemeModeChanged: (mode) {
                       setState(() => _themeMode = mode);
                       _saveThemeMode(mode);
                     },
+                    onLanguageChanged: _setLanguage,
                   )
                 : KeyedSubtree(
                     key: ValueKey('tab-$_index'),
@@ -202,11 +241,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _navIcon(Icons.touch_app, 0, 'Counter'),
-                  _navIcon(Icons.bar_chart, 1, 'Stats'),
-                  _navIcon(Icons.menu_book, 2, 'Content'),
-                  _navIcon(Icons.timer, 3, 'Timer'),
-                  _navIcon(Icons.settings, 4, 'Settings'),
+                  _navIcon(Icons.touch_app, 0, 'nav.counter'),
+                  _navIcon(Icons.bar_chart, 1, 'nav.stats'),
+                  _navIcon(Icons.menu_book, 2, 'nav.content'),
+                  _navIcon(Icons.timer, 3, 'nav.timer'),
+                  _navIcon(Icons.settings, 4, 'nav.settings'),
                 ],
               ),
             ),
@@ -223,7 +262,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  Widget _navIcon(IconData icon, int idx, String label) {
+  Widget _navIcon(IconData icon, int idx, String labelKey) {
     final active = _index == idx;
     final theme = Theme.of(context);
     final color = active
@@ -255,7 +294,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               Icon(icon, color: color),
               const SizedBox(height: 4),
               Text(
-                label,
+                _translate(labelKey),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: color,
                   fontWeight: active ? FontWeight.w600 : null,
@@ -427,7 +466,7 @@ class _StatsPageState extends State<_StatsPage> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Stats')),
+        appBar: AppBar(title: Text(context.tr('stats.title'))),
         body: const Center(child: CircularProgressIndicator()),
         bottomNavigationBar: const _BannerReserve(),
       );
@@ -446,7 +485,7 @@ class _StatsPageState extends State<_StatsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stats'),
+        title: Text(context.tr('stats.title')),
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: Container(
@@ -461,7 +500,9 @@ class _StatsPageState extends State<_StatsPage> {
         ),
         actions: [
           IconButton(
-            tooltip: _ambienceEnabled ? 'Ambience On' : 'Ambience Off',
+            tooltip: _ambienceEnabled
+                ? context.tr('stats.ambience.on')
+                : context.tr('stats.ambience.off'),
             icon: Icon(
               _ambienceEnabled ? Icons.spatial_audio_off : Icons.spatial_audio,
             ),
@@ -540,15 +581,21 @@ class _StatsPageState extends State<_StatsPage> {
                   _confetti.play();
                 }
               }
-              final streakMessage = streak > 0
-                  ? (streak == 7
-                        ? '🌸 7-Day Streak — Discipline!'
-                        : streak == 21
-                        ? '🔥 21-Day Streak — Devotion!'
-                        : streak == 40
-                        ? '🌼 40-Day Tapasya — Rare!'
-                        : '✨ Current Streak: $streak days')
-                  : 'No active streak yet';
+              String streakMessage;
+              if (streak == 0) {
+                streakMessage = context.tr('stats.noActiveStreak');
+              } else if (streak == 7) {
+                streakMessage = context.tr('stats.streakMessage.7');
+              } else if (streak == 21) {
+                streakMessage = context.tr('stats.streakMessage.21');
+              } else if (streak == 40) {
+                streakMessage = context.tr('stats.streakMessage.40');
+              } else {
+                streakMessage = context.tr(
+                  'stats.streakMessage.generic',
+                  args: {'days': '$streak'},
+                );
+              }
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -556,7 +603,7 @@ class _StatsPageState extends State<_StatsPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Current Streak',
+                        context.tr('stats.currentStreak'),
                         style: theme.textTheme.titleMedium,
                       ),
                       Container(
@@ -629,9 +676,18 @@ class _StatsPageState extends State<_StatsPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _metricTile('मालाएँ', '${data.totalMalas}'),
-                  _metricTile('ध्यान (मि)', '${data.totalMinutes}'),
-                  _metricTile('सिलसिला', '${data.streakDays}'),
+                  _metricTile(
+                    context.tr('stats.summary.malas'),
+                    '${data.totalMalas}',
+                  ),
+                  _metricTile(
+                    context.tr('stats.summary.meditation'),
+                    '${data.totalMinutes}',
+                  ),
+                  _metricTile(
+                    context.tr('stats.summary.streak'),
+                    '${data.streakDays}',
+                  ),
                 ],
               ),
             );
@@ -650,9 +706,9 @@ class _StatsPageState extends State<_StatsPage> {
                 runSpacing: 8,
                 children: badges.map((badge) {
                   final label = switch (badge) {
-                    'streak_7' => '🔥 7-day Streak',
-                    'streak_21' => '🔥 21-day Streak',
-                    'streak_40' => '🔥 40-day Streak',
+                    'streak_7' => context.tr('stats.badge.streak7'),
+                    'streak_21' => context.tr('stats.badge.streak21'),
+                    'streak_40' => context.tr('stats.badge.streak40'),
                     _ => badge,
                   };
                   return Container(
@@ -675,19 +731,22 @@ class _StatsPageState extends State<_StatsPage> {
         Row(
           children: [
             Expanded(
-              child: _NeoTile(title: "Today's Japs", value: _today.toString()),
+              child: _NeoTile(
+                title: context.tr('stats.metric.todayJaps'),
+                value: _today.toString(),
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _NeoTile(
-                title: "Today's Malas",
+                title: context.tr('stats.metric.todayMalas'),
                 value: todayMalas.toString(),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _NeoTile(
-                title: "Lifetime Malas",
+                title: context.tr('stats.metric.lifetimeMalas'),
                 value: lifetimeMalas.toString(),
               ),
             ),
@@ -698,14 +757,14 @@ class _StatsPageState extends State<_StatsPage> {
           children: [
             Expanded(
               child: _NeoTile(
-                title: "Today's Meditation (min)",
+                title: context.tr('stats.metric.todayMeditation'),
                 value: _todayMin.toString(),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _NeoTile(
-                title: "Lifetime Meditation (min)",
+                title: context.tr('stats.metric.lifetimeMeditation'),
                 value: _lifetimeMin.toString(),
               ),
             ),
@@ -738,9 +797,12 @@ class _StatsPageState extends State<_StatsPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      reached
-                          ? 'Daily Goal met — $todayMalas / $goal malas'
-                          : 'Daily Goal: $goal malas • Today: $todayMalas',
+                      context.tr(
+                        reached
+                            ? 'stats.dailyGoal.met'
+                            : 'stats.dailyGoal.pending',
+                        args: {'todayMalas': '$todayMalas', 'goal': '$goal'},
+                      ),
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
@@ -771,7 +833,10 @@ class _StatsPageState extends State<_StatsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('7-Day Progress', style: theme.textTheme.titleMedium),
+                  Text(
+                    context.tr('stats.progressTitle'),
+                    style: theme.textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 164,
@@ -872,6 +937,9 @@ class _StatsPageState extends State<_StatsPage> {
           future: DedicationStore.create().then((s) => s.note),
           builder: (context, snap) {
             final note = snap.data ?? '';
+            final dedicationText = note.isEmpty
+                ? context.tr('stats.dedication.empty')
+                : context.tr('stats.dedication.title', args: {'note': note});
             return Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -885,9 +953,7 @@ class _StatsPageState extends State<_StatsPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      note.isEmpty
-                          ? 'Dedication: (tap edit to add)'
-                          : 'Dedication: $note',
+                      dedicationText,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
@@ -898,25 +964,25 @@ class _StatsPageState extends State<_StatsPage> {
                       final updated = await showDialog<String>(
                         context: context,
                         builder: (ctx) => AlertDialog(
-                          title: const Text('Edit Dedication'),
+                          title: Text(context.tr('stats.dedication.editTitle')),
                           content: TextField(
                             controller: controller,
                             maxLines: 3,
                             textInputAction: TextInputAction.done,
-                            decoration: const InputDecoration(
-                              hintText: 'e.g., माता-पिता के नाम',
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              hintText: context.tr('stats.dedication.hint'),
+                              border: const OutlineInputBorder(),
                             ),
                           ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(ctx, null),
-                              child: const Text('Cancel'),
+                              child: Text(context.tr('common.cancel')),
                             ),
                             FilledButton(
                               onPressed: () =>
                                   Navigator.pop(ctx, controller.text.trim()),
-                              child: const Text('Save'),
+                              child: Text(context.tr('common.save')),
                             ),
                           ],
                         ),
@@ -928,7 +994,7 @@ class _StatsPageState extends State<_StatsPage> {
                       }
                     },
                     icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('Edit'),
+                    label: Text(context.tr('common.edit')),
                   ),
                 ],
               ),
@@ -984,8 +1050,13 @@ class _StatsPageState extends State<_StatsPage> {
             icon: const Icon(Icons.ios_share),
             label: Text(
               _shareBusy
-                  ? 'Preparing…'
-                  : (cooling ? 'Wait ${remLabel ?? ''}' : 'Share My Streak'),
+                  ? context.tr('stats.sharePreparing')
+                  : (cooling
+                        ? context.tr(
+                            'stats.shareWait',
+                            args: {'time': remLabel ?? '…'},
+                          )
+                        : context.tr('stats.shareButton')),
             ),
           ),
         ),
@@ -997,13 +1068,16 @@ class _StatsPageState extends State<_StatsPage> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
-                'Days Active: $count',
+                context.tr('stats.daysActive', args: {'count': '$count'}),
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
             );
           },
         ),
-        Text('Calendar', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          context.tr('stats.calendar'),
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 6),
         _ActivityCalendar(todayJaps: _today, todayMalas: todayMalas),
       ],
@@ -1269,10 +1343,10 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
           ),
         ),
         const SizedBox(height: 12),
-        _buildLegend(theme),
+        _buildLegend(context),
         if (selected != null) ...[
           const SizedBox(height: 12),
-          _buildSelectionSummary(theme, selected, selectedEntry),
+          _buildSelectionSummary(context, selected, selectedEntry),
         ],
       ],
     );
@@ -1311,7 +1385,8 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
     return isCurrentMonth ? base : base.withOpacity(0.45);
   }
 
-  Widget _buildLegend(ThemeData theme) {
+  Widget _buildLegend(BuildContext context) {
+    final theme = Theme.of(context);
     final zero = _colorForMalas(0, theme, true);
     final few = _colorForMalas(1, theme, true);
     final some = _colorForMalas(5, theme, true);
@@ -1321,23 +1396,34 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
       spacing: 16,
       runSpacing: 8,
       children: [
-        _LegendSwatch(color: zero, label: '0 mala'),
-        _LegendSwatch(color: few, label: '1-4 malas'),
-        _LegendSwatch(color: some, label: '5-7 malas'),
-        _LegendSwatch(color: plenty, label: '8-14 malas'),
-        _LegendSwatch(color: intense, label: '15+ malas'),
+        _LegendSwatch(color: zero, label: context.tr('stats.legend.zero')),
+        _LegendSwatch(color: few, label: context.tr('stats.legend.few')),
+        _LegendSwatch(color: some, label: context.tr('stats.legend.some')),
+        _LegendSwatch(color: plenty, label: context.tr('stats.legend.plenty')),
+        _LegendSwatch(
+          color: intense,
+          label: context.tr('stats.legend.intense'),
+        ),
       ],
     );
   }
 
   Widget _buildSelectionSummary(
-    ThemeData theme,
+    BuildContext context,
     DateTime date,
     _DailyHistoryEntry entry,
   ) {
-    final formattedDate = DateFormat('EEE, d MMM yyyy').format(date);
-    final malaLabel = entry.malas == 1 ? 'mala' : 'malas';
-    final japLabel = entry.japs == 1 ? 'jap' : 'japs';
+    final theme = Theme.of(context);
+    final lang = AppLocalizationScope.of(context).language;
+    final localeCode = lang == 'hi' ? 'hi' : 'en';
+    final formattedDate = DateFormat(
+      'EEE, d MMM yyyy',
+      localeCode,
+    ).format(date);
+    final now = DateTime.now();
+    final titleLabel = DateUtils.isSameDay(date, now)
+        ? '${context.tr('stats.calendar.today')} • $formattedDate'
+        : formattedDate;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1352,10 +1438,13 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(formattedDate, style: theme.textTheme.titleSmall),
+                Text(titleLabel, style: theme.textTheme.titleSmall),
                 const SizedBox(height: 4),
                 Text(
-                  '${entry.malas} $malaLabel • ${entry.japs} $japLabel',
+                  context.tr(
+                    'stats.calendar.summary',
+                    args: {'malas': '${entry.malas}', 'japs': '${entry.japs}'},
+                  ),
                   style: theme.textTheme.bodySmall,
                 ),
               ],
