@@ -23,6 +23,7 @@ import 'data/activity_store.dart';
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
 import 'data/goal_store.dart';
+import 'data/session_store.dart';
 import 'data/xp_store.dart';
 import 'theme/neumorph.dart';
 import 'gamify/gamify_store.dart';
@@ -30,6 +31,7 @@ import 'theme/theme.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'sync/sync_service.dart';
 import 'utils/streak_image_generator.dart';
+import 'utils/weekly_chart_data.dart';
 
 
 class App extends StatefulWidget {
@@ -49,7 +51,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
     _loadThemeMode();
     _initNotifications(); // fire-and-forget
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       for (final page in _pages) {
         if (page is StatefulWidget) {
           final key = page.key;
@@ -60,6 +62,23 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       }
       RewardedShareAd().preload();
       TimerInterstitialGate.instance.preload();
+      final counter = await CounterStore.create();
+      final today = counter.todayJaps ~/ 108;
+      final msg = today > 0
+          ? 'आज की प्रगति: $today माला पूर्ण हुई। साधना जारी रखें 🙏'
+          : 'कल से नई साधना यात्रा प्रारंभ करें 🌸';
+      if (mounted) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        messenger
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(msg),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+      }
     });
   }
 
@@ -418,6 +437,10 @@ class _CounterPageState extends State<_CounterPage> {
       if (mounted) {
         _showConfetti(context);
       }
+      try {
+        final sessions = await SessionStore.create();
+        await sessions.addSession(type: 'jap', count: willBe);
+      } catch (_) {}
     }
 
     setState(() {
@@ -1136,6 +1159,58 @@ class _StatsPageState extends State<_StatsPage> {
                           ? 'Daily Goal met — $todayMalas / $goal malas'
                           : 'Daily Goal: $goal malas • Today: $todayMalas',
                       style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: WeeklyChartData.build(),
+          builder: (context, snap) {
+            final data = snap.data ?? [];
+            if (data.isEmpty) return const SizedBox.shrink();
+            return Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('7-Day Progress', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 100,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: data.map((e) {
+                        final val = e['value'] as int? ?? 0;
+                        final h = (val * 10).clamp(4, 100).toDouble();
+                        return Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Container(
+                                height: h,
+                                width: 10,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                e['day'] as String? ?? '',
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ),
                 ],

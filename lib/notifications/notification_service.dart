@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -97,23 +98,29 @@ class NotificationService {
     ];
 
     for (final n in notifications) {
-      await _plugin.zonedSchedule(
-        n.id,
-        n.title,
-        n.body,
-        n.scheduledDate,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'daily_sadhana',
-            'Daily Reminders',
-            importance: Importance.high,
-            priority: Priority.high,
+      try {
+        await _plugin.zonedSchedule(
+          n.id,
+          n.title,
+          n.body,
+          n.scheduledDate,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'daily_sadhana',
+              'Daily Reminders',
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
           ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.time,
+        );
+      } on PlatformException catch (e) {
+        if (kDebugMode) {
+          debugPrint('[Notifications] Daily reminder skipped (${n.id}): $e');
+        }
+      }
     }
   }
 
@@ -135,20 +142,55 @@ class NotificationService {
       time = time.add(const Duration(days: 1));
     }
 
-    await _plugin.zonedSchedule(
-      4,
-      'आज का जप संख्याः $todayJaps',
-      '“राधे राधे” के संग साधना पूर्ण करें 🌸',
-      tz.TZDateTime.from(time, tz.local),
-      notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      androidAllowWhileIdle: true,
-      matchDateTimeComponents: DateTimeComponents.time,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-    );
+    try {
+      await _plugin.zonedSchedule(
+        4,
+        'आज का जप संख्याः $todayJaps',
+        '“राधे राधे” के संग साधना पूर्ण करें 🌸',
+        tz.TZDateTime.from(time, tz.local),
+        notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidAllowWhileIdle: true,
+        matchDateTimeComponents: DateTimeComponents.time,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } on PlatformException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Notifications] Dynamic reminder skipped: $e');
+      }
+    }
 
     if (kDebugMode) {
       debugPrint('[Notifications] Dynamic reminder scheduled for $time with count $todayJaps');
+    }
+  }
+
+  Future<void> scheduleDailyMotivation() async {
+    const android = AndroidNotificationDetails(
+      'daily_motivation',
+      'Daily Motivation',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const details = NotificationDetails(android: android);
+    final tzNow = tz.TZDateTime.now(tz.local);
+    final tomorrow7am = tz.TZDateTime(tz.local, tzNow.year, tzNow.month, tzNow.day, 7)
+        .add(const Duration(days: 1));
+    try {
+      await _plugin.zonedSchedule(
+        2001,
+        '🌞 नई साधना का दिन',
+        'कल की तरह आज भी अपने जाप पूरे करें 🙏',
+        tomorrow7am,
+        details,
+        androidAllowWhileIdle: true,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.time,
+      );
+    } on PlatformException catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Notifications] Daily motivation scheduling skipped: $e');
+      }
     }
   }
 
