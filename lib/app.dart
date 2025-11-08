@@ -596,51 +596,39 @@ class _StatsPageState extends State<_StatsPage> {
               onPressed: _shareBusy ? null : () async {
                 setState(() => _shareBusy = true);
                 try {
-                  // Show gate; do not navigate from inside the ad callback.
-                  // Load current jap stats for Share Preview
+                  // Fresh numbers at tap time
                   final counter = await CounterStore.create();
                   final int todayJaps = counter.todayJaps;
                   final int lifetimeMalas = counter.lifetimeMalas;
-
-// TODO: integrate streak from ActivityStore when ready
-                  final int streakDays = 0;
-
-                  if (kDebugMode) debugPrint('[Stats] Share button tapped → calling gateShareMyStreak');
-                  final earned = await gateShareMyStreak(
+                  final int streakDays = await ActivityStore.currentStreak();
+                  debugPrint('[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalas streakDays=$streakDays');
+                  await openShareMyStreak(
                     context,
-                    onEarned: () async {},
                     todayJaps: todayJaps,
                     lifetimeMalas: lifetimeMalas,
                     streakDays: streakDays,
                   );
-                  if (!mounted) return;
-
-                  if (kDebugMode) {
-                    debugPrint('[Stats] gateShareMyStreak → earned=$earned');
-                  }
-
-                  if (earned) {
-                    if (kDebugMode) debugPrint('[Stats] Opening StreakSharePreviewPage…');
-                    final todayMalas = _today ~/ 108;
-                    final lifetimeMalas = _lifetime ~/ 108;
-                    final streak = await ActivityStore.currentStreak();
-
-                    if (!mounted) return;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => StreakSharePreviewPage(
-                          todayJaps: _today,
-                          lifetimeMalas: lifetimeMalas,
-                          streakDays: streak,
-                        ),
-                      ),
-                    );
-                  } else {
-                    if (kDebugMode) debugPrint('[Stats] Not earned → no navigation');
-                  }                  // If not earned, share_gate already shows a SnackBar message.
                 } finally {
                   if (mounted) setState(() => _shareBusy = false);
                 }
+              },
+              onLongPress: () async {
+                // DEV BYPASS: open preview without ad for debugging UI quickly
+                final counter = await CounterStore.create();
+                final int todayJaps = counter.todayJaps;
+                final int lifetimeMalas = counter.lifetimeMalas;
+                final int streakDays = await ActivityStore.currentStreak();
+                debugPrint('[Stats][DEV] Long-press bypass → opening preview directly');
+                if (!context.mounted) return;
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => StreakSharePreviewPage(
+                      todayJaps: todayJaps,
+                      lifetimeMalas: lifetimeMalas,
+                      streakDays: streakDays,
+                    ),
+                  ),
+                );
               },
 
               icon: const Icon(Icons.ios_share),

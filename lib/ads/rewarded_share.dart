@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:async' show unawaited;
+import 'dart:async' show Completer, unawaited;
 
 /// Rewarded ad used to gate the "Share My Streak" action on the Stats tab.
 /// Test unit ID from Google: https://developers.google.com/admob/flutter/test-ads
@@ -10,6 +10,9 @@ class RewardedShareAd {
   RewardedAd? _ad;
   bool _isLoading = false;
   bool _invalidated = false;
+  // NEW: capture result across callbacks, complete only after dismiss
+  Completer<bool>? _activeCompleter;
+  bool _earnedThisImpression = false;
   DateTime? _lastRewardTime;
   static const Duration _minGapBetweenRewards = Duration(minutes: 3);
 
@@ -59,68 +62,82 @@ class RewardedShareAd {
 
   /// Shows the ad if available. Returns true if the user earned the reward.
   Future<bool> showIfAvailable(BuildContext context) async {
-    debugPrint('[RewardedShare] showIfAvailable() called');
+    debugPrint('[RewardedShareAd] showIfAvailable()');
 
     final now = DateTime.now();
     if (_lastRewardTime != null &&
         now.difference(_lastRewardTime!) < _minGapBetweenRewards) {
       final rem = _minGapBetweenRewards - now.difference(_lastRewardTime!);
-      debugPrint('[RewardedShareAd] Cooldown active: ${rem.inSeconds}s remaining.');
+      if (kDebugMode) {
+        debugPrint('[RewardedShareAd] Cooldown active: ${rem.inSeconds}s');
+      }
       unawaited(preload());
       return false;
     }
 
     final ad = _ad;
     if (ad == null) {
-      debugPrint('[RewardedShareAd] No ad available to show.');
+      if (kDebugMode) {
+        debugPrint('[RewardedShareAd] No ad available to show → preloading.');
+      }
       unawaited(preload());
       return false;
     }
 
-    var earned = false;
-
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdShowedFullScreenContent: (ad) =>
-          debugPrint('[RewardedShareAd] Ad shown'),
-      onAdDismissedFullScreenContent: (ad) {
-        debugPrint('[RewardedShareAd] Ad dismissed (earned=$earned)');
-        _disposeCurrent(invalidate: true);
-        Navigator.of(context).pop(earned); // pass result to caller
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        debugPrint('[RewardedShareAd] Failed to show: $error');
-        _disposeCurrent(invalidate: true);
-        Navigator.of(context).pop(false);
-      },
-    );
+    _activeCompleter = Completer<bool>();
+    _earnedThisImpression = false;
 
     await ad.show(onUserEarnedReward: (adWithoutView, reward) async {
-      earned = true;
+      _earnedThisImpression = true;
       _lastRewardTime = DateTime.now();
-      debugPrint('[RewardedShareAd] onUserEarnedReward fired! → ${reward.type}');
+      if (kDebugMode) {
+        debugPrint('[RewardedShareAd] onUserEarnedReward → amount=${reward.amount} type=${reward.type}');
+      }
     });
 
-    debugPrint('[RewardedShareAd] ad.show() finished, earned=$earned');
+    final earned = await _activeCompleter!.future;
+
     _disposeCurrent(invalidate: true);
     unawaited(preload());
+    if (kDebugMode) {
+      debugPrint('[RewardedShareAd] Returning earned=$earned after dismiss.');
+    }
     return earned;
   }
 
   void _wireFullScreenCallbacks(RewardedAd ad) {
     ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdShowedFullScreenContent: (ad) =>
-          debugPrint('[RewardedShareAd] Ad showed.'),
+      onAdShowedFullScreenContent: (ad) {
+        if (kDebugMode) debugPrint('[RewardedShareAd] Ad showed.');
+      },
       onAdDismissedFullScreenContent: (ad) {
-        debugPrint('[RewardedShareAd] Ad dismissed.');
+        if (kDebugMode) {
+          debugPrint('[RewardedShareAd] Ad dismissed. earned=$_earnedThisImpression');
+        }
+        if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
+          _activeCompleter!.complete(_earnedThisImpression);
+        }
+        _activeCompleter = null;
+        _earnedThisImpression = false;
         _disposeCurrent(invalidate: true);
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
-        debugPrint('[RewardedShareAd] Failed to show: $error');
+        if (kDebugMode) {
+          debugPrint('[RewardedShareAd] Failed to show: $error');
+        }
+        if (_activeCompleter != null && !_activeCompleter!.isCompleted) {
+          _activeCompleter!.complete(false);
+        }
+        _activeCompleter = null;
+        _earnedThisImpression = false;
         _disposeCurrent(invalidate: true);
       },
-      onAdImpression: (ad) =>
-          debugPrint('[RewardedShareAd] Impression logged.'),
-      onAdClicked: (ad) => debugPrint('[RewardedShareAd] Clicked.'),
+      onAdImpression: (ad) {
+        if (kDebugMode) debugPrint('[RewardedShareAd] Impression logged.');
+      },
+      onAdClicked: (ad) {
+        if (kDebugMode) debugPrint('[RewardedShareAd] Clicked.');
+      },
     );
   }
 

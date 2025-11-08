@@ -1,80 +1,65 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:flutter/material.dart';
 
 import '../ads/rewarded_share.dart';
-import '../widgets/ad_loading_overlay.dart';
 import 'streak_share_preview.dart';
 
-/// Shows the rewarded ad for the "Share My Streak" flow.
-/// Returns true if the user earned the reward; false otherwise.
-/// Caller must pass today's stats so we can build the preview immediately after the ad.
-Future<bool> gateShareMyStreak(
-    BuildContext context, {
-      required Future<void> Function() onEarned,
-      required int todayJaps,
-      required int lifetimeMalas,
-      required int streakDays,
-    }) async {
-  showAdLoadingOverlay(context);
-  bool earned = false;
+/// Unified gate that:
+/// 1) shows rewarded ad
+/// 2) on earned → navigates to preview
+/// 3) on dismiss early → shows friendly message
+/// Also logs clearly for debugging.
+Future<void> openShareMyStreak(
+  BuildContext context, {
+  required int todayJaps,
+  required int lifetimeMalas,
+  required int streakDays,
+}) async {
+  if (!context.mounted) return;
 
-  try {
-    // Ensure the ads SDK is ready (safe to call multiple times).
-    await MobileAds.instance.initialize();
+  // DEV bypass: long-press handler in caller can skip ad and call this with earned=true.
+  // Here we always try the ad.
+  debugPrint('[ShareGate] Launching rewarded gate…');
+  final rs = RewardedShareAd();
 
-    earned = await RewardedShareAd.instance.showIfAvailable(context);
-    if (kDebugMode) {
-      debugPrint('[ShareGate] Reward result → earned=$earned');
+  // Warm ad if needed
+  await rs.ensureWarm();
+
+  // Cooldown guard: let user know and return early.
+  if (rs.isCoolingDown) {
+    final rem = rs.cooldownRemaining ?? const Duration(seconds: 0);
+    final msg = rem.inMinutes > 0
+        ? 'Please wait ${rem.inMinutes}m ${rem.inSeconds % 60}s before sharing again.'
+        : 'Please wait ${rem.inSeconds % 60}s before sharing again.';
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
+    debugPrint('[ShareGate] Cooldown active → $msg');
+    return;
+  }
 
-    if (earned) {
-      if (kDebugMode) {
-        debugPrint('[ShareGate] earned=true → invoking onEarned() and opening preview');
-      }
-      // Allow caller to record any side-effects (analytics, state writes, etc.)
-      await onEarned();
+  final earned = await rs.showIfAvailable(context);
+  debugPrint('[ShareGate] Reward result: earned=$earned');
+  if (!context.mounted) return;
 
-      // Navigate to the preview card with all the required data.
-      if (context.mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => StreakSharePreviewPage(
-              todayJaps: todayJaps,
-              lifetimeMalas: lifetimeMalas,
-              streakDays: streakDays,
-            ),
-          ),
-        );
-      }
-    } else {
-      if (kDebugMode) debugPrint('[ShareGate] earned=false (no nav)');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Watch the full video to unlock the Share Preview.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-
-    // If not earned, provide precise cooldown feedback when applicable.
-    if (!earned && context.mounted) {
-      final rs = RewardedShareAd.instance;
-      if (rs.isCoolingDown) {
-        final rem = rs.cooldownRemaining ?? const Duration(seconds: 0);
-        final m = rem.inMinutes;
-        final s = rem.inSeconds % 60;
-        final msg =
-        m > 0 ? 'Please wait ${m}m ${s}s before sharing again.' : 'Please wait ${s}s before sharing again.';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-      }
-    }
-
-    return earned;
-  } finally {
-    // Always remove the loading overlay, even if something failed.
-    hideAdLoadingOverlay(context);
+  if (earned) {
+    debugPrint('[ShareGate] Opening StreakSharePreviewPage...');
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StreakSharePreviewPage(
+          todayJaps: todayJaps,
+          lifetimeMalas: lifetimeMalas,
+          streakDays: streakDays,
+        ),
+      ),
+    );
+  } else {
+    // Not cooling down and not earned → user likely dismissed the ad early
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Watch the full video to unlock the Share Preview.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 }
