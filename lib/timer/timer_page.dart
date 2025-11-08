@@ -16,6 +16,7 @@ import '../ads/interstitial_timer.dart';
 import '../data/meditation_store.dart';
 import '../data/dedication_store.dart';
 import '../notifications/notification_service.dart';
+import '../data/session_store.dart';
 
 enum _TimerState { idle, running, paused, completed }
 
@@ -39,6 +40,7 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
   // Ambience
   final TimerSoundController _sound = TimerSoundController();
   TimerSoundType _selectedSound = TimerSoundType.mute;
+  bool _isFocusMode = false;
 
   // Ticker drift control
   DateTime? _lastTickAt;
@@ -369,6 +371,13 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
       if (kDebugMode) debugPrint('[Timer] DedicationStore failed: $e');
     }
 
+    try {
+      final sessions = await SessionStore.create();
+      await sessions.addSession(type: 'meditation', count: _total.inMinutes);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[Timer] Session logging failed: $e');
+    }
+
     // After dialog: try interstitial once per session
     await TimerInterstitialGate.instance.maybeShow();
   }
@@ -444,6 +453,14 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
         appBar: AppBar(
           title: const Text('Timer'),
           centerTitle: true,
+          actions: [
+            IconButton(
+              icon: Icon(_isFocusMode ? Icons.visibility : Icons.visibility_off),
+              onPressed: () {
+                setState(() => _isFocusMode = !_isFocusMode);
+              },
+            ),
+          ],
         ),
         body: AnimatedContainer(
           duration: const Duration(milliseconds: 600),
@@ -524,11 +541,16 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            _readout,
-                            style: theme.textTheme.displayLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
+                          AnimatedOpacity(
+                            opacity: _isFocusMode ? 0.2 : 1.0,
+                            duration: const Duration(milliseconds: 600),
+                            child: Text(
+                              _readout,
+                              style: theme.textTheme.displayLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                                fontSize: _isFocusMode ? 64 : 88,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),

@@ -18,6 +18,10 @@ class NotificationService {
 
   FlutterLocalNotificationsPlugin get plugin => _plugin;
 
+  static Future<void> initialize() async {
+    await NotificationService().init();
+  }
+
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'bhakti_daily_channel',
     'Bhakti Daily Reminders',

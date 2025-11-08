@@ -236,10 +236,18 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Theme.of(context).dividerColor),
                   ),
-                  child: Text(
-                    _currentQuote,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 500),
+                    transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+                    child: Text(
+                      _currentQuote,
+                      key: ValueKey(_quoteIndex),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            height: 1.4,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                    ),
                   ),
                 ),
               ),

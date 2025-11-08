@@ -72,4 +72,12 @@ class ActivityStore {
     final day = d.day.toString().padLeft(2, '0');
     return '$y-$m-$day';
   }
+
+  static Future<void> resetAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+    await StreakStore.saveStreak(0, 0);
+  }
+
+  static Future<int> currentStreakDays() => currentStreak();
 }

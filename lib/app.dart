@@ -30,6 +30,7 @@ import 'gamify/gamify_store.dart';
 import 'theme/theme.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'sync/sync_service.dart';
+import 'theme/glow_theme.dart';
 import 'analytics/local_summary.dart';
 import 'utils/streak_image_generator.dart';
 import 'utils/weekly_chart_data.dart';
@@ -587,29 +588,48 @@ class _CounterPageState extends State<_CounterPage> {
             child: Center(
               child: GestureDetector(
                 onTap: _inc,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.25)),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Tap to Count', style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 12),
-                      AnimatedScale(
-                        scale: _pulse ? 1.12 : 1.0,
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOut,
-                        child: Text('$_today', style: Theme.of(context).textTheme.displaySmall),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Tap to Count', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 16),
+                    AnimatedScale(
+                      scale: _pulse ? 1.08 : 1.0,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
+                      child: Container(
+                        height: 240,
+                        width: 240,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              Theme.of(context).colorScheme.primary.withOpacity(0.25),
+                              Theme.of(context).colorScheme.surface,
+                            ],
+                            radius: 0.85,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                              blurRadius: 30,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$_today',
+                            style: TextStyle(
+                              fontSize: 72,
+                              fontWeight: FontWeight.bold,
+                              foreground: Paint()..shader = GlowTheme.linearGradient(context),
+                            ),
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1020,18 +1040,33 @@ class _StatsPageState extends State<_StatsPage> {
             if (data == null) return const SizedBox.shrink();
             return Container(
               margin: const EdgeInsets.symmetric(vertical: 8),
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).dividerColor),
+                borderRadius: BorderRadius.circular(18),
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                    Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  ],
+                ),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _summaryItem('Total Japs', '${data.totalJaps}'),
-                  _summaryItem('Total Malas', '${data.totalMalas}'),
-                  _summaryItem('Minutes', '${data.totalMinutes}'),
-                  _summaryItem('Streak', '${data.streakDays}d'),
+                  _metricTile('मालाएँ', '${data.totalMalas}'),
+                  _metricTile('ध्यान (मि)', '${data.totalMinutes}'),
+                  _metricTile('सिलसिला', '${data.streakDays}'),
                 ],
               ),
             );
@@ -1381,19 +1416,12 @@ class _StatsPageState extends State<_StatsPage> {
     );
   }
 
-  Widget _summaryItem(String title, String value) {
-    final theme = Theme.of(context);
+  Widget _metricTile(String label, String value) {
     return Column(
       children: [
-        Text(
-          value,
-          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: theme.textTheme.labelSmall,
-        ),
+        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+        Text(label, style: const TextStyle(fontSize: 13)),
       ],
     );
   }

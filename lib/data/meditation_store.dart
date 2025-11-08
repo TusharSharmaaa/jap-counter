@@ -66,4 +66,10 @@ class MeditationStore {
     final d = now.day.toString().padLeft(2, '0');
     return '$y$m$d';
   }
+
+  Future<void> resetAll() async {
+    await _prefs.remove(_kTodayMinutes);
+    await _prefs.remove(_kLifetimeMinutes);
+    await _prefs.remove(_kLastDate);
+  }
 }
