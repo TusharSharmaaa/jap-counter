@@ -1,19 +1,21 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
+import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
-
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+
 import 'dedication_store.dart';
 
 class StreakSharePreviewPage extends StatefulWidget {
   final int todayJaps;
   final int lifetimeMalas;
-  final int streakDays; // placeholder for now
+  final int streakDays;
 
   const StreakSharePreviewPage({
     super.key,
@@ -29,42 +31,47 @@ class StreakSharePreviewPage extends StatefulWidget {
 class _StreakSharePreviewPageState extends State<StreakSharePreviewPage> {
   final GlobalKey _cardKey = GlobalKey();
   bool _sharing = false;
+  String? _dedication;
+  bool _localeReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await initializeDateFormatting('hi_IN');
+    await _loadDedication();
+    if (mounted) setState(() => _localeReady = true);
+  }
+
+  Future<void> _loadDedication() async {
+    final d = await DedicationStore.get();
+    if (mounted) setState(() => _dedication = d);
+  }
 
   Future<void> _shareCard() async {
-    if (_sharing) return;
-    setState(() => _sharing = true);
-
     try {
-      // 1) Capture widget to image
-      final boundary = _cardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) throw Exception('Capture boundary not found');
-      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw Exception('Failed to encode PNG');
-      final Uint8List pngBytes = byteData.buffer.asUint8List();
+      setState(() => _sharing = true);
+      final boundary =
+          _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
 
-      // 2) Write to cache
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/radha_jap_streak.png');
-      await file.writeAsBytes(pngBytes, flush: true);
+      final file = File(
+        '${dir.path}/streak_share_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(pngBytes);
 
-      // 3) Launch share sheet
-      final xFile = XFile(file.path, mimeType: 'image/png', name: 'radha_jap_streak.png');
       await Share.shareXFiles(
-        [xFile],
-        text: '🕉️ Radha Jap Counter — मेरी साधना स्ट्रीक',
-        subject: 'Radha Jap Counter',
+        [XFile(file.path)],
+        text: '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text('Could not share image: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (kDebugMode) debugPrint('[SharePreview] Share failed: $e');
     } finally {
       if (mounted) setState(() => _sharing = false);
     }
@@ -72,85 +79,142 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    final todayJaps = widget.todayJaps;
-    final lifetimeMalas = widget.lifetimeMalas;
-    final streakDays = widget.streakDays;
+    final theme = Theme.of(context);
+    final now = (_localeReady)
+        ? DateFormat('d MMMM yyyy', 'hi_IN').format(DateTime.now())
+        : DateFormat.yMMMMd().format(DateTime.now());
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Share My Streak"),
-        actions: [
-          IconButton(
-            onPressed: _sharing ? null : _shareCard,
-            icon: _sharing
-                ? const SizedBox(
-              width: 20, height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-                : const Icon(Icons.ios_share),
-            tooltip: 'Share',
-          ),
-        ],
+        title: const Text('Share My Streak'),
+        centerTitle: true,
       ),
-      body: Center(
-        child: RepaintBoundary(
-          key: _cardKey,
-          child: Container(
-            width: 320,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Theme.of(context).dividerColor),
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.surface,
-                  Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '🔥 ${widget.streakDays} day${widget.streakDays == 1 ? '' : 's'} streak',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text("Today’s Japs: $todayJaps"),
-                Text("Lifetime Malas: $lifetimeMalas"),
-                Text("Streak: $streakDays days"),
-                FutureBuilder<String>(
-                  future: DedicationStore.get(),
-                  builder: (context, snap) {
-                    final dedication = snap.data ?? '';
-                    if (dedication.isEmpty) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        '💠 समर्पण: $dedication',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontStyle: FontStyle.italic,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  "Preview — share opens image",
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFFFE0B2), Color(0xFFFFF3E0)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
         ),
+        child: SafeArea(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              RepaintBoundary(
+                key: _cardKey,
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFFD54F), Color(0xFFFFB300)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '🌸 मेरा साधना सफर 🌸',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.brown.shade800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        now,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: Colors.brown.shade700,
+                        ),
+                      ),
+                      const Divider(thickness: 1, height: 24),
+                      _statRow('आज के जाप', widget.todayJaps.toString()),
+                      _statRow(
+                        'जीवन भर के माला',
+                        widget.lifetimeMalas.toString(),
+                      ),
+                      _statRow('अभ्यास के दिन', widget.streakDays.toString()),
+                      const SizedBox(height: 16),
+                      if (_dedication != null && _dedication!.isNotEmpty)
+                        Text(
+                          '💠 समर्पण: ${_dedication!}',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: Colors.deepOrange.shade900,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'साधना निरंतर 🌼',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                          color: Colors.brown.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Radha Jap Counter',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: Colors.brown.shade800.withOpacity(0.7),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: _sharing ? null : _shareCard,
+                icon: const Icon(Icons.share),
+                label: Text(_sharing ? 'Preparing...' : 'Share Image'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 14,
+                  ),
+                  backgroundColor: Colors.deepOrangeAccent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }
