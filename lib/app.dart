@@ -376,6 +376,7 @@ class _StatsPageState extends State<_StatsPage> {
     final s = await CounterStore.create();
     final mstore = await MeditationStore.create();
     final dstore = await DedicationStore.create();
+    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
 
     if (!mounted) return;
     setState(() {
@@ -401,6 +402,7 @@ class _StatsPageState extends State<_StatsPage> {
     final s = await CounterStore.create(); // uses same prefs + new-day reset
     final mstore = await MeditationStore.create();
     final dstore = await DedicationStore.create();
+    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
     setState(() {
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
@@ -772,7 +774,7 @@ class _StatsPageState extends State<_StatsPage> {
                   Text('7-Day Progress', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   SizedBox(
-                    height: 140,
+                    height: 164,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: data.map((e) {
@@ -782,36 +784,80 @@ class _StatsPageState extends State<_StatsPage> {
                         final normalized = val == 0 ? 0.0 : val / safeMax;
                         final barHeight = val == 0
                             ? 6.0
-                            : (normalized * 100).clamp(12.0, 100.0);
+                            : (normalized * 96).clamp(14.0, 96.0);
 
                         return Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Text(
-                                '$val',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surfaceVariant
+                                        .withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '$val',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 6),
-                              Container(
-                                height: barHeight,
-                                width: 16,
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(4),
+                                const SizedBox(height: 2),
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  curve: Curves.easeOutCubic,
+                                  height: barHeight,
+                                  width: 14,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.bottomCenter,
+                                      end: Alignment.topCenter,
+                                      colors: [
+                                        theme.colorScheme.primary,
+                                        theme.colorScheme.primaryContainer,
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: theme.colorScheme.primary
+                                            .withOpacity(0.2),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  alignment: Alignment.topCenter,
+                                  child: val > 0
+                                      ? Icon(
+                                          Icons.energy_savings_leaf,
+                                          size: 12,
+                                          color: theme.colorScheme.onPrimary,
+                                        )
+                                      : null,
                                 ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(dayLabel, style: theme.textTheme.labelSmall),
-                              Text(
-                                dateLabel,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontSize: 10,
+                                const SizedBox(height: 4),
+                                Text(
+                                  dayLabel,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                Text(
+                                  dateLabel,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       }).toList(),
@@ -959,7 +1005,7 @@ class _StatsPageState extends State<_StatsPage> {
         ),
         Text('Calendar', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 6),
-        const _ActivityCalendar(),
+        _ActivityCalendar(todayJaps: _today, todayMalas: todayMalas),
       ],
     );
   }
@@ -1031,7 +1077,10 @@ class _NeoTile extends StatelessWidget {
 }
 
 class _ActivityCalendar extends StatefulWidget {
-  const _ActivityCalendar();
+  final int todayJaps;
+  final int todayMalas;
+
+  const _ActivityCalendar({super.key, this.todayJaps = 0, this.todayMalas = 0});
 
   @override
   State<_ActivityCalendar> createState() => _ActivityCalendarState();
@@ -1046,6 +1095,15 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
   void initState() {
     super.initState();
     _loadHistory();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ActivityCalendar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.todayJaps != widget.todayJaps ||
+        oldWidget.todayMalas != widget.todayMalas) {
+      _loadHistory();
+    }
   }
 
   Future<void> _loadHistory() async {
@@ -1187,41 +1245,23 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
                         setState(() => _selectedDate = date);
                       },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
                   decoration: BoxDecoration(
                     color: fill,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: borderColor,
                       width: isSelected ? 2 : 1,
                     ),
                   ),
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${date.day}',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: isToday
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: textColor,
-                        ),
-                      ),
-                      if (malas > 0)
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Text(
-                            '$malas',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
-                    ],
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${date.day}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                      color: textColor,
+                    ),
                   ),
                 ),
               );
@@ -1241,6 +1281,12 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
   _DailyHistoryEntry _entryFor(DateTime date) {
     final history = _history;
     if (history == null) return const _DailyHistoryEntry(japs: 0, malas: 0);
+    if (DateUtils.isSameDay(date, DateTime.now())) {
+      return _DailyHistoryEntry(
+        japs: widget.todayJaps,
+        malas: widget.todayMalas,
+      );
+    }
     return history[_dateKey(date)] ??
         const _DailyHistoryEntry(japs: 0, malas: 0);
   }
@@ -1249,7 +1295,11 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
 
   Color _colorForMalas(int malas, ThemeData theme, bool isCurrentMonth) {
     Color base;
-    if (malas >= 5) {
+    if (malas >= 15) {
+      base = Colors.deepOrange.shade200;
+    } else if (malas >= 8) {
+      base = Colors.teal.shade200;
+    } else if (malas >= 5) {
       base = Colors.green.shade200;
     } else if (malas >= 1) {
       base = Colors.amber.shade100;
@@ -1264,14 +1314,18 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
   Widget _buildLegend(ThemeData theme) {
     final zero = _colorForMalas(0, theme, true);
     final few = _colorForMalas(1, theme, true);
-    final many = _colorForMalas(5, theme, true);
+    final some = _colorForMalas(5, theme, true);
+    final plenty = _colorForMalas(8, theme, true);
+    final intense = _colorForMalas(15, theme, true);
     return Wrap(
       spacing: 16,
       runSpacing: 8,
       children: [
         _LegendSwatch(color: zero, label: '0 mala'),
-        _LegendSwatch(color: few, label: '1-5 malas'),
-        _LegendSwatch(color: many, label: '5+ malas'),
+        _LegendSwatch(color: few, label: '1-4 malas'),
+        _LegendSwatch(color: some, label: '5-7 malas'),
+        _LegendSwatch(color: plenty, label: '8-14 malas'),
+        _LegendSwatch(color: intense, label: '15+ malas'),
       ],
     );
   }
