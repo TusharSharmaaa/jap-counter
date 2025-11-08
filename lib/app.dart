@@ -11,6 +11,7 @@ import 'data/meditation_store.dart';
 import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
 import 'stats/dedication_store.dart';
+import 'stats/stats_ambience.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/notification_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -22,6 +23,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'data/activity_store.dart';
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 
 class App extends StatefulWidget {
@@ -51,6 +53,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     }
   }
   int _index = 0;
+  final GlobalKey<_StatsPageState> _statsKey = GlobalKey<_StatsPageState>();
   // Theme state (will be wired to Settings toggle next)
   ThemeMode _themeMode = ThemeMode.light;
   static const _themeKey = 'themeMode';
@@ -70,12 +73,12 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   );
 
 
-  final _pages = const [
-    _CounterPage(),
-    _StatsPage(),
-    _ContentPage(),
-    TimerPage(),
-    _SettingsPage(),
+  late final List<Widget> _pages = [
+    const _CounterPage(),
+    _StatsPage(key: _statsKey),
+    const _ContentPage(),
+    const TimerPage(),
+    const _SettingsPage(),
   ];
 
   Future<void> _loadThemeMode() async {
@@ -126,11 +129,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: (i) {
-            // If user navigates to Stats tab, preload rewarded ad
-            if (i == 1) { // 0=Counter, 1=Stats, 2=Content, 3=Timer, 4=Settings
+            if (i == 1) {
               RewardedShareAd().preload();
-
-              // DEV ONLY: print remaining cooldown to console for quick checks
               if (kDebugMode) {
                 final rem = RewardedShareAd().cooldownRemaining;
                 if (rem != null && rem > Duration.zero) {
@@ -139,6 +139,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                   debugPrint('[RewardedShareAd] No cooldown active.');
                 }
               }
+              _statsKey.currentState?.onBecameVisible();
+            } else {
+              _statsKey.currentState?.onBecameHidden();
             }
 
             setState(() => _index = i);
@@ -225,8 +228,15 @@ class _CounterPageState extends State<_CounterPage> {
     // If first jap today, check for streak milestones
     if (wasZero) {
       final streak = await ActivityStore.currentStreak();
-      if (mounted && (streak == 7 || streak == 21 || streak == 40)) {
-        HapticFeedback.mediumImpact();
+      if (!mounted) return;
+      if (streak == 7 || streak == 21 || streak == 40) {
+        try {
+          HapticFeedback.mediumImpact();
+        } catch (_) {}
+        try {
+          final bell = AudioPlayer();
+          await bell.play(AssetSource('sounds/bell.mp3'));
+        } catch (_) {}
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
@@ -401,7 +411,7 @@ class _MalaProgress extends StatelessWidget {
 
 
 class _StatsPage extends StatefulWidget {
-  const _StatsPage();
+  const _StatsPage({super.key});
 
   @override
   State<_StatsPage> createState() => _StatsPageState();
@@ -416,6 +426,8 @@ class _StatsPageState extends State<_StatsPage> {
   int _lifetime = 0;
   int _todayMin = 0;
   int _lifetimeMin = 0;
+  static const _ambienceKey = 'stats.ambience.enabled';
+  bool _ambienceEnabled = false;
 
   @override
   void initState() {
@@ -426,12 +438,35 @@ class _StatsPageState extends State<_StatsPage> {
     // Warm up the rewarded ad in the background
     // ignore: unawaited_futures
     _gate.load();
+    _loadAmbiencePref();
   }
 
   @override
   void dispose() {
     _confetti.dispose();
+    StatsAmbience.instance.stop();
     super.dispose();
+  }
+
+  Future<void> _loadAmbiencePref() async {
+    final p = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => _ambienceEnabled = p.getBool(_ambienceKey) ?? false);
+  }
+
+  Future<void> _saveAmbiencePref(bool v) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_ambienceKey, v);
+  }
+
+  void onBecameVisible() {
+    if (_ambienceEnabled) {
+      StatsAmbience.instance.start();
+    }
+  }
+
+  void onBecameHidden() {
+    StatsAmbience.instance.stop();
   }
 
   Future<void> _refresh() async {
@@ -503,7 +538,25 @@ class _StatsPageState extends State<_StatsPage> {
         : null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Stats')),
+      appBar: AppBar(
+        title: const Text('Stats'),
+        actions: [
+          IconButton(
+            tooltip: _ambienceEnabled ? 'Ambience On' : 'Ambience Off',
+            icon: Icon(_ambienceEnabled ? Icons.spatial_audio_off : Icons.spatial_audio),
+            onPressed: () async {
+              final next = !_ambienceEnabled;
+              setState(() => _ambienceEnabled = next);
+              await _saveAmbiencePref(next);
+              if (next) {
+                StatsAmbience.instance.start();
+              } else {
+                StatsAmbience.instance.stop();
+              }
+            },
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           RefreshIndicator(
