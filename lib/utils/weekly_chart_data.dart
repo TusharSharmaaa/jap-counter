@@ -1,22 +1,29 @@
 import 'package:intl/intl.dart';
 
-import '../data/counter_store.dart';
+import '../data/activity_store.dart';
 
 class WeeklyChartData {
   static Future<List<Map<String, dynamic>>> build() async {
-    final c = await CounterStore.create();
+    final history = await ActivityStore.getDailyHistory();
     final today = DateTime.now();
-    final List<Map<String, dynamic>> out = [];
+    final out = <Map<String, dynamic>>[];
+
     for (int i = 6; i >= 0; i--) {
-      final d = today.subtract(Duration(days: i));
-      // Simple rolling data mock — you can replace with real per-day store later.
-      final count = (c.todayJaps ~/ 108) - i;
+      final date = today.subtract(Duration(days: i));
+      final key = DateFormat('yyyy-MM-dd').format(date);
+      final entry = history[key];
+      final malas = switch (entry) {
+        Map<String, dynamic> m => (m['malas'] as num?)?.round() ?? 0,
+        _ => 0,
+      };
+
       out.add({
-        'day': DateFormat('E').format(d),
-        'value': count < 0 ? 0 : count,
+        'day': DateFormat('E').format(date),
+        'dateLabel': DateFormat('d').format(date),
+        'value': malas < 0 ? 0 : malas,
       });
     }
+
     return out;
   }
 }
-

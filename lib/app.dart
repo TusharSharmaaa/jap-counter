@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:confetti/confetti.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:intl/intl.dart';
 
 import 'stats/streak_share_preview.dart';
 import 'stats/streak_badge.dart';
@@ -12,7 +13,6 @@ import 'content/content_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
 import 'data/dedication_store.dart';
-import 'data/insight_store.dart';
 import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
 import 'stats/stats_ambience.dart';
@@ -22,7 +22,6 @@ import 'notifications/notification_service.dart';
 import 'data/activity_store.dart';
 import 'data/counter_store.dart';
 import 'data/goal_store.dart';
-import 'data/xp_store.dart';
 import 'theme/neumorph.dart';
 import 'gamify/gamify_store.dart';
 import 'theme/theme.dart';
@@ -31,7 +30,6 @@ import 'analytics/local_summary.dart';
 import 'utils/streak_image_generator.dart';
 import 'utils/weekly_chart_data.dart';
 import 'counter/counter_page.dart';
-
 
 class App extends StatefulWidget {
   const App({super.key});
@@ -91,6 +89,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       SyncService.syncToday();
     }
   }
+
   int _index = 0;
   final GlobalKey<_StatsPageState> _statsKey = GlobalKey<_StatsPageState>();
   ThemeMode _themeMode = ThemeMode.system;
@@ -106,7 +105,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getInt('themeMode') ?? ThemeMode.system.index;
     final values = ThemeMode.values;
-    final mode = (stored >= 0 && stored < values.length) ? values[stored] : ThemeMode.system;
+    final mode = (stored >= 0 && stored < values.length)
+        ? values[stored]
+        : ThemeMode.system;
     if (mounted) {
       setState(() => _themeMode = mode);
     } else {
@@ -185,8 +186,16 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), offset: const Offset(2, 2), blurRadius: 6),
-                  BoxShadow(color: Colors.white.withValues(alpha: 0.8), offset: const Offset(-2, -2), blurRadius: 6),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    offset: const Offset(2, 2),
+                    blurRadius: 6,
+                  ),
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    offset: const Offset(-2, -2),
+                    blurRadius: 6,
+                  ),
                 ],
               ),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -207,6 +216,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
     );
   }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -216,7 +226,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   Widget _navIcon(IconData icon, int idx, String label) {
     final active = _index == idx;
     final theme = Theme.of(context);
-    final color = active ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant;
+    final color = active
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
     return Expanded(
       child: GestureDetector(
         onTap: () => _handleNavTap(idx),
@@ -224,10 +236,17 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
           decoration: BoxDecoration(
-            color: active ? theme.colorScheme.primary.withValues(alpha: 0.15) : Colors.transparent,
+            color: active
+                ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             boxShadow: active
-                ? [BoxShadow(color: theme.colorScheme.primary.withValues(alpha: 0.3), blurRadius: 10)]
+                ? [
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                    ),
+                  ]
                 : const [],
           ),
           child: Column(
@@ -237,7 +256,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               const SizedBox(height: 4),
               Text(
                 label,
-                style: theme.textTheme.labelSmall?.copyWith(color: color, fontWeight: active ? FontWeight.w600 : null),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: active ? FontWeight.w600 : null,
+                ),
               ),
             ],
           ),
@@ -253,7 +275,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       if (kDebugMode) {
         final rem = RewardedShareAd().cooldownRemaining;
         if (rem != null && rem > Duration.zero) {
-          debugPrint('[RewardedShareAd] Cooldown remaining: ${rem.inMinutes}m ${rem.inSeconds % 60}s');
+          debugPrint(
+            '[RewardedShareAd] Cooldown remaining: ${rem.inMinutes}m ${rem.inSeconds % 60}s',
+          );
         } else {
           debugPrint('[RewardedShareAd] No cooldown active.');
         }
@@ -275,14 +299,15 @@ class _BannerReserve extends StatelessWidget {
       height: 52, // reserved space for a standard banner
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(width: 0.5, color: Theme.of(context).dividerColor)),
+          border: Border(
+            top: BorderSide(width: 0.5, color: Theme.of(context).dividerColor),
+          ),
         ),
         child: const Center(child: Text('Ad Banner (reserved)')),
       ),
     );
   }
 }
-
 
 class _StatsPage extends StatefulWidget {
   const _StatsPage({super.key});
@@ -335,21 +360,6 @@ class _StatsPageState extends State<_StatsPage> {
   Future<void> _saveAmbiencePref(bool v) async {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_ambienceKey, v);
-  }
-
-  Future<Map<String, dynamic>> _loadInsightSummary() async {
-    final store = await InsightStore.create();
-    return {
-      'todayJaps': store.getTodayJaps(),
-      'todayMalas': store.getTodayMalas(),
-      'tip': store.getRandomTip(),
-    };
-  }
-
-  Future<Map<String, dynamic>> _loadLevelSnapshot() async {
-    final xp = await GamifyStore.xp();
-    final level = await GamifyStore.level();
-    return {'xp': xp, 'level': level};
   }
 
   void onBecameVisible() {
@@ -409,7 +419,6 @@ class _StatsPageState extends State<_StatsPage> {
     if ([7, 21, 40].contains(streak)) {
       _confetti.play();
     }
-
   }
 
   @override
@@ -427,7 +436,9 @@ class _StatsPageState extends State<_StatsPage> {
     final cooling = RewardedShareAd().isCoolingDown;
     final rem = RewardedShareAd().cooldownRemaining;
     final remLabel = (rem != null && rem > Duration.zero)
-        ? (rem.inMinutes > 0 ? '${rem.inMinutes}m ${rem.inSeconds % 60}s' : '${rem.inSeconds % 60}s')
+        ? (rem.inMinutes > 0
+              ? '${rem.inMinutes}m ${rem.inSeconds % 60}s'
+              : '${rem.inSeconds % 60}s')
         : null;
     // Load goal (synchronously via FutureBuilder below to avoid blocking build)
 
@@ -449,7 +460,9 @@ class _StatsPageState extends State<_StatsPage> {
         actions: [
           IconButton(
             tooltip: _ambienceEnabled ? 'Ambience On' : 'Ambience Off',
-            icon: Icon(_ambienceEnabled ? Icons.spatial_audio_off : Icons.spatial_audio),
+            icon: Icon(
+              _ambienceEnabled ? Icons.spatial_audio_off : Icons.spatial_audio,
+            ),
             onPressed: () async {
               final next = !_ambienceEnabled;
               setState(() => _ambienceEnabled = next);
@@ -466,8 +479,14 @@ class _StatsPageState extends State<_StatsPage> {
       body: Stack(
         children: [
           RefreshIndicator(
-          onRefresh: _refresh,
-            child: _buildStatsList(context, cooling, remLabel, todayMalas, lifetimeMalas),
+            onRefresh: _refresh,
+            child: _buildStatsList(
+              context,
+              cooling,
+              remLabel,
+              todayMalas,
+              lifetimeMalas,
+            ),
           ),
           Align(
             alignment: Alignment.topCenter,
@@ -476,7 +495,12 @@ class _StatsPageState extends State<_StatsPage> {
               blastDirectionality: BlastDirectionality.explosive,
               emissionFrequency: 0.05,
               numberOfParticles: 20,
-              colors: const [Colors.orange, Colors.yellow, Colors.pink, Colors.white],
+              colors: const [
+                Colors.orange,
+                Colors.yellow,
+                Colors.pink,
+                Colors.white,
+              ],
             ),
           ),
         ],
@@ -493,34 +517,14 @@ class _StatsPageState extends State<_StatsPage> {
     int lifetimeMalas,
   ) {
     return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Column(
-            children: [
-              AnimatedScale(
-                duration: const Duration(milliseconds: 1500),
-                curve: Curves.easeInOutCubic,
-                scale: _ambienceEnabled ? 1.2 : 1.0,
-                child: Icon(
-                  Icons.self_improvement,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _ambienceEnabled ? "ॐ की ध्वनि गूंज रही है…" : "शांति का अनुभव करें",
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ),
+      padding: const EdgeInsets.all(16),
+      children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Theme.of(context).dividerColor),
           ),
@@ -536,12 +540,12 @@ class _StatsPageState extends State<_StatsPage> {
               }
               final streakMessage = streak > 0
                   ? (streak == 7
-                      ? '🌸 7-Day Streak — Discipline!'
-                      : streak == 21
-                          ? '🔥 21-Day Streak — Devotion!'
-                          : streak == 40
-                              ? '🌼 40-Day Tapasya — Rare!'
-                              : '✨ Current Streak: $streak days')
+                        ? '🌸 7-Day Streak — Discipline!'
+                        : streak == 21
+                        ? '🔥 21-Day Streak — Devotion!'
+                        : streak == 40
+                        ? '🌼 40-Day Tapasya — Rare!'
+                        : '✨ Current Streak: $streak days')
                   : 'No active streak yet';
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -554,16 +558,21 @@ class _StatsPageState extends State<_StatsPage> {
                         style: theme.textTheme.titleMedium,
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.15,
+                          ),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           '🔥 $streak',
                           style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
@@ -578,21 +587,6 @@ class _StatsPageState extends State<_StatsPage> {
                     child: Text(
                       streakMessage,
                       style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      icon: const Icon(Icons.share),
-                      label: const Text('Share Streak'),
-                      onPressed: () async {
-                        final path = await StreakImageGenerator.generate();
-                        await Share.shareXFiles(
-                          [XFile(path)],
-                          text: '🔥 मेरी साधना: $path',
-                        );
-                      },
                     ),
                   ),
                 ],
@@ -621,7 +615,9 @@ class _StatsPageState extends State<_StatsPage> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.15),
                     blurRadius: 20,
                     spreadRadius: 2,
                     offset: const Offset(0, 5),
@@ -634,76 +630,6 @@ class _StatsPageState extends State<_StatsPage> {
                   _metricTile('मालाएँ', '${data.totalMalas}'),
                   _metricTile('ध्यान (मि)', '${data.totalMinutes}'),
                   _metricTile('सिलसिला', '${data.streakDays}'),
-                ],
-              ),
-            );
-          },
-        ),
-        FutureBuilder<Map<String, dynamic>>(
-          future: _loadInsightSummary(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const SizedBox.shrink();
-            }
-            final data = snapshot.data!;
-            final theme = Theme.of(context);
-            final todayJaps = data['todayJaps'] as int? ?? 0;
-            final todayMalasValue = data['todayMalas'] as int? ?? 0;
-            final tip = data['tip'] as String? ?? '';
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 16),
-                Text("📿 Today’s Jap: $todayJaps", style: theme.textTheme.titleMedium),
-                Text("🕉️ Total Malas Today: $todayMalasValue"),
-                const SizedBox(height: 8),
-                Text(
-                  "💡 $tip",
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
-                ),
-              ],
-            );
-          },
-        ),
-        FutureBuilder<int>(
-          future: XPStore.create().then((s) => s.totalXP),
-          builder: (context, snapshot) {
-            final xp = snapshot.data ?? 0;
-            final level = (xp / 100).floor() + 1;
-            return Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                'Level $level • XP $xp',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            );
-          },
-        ),
-        FutureBuilder<Map<String, dynamic>>(
-          future: _loadLevelSnapshot(),
-          builder: (context, snapshot) {
-            final xp = (snapshot.data?['xp'] ?? 0) as int;
-            final level = (snapshot.data?['level'] ?? 1) as int;
-            final next = 100 + (level - 1) * 50;
-            final progress = (xp / next).clamp(0.0, 1.0);
-
-            return Container(
-              margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: Neo.pill(context),
-              child: Row(
-                children: [
-                  Text('Level $level', style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(value: progress, minHeight: 8),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text('$xp/$next', style: Theme.of(context).textTheme.labelMedium),
                 ],
               ),
             );
@@ -728,9 +654,15 @@ class _StatsPageState extends State<_StatsPage> {
                     _ => badge,
                   };
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: Neo.pill(context),
-                    child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+                    child: Text(
+                      label,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
                   );
                 }).toList(),
               ),
@@ -738,24 +670,46 @@ class _StatsPageState extends State<_StatsPage> {
           },
         ),
         const SizedBox(height: 16),
-          Row(
-            children: [
-            Expanded(child: _NeoTile(title: "Today's Japs", value: _today.toString())),
-              const SizedBox(width: 8),
-            Expanded(child: _NeoTile(title: "Today's Malas", value: todayMalas.toString())),
-              const SizedBox(width: 8),
-            Expanded(child: _NeoTile(title: "Lifetime Malas", value: lifetimeMalas.toString())),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-            Expanded(child: _NeoTile(title: "Today's Meditation (min)", value: _todayMin.toString())),
-              const SizedBox(width: 8),
-            Expanded(child: _NeoTile(title: "Lifetime Meditation (min)", value: _lifetimeMin.toString())),
-            ],
-          ),
-          const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _NeoTile(title: "Today's Japs", value: _today.toString()),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _NeoTile(
+                title: "Today's Malas",
+                value: todayMalas.toString(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _NeoTile(
+                title: "Lifetime Malas",
+                value: lifetimeMalas.toString(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _NeoTile(
+                title: "Today's Meditation (min)",
+                value: _todayMin.toString(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _NeoTile(
+                title: "Lifetime Meditation (min)",
+                value: _lifetimeMin.toString(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
         FutureBuilder<int>(
           future: (() async {
             final gs = await GoalStore.create();
@@ -798,41 +752,64 @@ class _StatsPageState extends State<_StatsPage> {
           builder: (context, snap) {
             final data = snap.data ?? [];
             if (data.isEmpty) return const SizedBox.shrink();
+            final theme = Theme.of(context);
+            final maxMalas = data.fold<int>(0, (prev, element) {
+              final val = element['value'] as int? ?? 0;
+              return val > prev ? val : prev;
+            });
+            final safeMax = maxMalas == 0 ? 1 : maxMalas;
+
             return Container(
               margin: const EdgeInsets.only(top: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).dividerColor),
+                border: Border.all(color: theme.dividerColor),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('7-Day Progress', style: Theme.of(context).textTheme.titleMedium),
+                  Text('7-Day Progress', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   SizedBox(
-                    height: 100,
+                    height: 140,
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: data.map((e) {
                         final val = e['value'] as int? ?? 0;
-                        final h = (val * 10).clamp(4, 100).toDouble();
+                        final dayLabel = e['day'] as String? ?? '';
+                        final dateLabel = e['dateLabel'] as String? ?? '';
+                        final normalized = val == 0 ? 0.0 : val / safeMax;
+                        final barHeight = val == 0
+                            ? 6.0
+                            : (normalized * 100).clamp(12.0, 100.0);
+
                         return Expanded(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              Container(
-                                height: h,
-                                width: 10,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(3),
+                              Text(
+                                '$val',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 6),
+                              Container(
+                                height: barHeight,
+                                width: 16,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(dayLabel, style: theme.textTheme.labelSmall),
                               Text(
-                                e['day'] as String? ?? '',
-                                style: Theme.of(context).textTheme.labelSmall,
+                                dateLabel,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontSize: 10,
+                                ),
                               ),
                             ],
                           ),
@@ -850,22 +827,24 @@ class _StatsPageState extends State<_StatsPage> {
           builder: (context, snap) {
             final note = snap.data ?? '';
             return Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).dividerColor),
-            ),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(Icons.favorite, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
-            child: Text(
-                      note.isEmpty ? 'Dedication: (tap edit to add)' : 'Dedication: $note',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
+                    child: Text(
+                      note.isEmpty
+                          ? 'Dedication: (tap edit to add)'
+                          : 'Dedication: $note',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: () async {
@@ -889,7 +868,8 @@ class _StatsPageState extends State<_StatsPage> {
                               child: const Text('Cancel'),
                             ),
                             FilledButton(
-                              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                              onPressed: () =>
+                                  Navigator.pop(ctx, controller.text.trim()),
                               child: const Text('Save'),
                             ),
                           ],
@@ -909,26 +889,29 @@ class _StatsPageState extends State<_StatsPage> {
             );
           },
         ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 48,
-            child: FilledButton.icon(
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 48,
+          child: FilledButton.icon(
             onPressed: _shareBusy
                 ? null
                 : () async {
-                setState(() => _shareBusy = true);
-                try {
-                  final counter = await CounterStore.create();
-                  final int todayJaps = counter.todayJaps;
+                    setState(() => _shareBusy = true);
+                    try {
+                      final counter = await CounterStore.create();
+                      final int todayJaps = counter.todayJaps;
                       final int lifetimeMalasLocal = counter.lifetimeMalas;
-                      final int streakDays = await ActivityStore.currentStreak();
-                      debugPrint('[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays');
+                      final int streakDays =
+                          await ActivityStore.currentStreak();
+                      debugPrint(
+                        '[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
+                      );
                       await openShareMyStreak(
-                    context,
-                    todayJaps: todayJaps,
+                        context,
+                        todayJaps: todayJaps,
                         lifetimeMalas: lifetimeMalasLocal,
-                    streakDays: streakDays,
-                  );
+                        streakDays: streakDays,
+                      );
                     } finally {
                       if (context.mounted) setState(() => _shareBusy = false);
                     }
@@ -938,55 +921,56 @@ class _StatsPageState extends State<_StatsPage> {
               final int todayJaps = counter.todayJaps;
               final int lifetimeMalasLocal = counter.lifetimeMalas;
               final int streakDays = await ActivityStore.currentStreak();
-              debugPrint('[Stats][DEV] Long-press bypass → opening preview directly');
+              debugPrint(
+                '[Stats][DEV] Long-press bypass → opening preview directly',
+              );
               if (!context.mounted) return;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => StreakSharePreviewPage(
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StreakSharePreviewPage(
                     todayJaps: todayJaps,
                     lifetimeMalas: lifetimeMalasLocal,
                     streakDays: streakDays,
-                        ),
-                      ),
-                    );
+                  ),
+                ),
+              );
             },
-              icon: const Icon(Icons.ios_share),
-              label: Text(
-                _shareBusy
+            icon: const Icon(Icons.ios_share),
+            label: Text(
+              _shareBusy
                   ? 'Preparing…'
                   : (cooling ? 'Wait ${remLabel ?? ''}' : 'Share My Streak'),
             ),
           ),
         ),
-          const SizedBox(height: 24),
-              FutureBuilder<int>(
-                future: ActivityStore.totalActiveDays(),
-                builder: (context, snap) {
-                  final count = snap.data ?? 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
+        const SizedBox(height: 24),
+        FutureBuilder<int>(
+          future: ActivityStore.totalActiveDays(),
+          builder: (context, snap) {
+            final count = snap.data ?? 0;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
                 'Days Active: $count',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  );
-                },
+                style: Theme.of(context).textTheme.bodyLarge,
               ),
+            );
+          },
+        ),
         Text('Calendar', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 6),
-              const _CalendarHeader(),
-              const SizedBox(height: 6),
-              const _WeekdayRow(),
-              const SizedBox(height: 6),
-              const _ActivityCalendar(days: 35),
-            ],
+        const SizedBox(height: 6),
+        const _ActivityCalendar(),
+      ],
     );
   }
 
   Widget _metricTile(String label, String value) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 6),
         Text(label, style: const TextStyle(fontSize: 13)),
       ],
@@ -1028,13 +1012,16 @@ class _NeoTile extends StatelessWidget {
           children: [
             Text(
               title,
-              style: theme.textTheme.labelMedium
-                  ?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.6)),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
             ),
             const SizedBox(height: 6),
             Text(
               value,
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -1044,128 +1031,323 @@ class _NeoTile extends StatelessWidget {
 }
 
 class _ActivityCalendar extends StatefulWidget {
-  final int days; // how many days to show (e.g., 35 = 5 rows x 7 cols)
-  const _ActivityCalendar({this.days = 35});
+  const _ActivityCalendar();
 
   @override
   State<_ActivityCalendar> createState() => _ActivityCalendarState();
 }
 
 class _ActivityCalendarState extends State<_ActivityCalendar> {
-  Map<String, bool>? _recent; // yyyy-MM-dd -> active?
-  Set<String>? _streak;       // dates that are part of the current streak
+  Map<String, _DailyHistoryEntry>? _history;
+  DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime? _selectedDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadHistory();
   }
 
-  Future<void> _load() async {
-    final data = await ActivityStore.recentDays(days: widget.days);
-    final streakLen = await ActivityStore.currentStreak();
+  Future<void> _loadHistory() async {
+    final raw = await ActivityStore.getDailyHistory();
+    final parsed = <String, _DailyHistoryEntry>{};
 
-    // Build a set of ISO dates for the last [streakLen] days (today inclusive)
-    final now = DateTime.now();
-    final streakDates = <String>{};
-    for (int i = 0; i < streakLen; i++) {
-      final d = DateTime(now.year, now.month, now.day).subtract(Duration(days: i));
-      final y = d.year.toString().padLeft(4, '0');
-      final m = d.month.toString().padLeft(2, '0');
-      final dd = d.day.toString().padLeft(2, '0');
-      streakDates.add('$y-$m-$dd');
+    for (final entry in raw.entries) {
+      final value = entry.value;
+      if (value is Map<String, dynamic>) {
+        final japs = (value['japs'] as num?)?.round() ?? 0;
+        final malas = (value['malas'] as num?)?.round() ?? 0;
+        parsed[entry.key] = _DailyHistoryEntry(japs: japs, malas: malas);
+      }
     }
 
     if (!mounted) return;
+    setState(() => _history = parsed);
+  }
+
+  void _changeMonth(int offset) {
+    final target = DateTime(_visibleMonth.year, _visibleMonth.month + offset);
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    if (target.isAfter(currentMonth)) return;
     setState(() {
-      _recent = data;
-      _streak = streakDates;
+      _visibleMonth = target;
+      _selectedDate = DateTime(target.year, target.month, 1);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final recent = _recent;
-    if (recent == null) {
-      return const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()));
+    final history = _history;
+    if (history == null) {
+      return const SizedBox(
+        height: 180,
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
 
-    // Oldest -> newest so the latest day appears at the end.
-    final keys = recent.keys.toList().reversed.toList();
-    final values = keys.map((k) => recent[k] ?? false).toList();
-    final streak = _streak ?? const <String>{};
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    final monthStart = DateTime(_visibleMonth.year, _visibleMonth.month, 1);
+    final startOffset = monthStart.weekday % 7; // Sunday-first grid
+    final startDate = monthStart.subtract(Duration(days: startOffset));
+    const totalCells = 42; // 6 rows
+    final dates = List.generate(
+      totalCells,
+      (i) => startDate.add(Duration(days: i)),
+    );
+    final canGoForward = _visibleMonth.isBefore(currentMonth);
 
-    const cols = 7;
-    final rows = (values.length / cols).ceil();
+    final selected = _selectedDate;
+    final selectedEntry = selected == null
+        ? const _DailyHistoryEntry(japs: 0, malas: 0)
+        : _entryFor(selected);
 
-    return AspectRatio(
-      aspectRatio: cols / rows,
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: cols,
-          mainAxisSpacing: 6,
-          crossAxisSpacing: 6,
-        ),
-        itemCount: rows * cols,
-        itemBuilder: (context, i) {
-          final active = i < values.length ? values[i] : false;
-          final key = i < keys.length ? keys[i] : null;
-          final isStreak = key != null && streak.contains(key);
-
-          // Active days are filled; streak days get a stronger fill + thicker border.
-          final base = Theme.of(context).colorScheme.primary;
-          final fill = active
-              ? (isStreak ? base.withValues(alpha: 0.95) : base.withValues(alpha: 0.65))
-              : Colors.transparent;
-          final borderColor = isStreak
-              ? base.withValues(alpha: 0.9)
-              : Theme.of(context).dividerColor;
-          final borderWidth = isStreak ? 2.0 : 1.0;
-
-          return Container(
-            decoration: BoxDecoration(
-              color: fill,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: borderColor, width: borderWidth),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.chevron_left),
+              onPressed: () => _changeMonth(-1),
             ),
-          );
-        },
+            Expanded(
+              child: Center(
+                child: Text(
+                  DateFormat('MMMM yyyy').format(_visibleMonth),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.chevron_right),
+              onPressed: canGoForward ? () => _changeMonth(1) : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+              .map(
+                (d) => Expanded(
+                  child: Center(
+                    child: Text(
+                      d,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 8),
+        AspectRatio(
+          aspectRatio: 7 / 6,
+          child: GridView.builder(
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+            ),
+            itemCount: dates.length,
+            itemBuilder: (context, index) {
+              final date = dates[index];
+              final entry = _entryFor(date);
+              final malas = entry.malas;
+              final isCurrentMonth =
+                  date.month == _visibleMonth.month &&
+                  date.year == _visibleMonth.year;
+              final isFuture = date.isAfter(
+                DateTime(now.year, now.month, now.day),
+              );
+              final isSelected =
+                  selected != null && DateUtils.isSameDay(selected, date);
+              final isToday = DateUtils.isSameDay(date, now);
+
+              final fill = _colorForMalas(malas, theme, isCurrentMonth);
+              final borderColor = isSelected
+                  ? theme.colorScheme.primary
+                  : theme.dividerColor.withOpacity(isCurrentMonth ? 1 : 0.4);
+              final textColor = isCurrentMonth
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.onSurface.withOpacity(0.4);
+
+              return GestureDetector(
+                onTap: isFuture
+                    ? null
+                    : () {
+                        setState(() => _selectedDate = date);
+                      },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  decoration: BoxDecoration(
+                    color: fill,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: borderColor,
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${date.day}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: isToday
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: textColor,
+                        ),
+                      ),
+                      if (malas > 0)
+                        Align(
+                          alignment: Alignment.bottomRight,
+                          child: Text(
+                            '$malas',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildLegend(theme),
+        if (selected != null) ...[
+          const SizedBox(height: 12),
+          _buildSelectionSummary(theme, selected, selectedEntry),
+        ],
+      ],
+    );
+  }
+
+  _DailyHistoryEntry _entryFor(DateTime date) {
+    final history = _history;
+    if (history == null) return const _DailyHistoryEntry(japs: 0, malas: 0);
+    return history[_dateKey(date)] ??
+        const _DailyHistoryEntry(japs: 0, malas: 0);
+  }
+
+  String _dateKey(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
+
+  Color _colorForMalas(int malas, ThemeData theme, bool isCurrentMonth) {
+    Color base;
+    if (malas >= 5) {
+      base = Colors.green.shade200;
+    } else if (malas >= 1) {
+      base = Colors.amber.shade100;
+    } else {
+      base = theme.brightness == Brightness.dark
+          ? theme.colorScheme.surface
+          : Colors.white;
+    }
+    return isCurrentMonth ? base : base.withOpacity(0.45);
+  }
+
+  Widget _buildLegend(ThemeData theme) {
+    final zero = _colorForMalas(0, theme, true);
+    final few = _colorForMalas(1, theme, true);
+    final many = _colorForMalas(5, theme, true);
+    return Wrap(
+      spacing: 16,
+      runSpacing: 8,
+      children: [
+        _LegendSwatch(color: zero, label: '0 mala'),
+        _LegendSwatch(color: few, label: '1-5 malas'),
+        _LegendSwatch(color: many, label: '5+ malas'),
+      ],
+    );
+  }
+
+  Widget _buildSelectionSummary(
+    ThemeData theme,
+    DateTime date,
+    _DailyHistoryEntry entry,
+  ) {
+    final formattedDate = DateFormat('EEE, d MMM yyyy').format(date);
+    final malaLabel = entry.malas == 1 ? 'mala' : 'malas';
+    final japLabel = entry.japs == 1 ? 'jap' : 'japs';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_month, color: theme.colorScheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(formattedDate, style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(
+                  '${entry.malas} $malaLabel • ${entry.japs} $japLabel',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
-class _CalendarHeader extends StatelessWidget {
-  const _CalendarHeader();
 
-  static const _months = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December'
-  ];
+class _DailyHistoryEntry {
+  final int japs;
+  final int malas;
 
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final label = '${_months[now.month - 1]} ${now.year}';
-    return Text(label, style: Theme.of(context).textTheme.titleSmall);
-  }
+  const _DailyHistoryEntry({required this.japs, required this.malas});
 }
 
-class _WeekdayRow extends StatelessWidget {
-  const _WeekdayRow();
+class _LegendSwatch extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendSwatch({required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    const days = ['S','M','T','W','T','F','S'];
-    final style = Theme.of(context).textTheme.labelMedium;
+    final theme = Theme.of(context);
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: days.map((d) => Expanded(
-        child: Center(child: Text(d, style: style)),
-      )).toList(),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: theme.dividerColor),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: theme.textTheme.labelSmall),
+      ],
     );
   }
 }
+
 class _ContentPage extends StatelessWidget {
   const _ContentPage();
 
@@ -1175,7 +1357,5 @@ class _ContentPage extends StatelessWidget {
   }
 }
 
-
-
-
+// Legacy settings classes removed. Latest settings UI lives in lib/settings/settings_page.dart
 // Legacy settings classes removed. Latest settings UI lives in lib/settings/settings_page.dart
