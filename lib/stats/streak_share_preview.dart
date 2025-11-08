@@ -28,15 +28,23 @@ class StreakSharePreviewPage extends StatefulWidget {
   State<StreakSharePreviewPage> createState() => _StreakSharePreviewPageState();
 }
 
-class _StreakSharePreviewPageState extends State<StreakSharePreviewPage> {
+class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
+    with SingleTickerProviderStateMixin {
   final GlobalKey _cardKey = GlobalKey();
   bool _sharing = false;
   String? _dedication;
   bool _localeReady = false;
+  late final AnimationController _glowCtl;
 
   @override
   void initState() {
     super.initState();
+    _glowCtl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+      lowerBound: 0.0,
+      upperBound: 1.0,
+    )..repeat(reverse: true);
     _init();
   }
 
@@ -44,6 +52,12 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage> {
     await initializeDateFormatting('hi_IN');
     await _loadDedication();
     if (mounted) setState(() => _localeReady = true);
+  }
+
+  @override
+  void dispose() {
+    _glowCtl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDedication() async {
@@ -103,77 +117,85 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage> {
             children: [
               RepaintBoundary(
                 key: _cardKey,
-                child: Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.symmetric(horizontal: 20),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFFD54F), Color(0xFFFFB300)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '🌸 मेरा साधना सफर 🌸',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.brown.shade800,
+                child: AnimatedBuilder(
+                  animation: _glowCtl,
+                  builder: (context, _) {
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFFD54F), Color(0xFFFFB300)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        now,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: Colors.brown.shade700,
-                        ),
-                      ),
-                      const Divider(thickness: 1, height: 24),
-                      _statRow('आज के जाप', widget.todayJaps.toString()),
-                      _statRow(
-                        'जीवन भर के माला',
-                        widget.lifetimeMalas.toString(),
-                      ),
-                      _statRow('अभ्यास के दिन', widget.streakDays.toString()),
-                      const SizedBox(height: 16),
-                      if (_dedication != null && _dedication!.isNotEmpty)
-                        Text(
-                          '💠 समर्पण: ${_dedication!}',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: Colors.deepOrange.shade900,
-                            fontStyle: FontStyle.italic,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.amber.withOpacity(
+                              0.25 + 0.25 * _glowCtl.value,
+                            ),
+                            blurRadius: 14 + 6 * _glowCtl.value,
+                            spreadRadius: 1 + 1 * _glowCtl.value,
+                            offset: const Offset(0, 6),
                           ),
-                        ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'साधना निरंतर 🌼',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                          color: Colors.brown.shade700,
-                        ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Radha Jap Counter',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: Colors.brown.shade800.withOpacity(0.7),
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '🌸 मेरा साधना सफर 🌸',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.brown.shade800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            now,
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: Colors.brown.shade700,
+                            ),
+                          ),
+                          const Divider(thickness: 1, height: 24),
+                          _statRow('आज के जाप', widget.todayJaps.toString()),
+                          _statRow(
+                            'जीवन भर के माला',
+                            widget.lifetimeMalas.toString(),
+                          ),
+                          _statRow('अभ्यास के दिन', widget.streakDays.toString()),
+                          const SizedBox(height: 16),
+                          if (_dedication != null && _dedication!.isNotEmpty)
+                            Text(
+                              '💠 समर्पण: ${_dedication!}',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: Colors.deepOrange.shade900,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'साधना निरंतर 🌼',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: Colors.brown.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Radha Jap Counter',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: Colors.brown.shade800.withOpacity(0.7),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 32),
