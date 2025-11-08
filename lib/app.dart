@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:confetti/confetti.dart';
 
 import 'stats/streak_share_preview.dart';
+import 'stats/streak_badge.dart';
 import 'ads/rewarded.dart';
+import 'ads/interstitial_timer.dart';
 import 'content/content_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
@@ -18,11 +20,11 @@ import 'notifications/notification_service.dart';
 import 'data/activity_store.dart';
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
+import 'data/xp_store.dart';
 import 'theme/neumorph.dart';
 import 'gamify/gamify_store.dart';
 import 'theme/theme.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'ads/interstitial_timer.dart';
 
 
 class App extends StatefulWidget {
@@ -125,12 +127,12 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             );
           },
           child: (_index == 4)
-              ? SettingsPage(
+            ? SettingsPage(
                   key: const ValueKey('settings'),
-                  themeMode: _themeMode,
-                  onThemeModeChanged: (mode) {
-                    setState(() => _themeMode = mode);
-                    _saveThemeMode(mode);
+          themeMode: _themeMode,
+          onThemeModeChanged: (mode) {
+            setState(() => _themeMode = mode);
+            _saveThemeMode(mode);
                   },
                 )
               : KeyedSubtree(
@@ -138,34 +140,29 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                   child: _pages[_index],
                 ),
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) {
-            if (i == 1) {
-              RewardedShareAd().preload();
-              if (kDebugMode) {
-                final rem = RewardedShareAd().cooldownRemaining;
-                if (rem != null && rem > Duration.zero) {
-                  debugPrint('[RewardedShareAd] Cooldown remaining: ${rem.inMinutes}m ${rem.inSeconds % 60}s');
-                } else {
-                  debugPrint('[RewardedShareAd] No cooldown active.');
-                }
-              }
-              _statsKey.currentState?.onBecameVisible();
-            } else {
-              _statsKey.currentState?.onBecameHidden();
-            }
-
-            setState(() => _index = i);
-          },
-          destinations: const [
-
-            NavigationDestination(icon: Icon(Icons.touch_app), label: 'Counter'),
-            NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Stats'),
-            NavigationDestination(icon: Icon(Icons.menu_book), label: 'Content'),
-            NavigationDestination(icon: Icon(Icons.timer), label: 'Timer'),
-            NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
-          ],
+        bottomNavigationBar: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.1), offset: const Offset(2, 2), blurRadius: 6),
+                BoxShadow(color: Colors.white.withValues(alpha: 0.8), offset: const Offset(-2, -2), blurRadius: 6),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _navIcon(Icons.touch_app, 0, 'Counter'),
+                _navIcon(Icons.bar_chart, 1, 'Stats'),
+                _navIcon(Icons.menu_book, 2, 'Content'),
+                _navIcon(Icons.timer, 3, 'Timer'),
+                _navIcon(Icons.settings, 4, 'Settings'),
+              ],
+            ),
+          ),
         ),
       ),
       debugShowCheckedModeBanner: false,
@@ -175,6 +172,58 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Widget _navIcon(IconData icon, int idx, String label) {
+    final active = _index == idx;
+    final theme = Theme.of(context);
+    final color = active ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _handleNavTap(idx),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          decoration: BoxDecoration(
+            color: active ? theme.colorScheme.primary.withValues(alpha: 0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: active
+                ? [BoxShadow(color: theme.colorScheme.primary.withValues(alpha: 0.3), blurRadius: 10)]
+                : const [],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(color: color, fontWeight: active ? FontWeight.w600 : null),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleNavTap(int index) {
+    if (_index == index) return;
+    if (index == 1) {
+      RewardedShareAd().preload();
+      if (kDebugMode) {
+        final rem = RewardedShareAd().cooldownRemaining;
+        if (rem != null && rem > Duration.zero) {
+          debugPrint('[RewardedShareAd] Cooldown remaining: ${rem.inMinutes}m ${rem.inSeconds % 60}s');
+        } else {
+          debugPrint('[RewardedShareAd] No cooldown active.');
+        }
+      }
+      _statsKey.currentState?.onBecameVisible();
+    } else if (_index == 1) {
+      _statsKey.currentState?.onBecameHidden();
+    }
+    setState(() => _index = index);
   }
 }
 
@@ -288,7 +337,7 @@ class _CounterPageState extends State<_CounterPage> {
           await GamifyStore.addXp(30);
         } catch (_) {}
         try {
-          HapticFeedback.mediumImpact();
+        HapticFeedback.mediumImpact();
         } catch (_) {}
         try {
           final bell = AudioPlayer();
@@ -313,7 +362,7 @@ class _CounterPageState extends State<_CounterPage> {
     // Stronger feedback + toast on completing a mala (108, 216, 324, ...)
     if (willBe % 108 == 0) {
       try {
-        HapticFeedback.mediumImpact();
+      HapticFeedback.mediumImpact();
       } catch (_) {}
       setState(() => _pulse = true);
       Future.delayed(const Duration(milliseconds: 250), () {
@@ -324,15 +373,16 @@ class _CounterPageState extends State<_CounterPage> {
         final next = xpRes['nextThreshold'] as int? ?? 0;
         final xp = xpRes['xp'] as int? ?? 0;
         final level = xpRes['level'] as int? ?? 1;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
+        if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
             SnackBar(
               content: Text('🎯 Mala completed!  +20 XP  •  Level $level  ($xp/$next)'),
               duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
         if (xpRes['leveledUp'] == true) {
           try {
             final bell = AudioPlayer();
@@ -341,6 +391,9 @@ class _CounterPageState extends State<_CounterPage> {
           await _showLevelUpDialog(level);
         }
       } catch (_) {}
+      if (mounted) {
+        _showConfetti(context);
+      }
     }
 
     setState(() {
@@ -350,6 +403,42 @@ class _CounterPageState extends State<_CounterPage> {
 
     final ns = NotificationService();
     await ns.scheduleDynamicJapReminder(_today);
+  }
+
+  void _showConfetti(BuildContext context) {
+    final controller = ConfettiController(duration: const Duration(seconds: 2));
+    controller.play();
+    final navigator = Navigator.of(context, rootNavigator: true);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      builder: (_) => Stack(
+        alignment: Alignment.center,
+        children: [
+          ConfettiWidget(
+            confettiController: controller,
+            blastDirectionality: BlastDirectionality.explosive,
+            shouldLoop: false,
+            colors: const [Colors.amber, Colors.pink, Colors.purple, Colors.white],
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              '🌸 Mala Completed!',
+              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    ).whenComplete(() => controller.dispose());
+    Future.delayed(const Duration(seconds: 2), () {
+      if (navigator.canPop()) navigator.pop();
+    });
   }
 
   int get _malas => _today ~/ 108;
@@ -666,7 +755,7 @@ class _StatsPageState extends State<_StatsPage> {
       body: Stack(
         children: [
           RefreshIndicator(
-            onRefresh: _refresh,
+          onRefresh: _refresh,
             child: _buildStatsList(context, cooling, remLabel, todayMalas, lifetimeMalas),
           ),
           Align(
@@ -693,8 +782,8 @@ class _StatsPageState extends State<_StatsPage> {
     int lifetimeMalas,
   ) {
     return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
+            padding: const EdgeInsets.all(16),
+            children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Column(
@@ -728,30 +817,55 @@ class _StatsPageState extends State<_StatsPage> {
             future: ActivityStore.currentStreak(),
             builder: (context, snap) {
               final streak = snap.data ?? 0;
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              final theme = Theme.of(context);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Current Streak',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Current Streak',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '🔥 $streak',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                    ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
+                  if (streak > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: StreakBadge(streakDays: streak),
                     ),
-                    child: Text(
-                      '🔥 $streak',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  ),
                 ],
               );
             },
           ),
+        ),
+        FutureBuilder<int>(
+          future: XPStore.create().then((s) => s.totalXP),
+          builder: (context, snapshot) {
+            final xp = snapshot.data ?? 0;
+            final level = (xp / 100).floor() + 1;
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                'Level $level • XP $xp',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            );
+          },
         ),
         FutureBuilder<Map<String, dynamic>>(
           future: _loadLevelSnapshot(),
@@ -811,45 +925,45 @@ class _StatsPageState extends State<_StatsPage> {
           },
         ),
         const SizedBox(height: 16),
-        Row(
-          children: [
+          Row(
+            children: [
             Expanded(child: _NeoTile(title: "Today's Japs", value: _today.toString())),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
             Expanded(child: _NeoTile(title: "Today's Malas", value: todayMalas.toString())),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
             Expanded(child: _NeoTile(title: "Lifetime Malas", value: lifetimeMalas.toString())),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
             Expanded(child: _NeoTile(title: "Today's Meditation (min)", value: _todayMin.toString())),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
             Expanded(child: _NeoTile(title: "Lifetime Meditation (min)", value: _lifetimeMin.toString())),
-          ],
-        ),
-        const SizedBox(height: 16),
+            ],
+          ),
+          const SizedBox(height: 16),
         FutureBuilder<String>(
           future: DedicationStore.get(),
           builder: (context, snap) {
             final note = snap.data ?? '';
             return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).dividerColor),
-              ),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Theme.of(context).dividerColor),
+            ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(Icons.favorite, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
+            child: Text(
                       note.isEmpty ? 'Dedication: (tap edit to add)' : 'Dedication: $note',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
                   const SizedBox(width: 8),
                   TextButton.icon(
                     onPressed: () async {
@@ -892,26 +1006,26 @@ class _StatsPageState extends State<_StatsPage> {
             );
           },
         ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 48,
-          child: FilledButton.icon(
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 48,
+            child: FilledButton.icon(
             onPressed: _shareBusy
                 ? null
                 : () async {
-                    setState(() => _shareBusy = true);
-                    try {
-                      final counter = await CounterStore.create();
-                      final int todayJaps = counter.todayJaps;
+                setState(() => _shareBusy = true);
+                try {
+                  final counter = await CounterStore.create();
+                  final int todayJaps = counter.todayJaps;
                       final int lifetimeMalasLocal = counter.lifetimeMalas;
                       final int streakDays = await ActivityStore.currentStreak();
                       debugPrint('[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays');
                       await openShareMyStreak(
-                        context,
-                        todayJaps: todayJaps,
+                    context,
+                    todayJaps: todayJaps,
                         lifetimeMalas: lifetimeMalasLocal,
-                        streakDays: streakDays,
-                      );
+                    streakDays: streakDays,
+                  );
                     } finally {
                       if (context.mounted) setState(() => _shareBusy = false);
                     }
@@ -923,46 +1037,46 @@ class _StatsPageState extends State<_StatsPage> {
               final int streakDays = await ActivityStore.currentStreak();
               debugPrint('[Stats][DEV] Long-press bypass → opening preview directly');
               if (!context.mounted) return;
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => StreakSharePreviewPage(
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StreakSharePreviewPage(
                     todayJaps: todayJaps,
                     lifetimeMalas: lifetimeMalasLocal,
                     streakDays: streakDays,
-                  ),
-                ),
-              );
+                        ),
+                      ),
+                    );
             },
-            icon: const Icon(Icons.ios_share),
-            label: Text(
-              _shareBusy
+              icon: const Icon(Icons.ios_share),
+              label: Text(
+                _shareBusy
                   ? 'Preparing…'
                   : (cooling ? 'Wait ${remLabel ?? ''}' : 'Share My Streak'),
             ),
           ),
         ),
-        const SizedBox(height: 24),
-        FutureBuilder<int>(
-          future: ActivityStore.totalActiveDays(),
-          builder: (context, snap) {
-            final count = snap.data ?? 0;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
+          const SizedBox(height: 24),
+              FutureBuilder<int>(
+                future: ActivityStore.totalActiveDays(),
+                builder: (context, snap) {
+                  final count = snap.data ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
                 'Days Active: $count',
-                style: Theme.of(context).textTheme.bodyLarge,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  );
+                },
               ),
-            );
-          },
-        ),
         Text('Calendar', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 6),
-        const _CalendarHeader(),
-        const SizedBox(height: 6),
-        const _WeekdayRow(),
-        const SizedBox(height: 6),
-        const _ActivityCalendar(days: 35),
-      ],
+              const SizedBox(height: 6),
+              const _CalendarHeader(),
+              const SizedBox(height: 6),
+              const _WeekdayRow(),
+              const SizedBox(height: 6),
+              const _ActivityCalendar(days: 35),
+            ],
     );
   }
 }

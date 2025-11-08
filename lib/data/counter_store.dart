@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'xp_store.dart';
+
 /// Offline-only store for Counter page with daily reset.
 class CounterStore {
   CounterStore._(this._prefs);
@@ -30,6 +32,8 @@ class CounterStore {
     await _resetIfNewDay();
     await _prefs.setInt(_kTodayJaps, todayJaps + 1);
     await _prefs.setInt(_kLifetimeJaps, lifetimeJaps + 1);
+    final xp = await XPStore.create();
+    await xp.addXP(1);
   }
 
   /// Clears only today's japs (used on new day).

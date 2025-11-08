@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:lottie/lottie.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:confetti/confetti.dart';
 
 import 'timer_sound_controller.dart';
 import 'timer_prefs.dart';
@@ -241,6 +242,8 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
       }
 
       // 1) Gentle Lottie overlay (auto-dismiss ~1.5s)
+      final confettiController = ConfettiController(duration: const Duration(seconds: 2));
+      confettiController.play();
       final overlayFuture = showGeneralDialog(
         context: context,
         barrierDismissible: false,
@@ -248,26 +251,37 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
         barrierColor: Colors.black54,
         transitionDuration: const Duration(milliseconds: 250),
         pageBuilder: (context, _, __) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 220,
-                  height: 220,
-                  child: Lottie.network(
-                    'https://assets9.lottiefiles.com/packages/lf20_jcikwtux.json',
-                    repeat: false,
-                  ),
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              ConfettiWidget(
+                confettiController: confettiController,
+                blastDirectionality: BlastDirectionality.explosive,
+                shouldLoop: false,
+                colors: const [Colors.amber, Colors.pink, Colors.deepPurple, Colors.white],
+              ),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 220,
+                      height: 220,
+                      child: Lottie.network(
+                        'https://assets9.lottiefiles.com/packages/lf20_jcikwtux.json',
+                        repeat: false,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '🌼 साधना पूर्ण हुई',
+                      style: Theme.of(context).textTheme.titleLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  '🌼 साधना पूर्ण हुई',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       );
@@ -276,6 +290,7 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
         Navigator.of(context, rootNavigator: true).pop(); // close overlay
       }
       await overlayFuture;
+      confettiController.dispose();
 
       // 2) Summary dialog with Share
       if (mounted) {
