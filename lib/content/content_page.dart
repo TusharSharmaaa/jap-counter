@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
@@ -36,7 +35,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   ];
 
   // ---------------- GITA STATE ----------------
-  int _chapter = 1;
+  final int _chapter = 1;
   int _verse = 1;
 
   @override
@@ -69,11 +68,9 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
   }
 
   Future<void> _shareQuote() async {
-    final text = "🌸 ${_currentQuote}\n— Radha Jap Counter";
-    await Share.share(
-      text,
-      subject: 'Radha Jap Counter',
-      sharePositionOrigin: const ui.Rect.fromLTWH(0, 0, 100, 100),
+    final text = "🌸 $_currentQuote\n— Radha Jap Counter";
+    await SharePlus.instance.share(
+      ShareParams(text: text),
     );
   }
 
@@ -129,9 +126,11 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     final file = File('${dir.path}/gita_quote_${DateTime.now().millisecondsSinceEpoch}.png');
     await file.writeAsBytes(pngBytes);
 
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: '📖 श्रीमद् भगवद् गीता से प्रेरणा',
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        text: '📖 श्रीमद् भगवद् गीता से प्रेरणा',
+      ),
     );
   }
   Future<void> _loadLocalQuotes() async {
@@ -149,7 +148,8 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
 
   Future<void> _maybeRefreshFromFirebase() async {
     final conn = await Connectivity().checkConnectivity();
-    if (conn == ConnectivityResult.none) return;
+    final hasConnection = conn.any((result) => result != ConnectivityResult.none);
+    if (!hasConnection) return;
     try {
       final snap = await FirebaseFirestore.instance.collection('daily_quotes').limit(10).get();
       for (final doc in snap.docs) {
@@ -378,10 +378,10 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                     height: 44,
                     child: FilledButton.icon(
                       onPressed: () async {
-                        await Share.share(
-                          "अध्याय ${v.chapter}, श्लोक ${v.verse} — Radha Jap Counter",
-                          subject: 'Radha Jap Counter',
-                          sharePositionOrigin: const ui.Rect.fromLTWH(0, 0, 100, 100),
+                        await SharePlus.instance.share(
+                          ShareParams(
+                            text: "अध्याय ${v.chapter}, श्लोक ${v.verse} — Radha Jap Counter",
+                          ),
                         );
                       },
                       icon: const Icon(Icons.share),

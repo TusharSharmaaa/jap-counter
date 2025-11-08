@@ -1,6 +1,3 @@
-import 'dart:ui' show Rect;
-
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -8,7 +5,6 @@ import 'package:confetti/confetti.dart';
 
 import 'stats/streak_share_preview.dart';
 import 'ads/rewarded.dart';
-import 'ads/interstitial_timer.dart';
 import 'content/content_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
@@ -19,12 +15,6 @@ import 'stats/stats_ambience.dart';
 import 'settings/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/notification_service.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'legal/privacy_policy.dart';
-import 'legal/terms_conditions.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'data/activity_store.dart';
 import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
@@ -977,36 +967,6 @@ class _StatsPageState extends State<_StatsPage> {
   }
 }
 
-class _CalendarStub extends StatelessWidget {
-  const _CalendarStub();
-
-  @override
-  Widget build(BuildContext context) {
-    // Simple 7x5 grid placeholder (no real dates/colors yet)
-    const rows = 5;
-    const cols = 7;
-    return AspectRatio(
-      aspectRatio: cols / rows,
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: cols,
-          mainAxisSpacing: 6,
-          crossAxisSpacing: 6,
-        ),
-        itemCount: rows * cols,
-        itemBuilder: (context, i) {
-          return Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(context).dividerColor),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
 class _ActivityCalendar extends StatefulWidget {
   final int days; // how many days to show (e.g., 35 = 5 rows x 7 cols)
   const _ActivityCalendar({this.days = 35});

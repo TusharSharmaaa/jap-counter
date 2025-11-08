@@ -57,7 +57,9 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _shareApp() async {
     const pkg = 'com.example.jap_counter';
     final link = 'https://play.google.com/store/apps/details?id=$pkg';
-    await Share.share('मैं Radha Jap Counter ऐप इस्तेमाल कर रहा/रही हूँ — $link');
+    await SharePlus.instance.share(
+      ShareParams(text: 'मैं Radha Jap Counter ऐप इस्तेमाल कर रहा/रही हूँ — $link'),
+    );
   }
 
   @override

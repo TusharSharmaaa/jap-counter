@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show Rect;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/brand.dart';
@@ -298,10 +297,10 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
                 TextButton(
                   onPressed: () async {
                     Navigator.pop(context);
-                    await Share.share(
-                      'साधना पूर्ण हुई — मैंने $minutes मिनट ध्यान किया। Radha Jap Counter के साथ।',
-                      subject: 'Radha Jap Counter',
-                      sharePositionOrigin: const Rect.fromLTWH(0, 0, 100, 100),
+                    await SharePlus.instance.share(
+                      ShareParams(
+                        text: 'साधना पूर्ण हुई — मैंने $minutes मिनट ध्यान किया। Radha Jap Counter के साथ।',
+                      ),
                     );
                   },
                   child: const Text('Share Blessing'),
@@ -425,7 +424,7 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
                         initiallyExpanded: false,
                         title: Text('Advanced', style: theme.textTheme.titleMedium),
                         subtitle: Text(
-                          '${_selectedMinutes} min • $_ambienceLabel',
+                          '$_selectedMinutes min • $_ambienceLabel',
                           style: theme.textTheme.bodySmall,
                         ),
                         children: [

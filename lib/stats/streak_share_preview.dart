@@ -99,9 +99,11 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
       );
       await file.writeAsBytes(pngBytes);
 
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
+        ),
       );
     } catch (e) {
       if (kDebugMode) debugPrint('[SharePreview] Share failed: $e');
@@ -147,10 +149,10 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
       }
     } catch (_) {}
 
-    await Share.share(
-      '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
-      subject: 'Radha Jap Counter',
-      sharePositionOrigin: const Rect.fromLTWH(0, 0, 100, 100),
+    await SharePlus.instance.share(
+      ShareParams(
+        text: '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
+      ),
     );
   }
 
