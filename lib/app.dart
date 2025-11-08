@@ -140,56 +140,69 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: _themeMode,
-      home: Scaffold(
-        body: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 280),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            final offset = Tween<Offset>(
-              begin: const Offset(0.03, 0.02),
-              end: Offset.zero,
-            ).animate(animation);
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(position: offset, child: child),
-            );
-          },
-          child: (_index == 4)
-            ? SettingsPage(
-                  key: const ValueKey('settings'),
-          themeMode: _themeMode,
-          onThemeModeChanged: (mode) {
-            setState(() => _themeMode = mode);
-            _saveThemeMode(mode);
-                  },
-                )
-              : KeyedSubtree(
-                  key: ValueKey('tab-$_index'),
-                  child: _pages[_index],
-                ),
+      home: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Theme.of(context).colorScheme.surface.withOpacity(0.95),
+              Theme.of(context).colorScheme.primary.withOpacity(0.05),
+            ],
+          ),
         ),
-        bottomNavigationBar: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.1), offset: const Offset(2, 2), blurRadius: 6),
-                BoxShadow(color: Colors.white.withValues(alpha: 0.8), offset: const Offset(-2, -2), blurRadius: 6),
-              ],
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _navIcon(Icons.touch_app, 0, 'Counter'),
-                _navIcon(Icons.bar_chart, 1, 'Stats'),
-                _navIcon(Icons.menu_book, 2, 'Content'),
-                _navIcon(Icons.timer, 3, 'Timer'),
-                _navIcon(Icons.settings, 4, 'Settings'),
-              ],
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final offset = Tween<Offset>(
+                begin: const Offset(0.03, 0.02),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: offset, child: child),
+              );
+            },
+            child: (_index == 4)
+                ? SettingsPage(
+                    key: const ValueKey('settings'),
+                    themeMode: _themeMode,
+                    onThemeModeChanged: (mode) {
+                      setState(() => _themeMode = mode);
+                      _saveThemeMode(mode);
+                    },
+                  )
+                : KeyedSubtree(
+                    key: ValueKey('tab-$_index'),
+                    child: _pages[_index],
+                  ),
+          ),
+          bottomNavigationBar: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), offset: const Offset(2, 2), blurRadius: 6),
+                  BoxShadow(color: Colors.white.withValues(alpha: 0.8), offset: const Offset(-2, -2), blurRadius: 6),
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _navIcon(Icons.touch_app, 0, 'Counter'),
+                  _navIcon(Icons.bar_chart, 1, 'Stats'),
+                  _navIcon(Icons.menu_book, 2, 'Content'),
+                  _navIcon(Icons.timer, 3, 'Timer'),
+                  _navIcon(Icons.settings, 4, 'Settings'),
+                ],
+              ),
             ),
           ),
         ),
@@ -524,14 +537,42 @@ class _CounterPageState extends State<_CounterPage> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Counter')),
+        appBar: AppBar(
+          title: const Text('Counter'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
         body: const Center(child: CircularProgressIndicator()),
         bottomNavigationBar: const TestBanner(),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Counter')),
+      appBar: AppBar(
+        title: const Text('Counter'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                Colors.transparent,
+              ],
+            ),
+          ),
+        ),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -879,6 +920,18 @@ class _StatsPageState extends State<_StatsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Stats'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                Colors.transparent,
+              ],
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: _ambienceEnabled ? 'Ambience On' : 'Ambience Off',

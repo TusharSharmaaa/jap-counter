@@ -15,6 +15,7 @@ import '../data/dedication_store.dart';
 import '../data/backup_service.dart';
 import '../legal/privacy_policy.dart';
 import '../legal/terms_conditions.dart';
+import 'about_page.dart';
 import '../ui/glow_card.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -244,6 +245,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     label: 'Terms & Conditions',
                     onTap: () => Navigator.of(context)
                         .push(MaterialPageRoute(builder: (_) => const TermsConditionsPage())),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: const Text('About App'),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AboutPage()),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   _rateCard(context),
