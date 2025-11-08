@@ -1,11 +1,21 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
+import 'package:shared_preferences/shared_preferences.dart';
 import 'streak_store.dart';
+
+/// Local date helper (YYYY-MM-DD) used by ActivityStore.
+String _yyyymmdd(DateTime d) {
+  final y = d.year.toString().padLeft(4, '0');
+  final m = d.month.toString().padLeft(2, '0');
+  final dd = d.day.toString().padLeft(2, '0');
+  return '$y-$m-$dd';
+}
 
 /// Stores which dates the user was "active" (did at least 1 jap).
 /// Dates are saved as ISO "yyyy-MM-dd" strings in a StringList.
 class ActivityStore {
   static const _key = 'active_days'; // List<String> of yyyy-MM-dd
+  static const _kDailyHistory = 'activity.dailyHistory';
 
   /// Marks today as active (idempotent).
   static Future<void> markTodayActive() async {
@@ -66,12 +76,7 @@ class ActivityStore {
     await StreakStore.saveStreak(streak, active.length);
     return streak;
   }
-  static String _isoDate(DateTime d) {
-    final y = d.year.toString().padLeft(4, '0');
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return '$y-$m-$day';
-  }
+  static String _isoDate(DateTime d) => _yyyymmdd(d);
 
   static Future<void> resetAll() async {
     final prefs = await SharedPreferences.getInstance();
@@ -80,4 +85,23 @@ class ActivityStore {
   }
 
   static Future<int> currentStreakDays() => currentStreak();
+
+  static Future<void> recordDailySummary(int japs, int malas) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kDailyHistory);
+    final history = raw == null ? <String, dynamic>{} : Map<String, dynamic>.from(jsonDecode(raw));
+    final key = _yyyymmdd(DateTime.now());
+    history[key] = {
+      'japs': japs,
+      'malas': malas,
+    };
+    await prefs.setString(_kDailyHistory, jsonEncode(history));
+  }
+
+  static Future<Map<String, dynamic>> getDailyHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kDailyHistory);
+    if (raw == null) return {};
+    return Map<String, dynamic>.from(jsonDecode(raw));
+  }
 }
