@@ -16,6 +16,7 @@ class QuoteImageGenerator {
     String? note,
     bool includeLink = true,
     String? shareLink,
+    String? subtitle,
   }) async {
     final selectedTheme = theme ?? _fallbackTheme;
     final recorder = ui.PictureRecorder();
@@ -34,7 +35,10 @@ class QuoteImageGenerator {
       width - inset * 2,
       height - inset * 2,
     );
-    final innerRRect = RRect.fromRectAndRadius(innerRect, const Radius.circular(48));
+    final innerRRect = RRect.fromRectAndRadius(
+      innerRect,
+      const Radius.circular(48),
+    );
     final innerPaint = Paint()
       ..color = Colors.white.withOpacity(0.12)
       ..style = PaintingStyle.fill;
@@ -97,14 +101,32 @@ class QuoteImageGenerator {
       startY: cursorY,
     );
 
+    cursorY += 20;
+
     cursorY = _paintText(
       canvas,
       text: '”',
-      style: titleStyle.copyWith(fontSize: 80),
+      style: titleStyle.copyWith(fontSize: 60),
       maxWidth: innerRect.width,
       startX: innerRect.left + innerRect.width - 100,
-      startY: cursorY + 20,
+      startY: cursorY,
     );
+
+    if (subtitle != null && subtitle.trim().isNotEmpty) {
+      cursorY += 40;
+      cursorY = _paintText(
+        canvas,
+        text: subtitle.trim(),
+        style: bodyStyle.copyWith(
+          fontSize: 32,
+          fontWeight: FontWeight.w500,
+          color: selectedTheme.textColor.withOpacity(0.85),
+        ),
+        maxWidth: innerRect.width - 60,
+        startX: innerRect.left + 30,
+        startY: cursorY,
+      );
+    }
 
     if (note != null && note.trim().isNotEmpty) {
       cursorY += 60;
@@ -128,7 +150,8 @@ class QuoteImageGenerator {
       startY: footerY,
     );
     if (includeLink) {
-      final linkText = shareLink ??
+      final linkText =
+          shareLink ??
           'Download today · https://play.google.com/store/apps/details?id=com.example.jap_counter';
       _paintText(
         canvas,
@@ -149,7 +172,8 @@ class QuoteImageGenerator {
     final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
 
     final dir = await getTemporaryDirectory();
-    final path = '${dir.path}/quote_${DateTime.now().millisecondsSinceEpoch}.png';
+    final path =
+        '${dir.path}/quote_${DateTime.now().millisecondsSinceEpoch}.png';
     await File(path).writeAsBytes(bytes!.buffer.asUint8List());
     return path;
   }
@@ -171,4 +195,3 @@ class QuoteImageGenerator {
     return startY + painter.height;
   }
 }
-

@@ -23,7 +23,8 @@ class ContentPage extends StatefulWidget {
   State<ContentPage> createState() => _ContentPageState();
 }
 
-class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin {
+class _ContentPageState extends State<ContentPage>
+    with TickerProviderStateMixin {
   static const _quotesPrefKey = 'content.daily_quotes';
 
   late final TabController _tabs;
@@ -104,6 +105,31 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     await SharePlus.instance.share(ShareParams(text: buffer.toString()));
   }
 
+  Future<void> _shareVerseText(GitaVerse verse) async {
+    final reference = 'अध्याय ${verse.chapter}, श्लोक ${verse.verse}';
+    final buffer = StringBuffer()
+      ..writeln('📖 $reference')
+      ..writeln('\n${verse.sanskrit}')
+      ..writeln('\n${verse.hindi}')
+      ..writeln('\n— Radha Jap Counter')
+      ..writeln(_currentShareLink);
+    await SharePlus.instance.share(ShareParams(text: buffer.toString()));
+  }
+
+  Future<void> _shareVerseImage(GitaVerse verse) async {
+    final reference = 'अध्याय ${verse.chapter}, श्लोक ${verse.verse}';
+    final path = await QuoteImageGenerator.generate(
+      verse.sanskrit,
+      subtitle: verse.hindi,
+      note: reference,
+      theme: _themes[_selectedThemeIndex],
+      shareLink: _currentShareLink,
+    );
+    await SharePlus.instance.share(
+      ShareParams(files: [XFile(path)], text: '$reference\n$_currentShareLink'),
+    );
+  }
+
   Future<void> _shareQuoteImage({
     required QuoteTheme theme,
     String? note,
@@ -119,7 +145,8 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(path)],
-        text: '${note != null && note.trim().isNotEmpty ? '$note\n\n' : ''}${_currentShareLink}',
+        text:
+            '${note != null && note.trim().isNotEmpty ? '$note\n\n' : ''}${_currentShareLink}',
       ),
     );
   }
@@ -142,7 +169,8 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
         content: Text('Saved share card to $path'),
         action: SnackBarAction(
           label: 'Share',
-          onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(path)])),
+          onPressed: () =>
+              SharePlus.instance.share(ShareParams(files: [XFile(path)])),
         ),
       ),
     );
@@ -150,9 +178,9 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
 
   void _copyQuoteToClipboard() {
     Clipboard.setData(ClipboardData(text: _currentQuote));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Quote copied to clipboard')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Quote copied to clipboard')));
   }
 
   void _openShareSheet() {
@@ -214,7 +242,8 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     value: includeLink,
-                    onChanged: (value) => setModalState(() => includeLink = value),
+                    onChanged: (value) =>
+                        setModalState(() => includeLink = value),
                     title: const Text('Include Play Store link'),
                   ),
                   const SizedBox(height: 12),
@@ -228,7 +257,9 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                             _noteController.text = controller.text;
                             await _shareQuoteImage(
                               theme: _themes[themeIndex],
-                              note: controller.text.trim().isEmpty ? null : controller.text.trim(),
+                              note: controller.text.trim().isEmpty
+                                  ? null
+                                  : controller.text.trim(),
                               includeLink: includeLink,
                             );
                           },
@@ -248,7 +279,9 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                             _selectedThemeIndex = themeIndex;
                             _noteController.text = controller.text;
                             await _shareQuoteText(
-                              note: controller.text.trim().isEmpty ? null : controller.text.trim(),
+                              note: controller.text.trim().isEmpty
+                                  ? null
+                                  : controller.text.trim(),
                               includeLink: includeLink,
                             );
                           },
@@ -264,7 +297,9 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                           _noteController.text = controller.text;
                           await _saveQuoteImage(
                             theme: _themes[themeIndex],
-                            note: controller.text.trim().isEmpty ? null : controller.text.trim(),
+                            note: controller.text.trim().isEmpty
+                                ? null
+                                : controller.text.trim(),
                             includeLink: includeLink,
                           );
                         },
@@ -280,6 +315,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
       },
     );
   }
+
   Future<void> _loadLocalQuotes() async {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getStringList(_quotesPrefKey);
@@ -295,10 +331,15 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
 
   Future<void> _maybeRefreshFromFirebase() async {
     final conn = await Connectivity().checkConnectivity();
-    final hasConnection = conn.any((result) => result != ConnectivityResult.none);
+    final hasConnection = conn.any(
+      (result) => result != ConnectivityResult.none,
+    );
     if (!hasConnection) return;
     try {
-      final snap = await FirebaseFirestore.instance.collection('daily_quotes').limit(10).get();
+      final snap = await FirebaseFirestore.instance
+          .collection('daily_quotes')
+          .limit(10)
+          .get();
       for (final doc in snap.docs) {
         await _saveQuoteLocally(doc.data());
       }
@@ -315,7 +356,9 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
 
   Future<void> _saveQuoteLocally(Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
-    final text = (data['text'] ?? data['quote'] ?? data['message'] ?? '').toString().trim();
+    final text = (data['text'] ?? data['quote'] ?? data['message'] ?? '')
+        .toString()
+        .trim();
     if (text.isEmpty) return;
     final current = prefs.getStringList(_quotesPrefKey) ?? <String>[];
     if (!current.contains(text)) {
@@ -392,23 +435,29 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                   SizedBox(
                     height: cardHeight,
                     child: PageView.builder(
-                  controller: _quoteController,
-                  itemCount: _quotes.isEmpty ? 1 : _quotes.length,
-                  onPageChanged: (index) {
-                    setState(() => _quoteIndex = _quotes.isEmpty ? 0 : index % _quotes.length);
-                  },
-                  itemBuilder: (context, index) {
-                    final quote = _quotes.isEmpty ? _currentQuote : _quotes[index % _quotes.length];
-                    return Align(
-                      alignment: Alignment.topCenter,
-                      child: _QuotePreviewCard(
-                        quote: quote,
-                        theme: _themes[_selectedThemeIndex],
-                      ),
-                    );
-                  },
-                ),
-              ),
+                      controller: _quoteController,
+                      itemCount: _quotes.isEmpty ? 1 : _quotes.length,
+                      onPageChanged: (index) {
+                        setState(
+                          () => _quoteIndex = _quotes.isEmpty
+                              ? 0
+                              : index % _quotes.length,
+                        );
+                      },
+                      itemBuilder: (context, index) {
+                        final quote = _quotes.isEmpty
+                            ? _currentQuote
+                            : _quotes[index % _quotes.length];
+                        return Align(
+                          alignment: Alignment.topCenter,
+                          child: _QuotePreviewCard(
+                            quote: quote,
+                            theme: _themes[_selectedThemeIndex],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                   if (_quotes.length > 1)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
@@ -424,7 +473,9 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                             decoration: BoxDecoration(
                               color: active
                                   ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withOpacity(0.3),
                               shape: BoxShape.circle,
                             ),
                           );
@@ -489,10 +540,7 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
                     ),
                   ),
                   const Spacer(),
-                  const SizedBox(
-                    height: 60,
-                    child: _BannerReserve(),
-                  ),
+                  const SizedBox(height: 60, child: _BannerReserve()),
                 ],
               );
             },
@@ -529,81 +577,138 @@ class _ContentPageState extends State<ContentPage> with TickerProviderStateMixin
               final v = snap.data!;
               _prefetchNext(); // warm the next verse
 
-              return ListView(
+              final reference = "अध्याय ${v.chapter}, श्लोक ${v.verse}";
+              return Padding(
                 padding: const EdgeInsets.all(16),
-                children: [
-                  Text(
-                    "अध्याय ${v.chapter}, श्लोक ${v.verse}",
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    v.sanskrit,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    v.hindi,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _prevVerse,
-                          icon: const Icon(Icons.chevron_left),
-                          label: const Text("Previous"),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        gradient: LinearGradient(
+                          colors: [
+                            Theme.of(
+                              context,
+                            ).colorScheme.surfaceVariant.withOpacity(0.6),
+                            Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.08),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _nextVerse,
-                          icon: const Icon(Icons.chevron_right),
-                          label: const Text("Next"),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 44,
-                    child: FilledButton.icon(
-                      onPressed: () async {
-                        await SharePlus.instance.share(
-                          ShareParams(
-                            text: "अध्याय ${v.chapter}, श्लोक ${v.verse} — Radha Jap Counter",
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Chip(
+                                label: Text(
+                                  reference,
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                backgroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withOpacity(0.1),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.copy),
+                                tooltip: 'Copy verse',
+                                onPressed: () {
+                                  Clipboard.setData(
+                                    ClipboardData(
+                                      text:
+                                          '$reference\n\n${v.sanskrit}\n\n${v.hindi}\n\n$_currentShareLink',
+                                    ),
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Verse copied'),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.share),
-                      label: const Text("Share"),
-                    ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.image),
-                        tooltip: 'Share as Image',
-                        onPressed: () async {
-                          final reference = "अध्याय ${v.chapter}, श्लोक ${v.verse}";
-                          await _shareQuoteImage(
-                            theme: _themes[_selectedThemeIndex],
-                            note: reference,
-                            includeLink: true,
-                          );
-                        },
+                          const SizedBox(height: 12),
+                          Text(
+                            v.sanskrit,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  height: 1.6,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                          const SizedBox(height: 12),
+                          Divider(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.2),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            v.hindi,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyLarge?.copyWith(height: 1.5),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const _BannerReserve(),
-                ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _prevVerse,
+                            icon: const Icon(Icons.chevron_left),
+                            label: const Text("Previous"),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _nextVerse,
+                            icon: const Icon(Icons.chevron_right),
+                            label: const Text("Next"),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () => _shareVerseText(v),
+                            icon: const Icon(Icons.text_snippet),
+                            label: const Text("Share text"),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _shareVerseImage(v),
+                            icon: const Icon(Icons.image),
+                            label: const Text("Share card"),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const _BannerReserve(),
+                  ],
+                ),
               );
             },
           ),
@@ -635,14 +740,12 @@ class _BannerReserve extends StatelessWidget {
     );
   }
 }
+
 class _QuotePreviewCard extends StatelessWidget {
   final QuoteTheme theme;
   final String quote;
 
-  const _QuotePreviewCard({
-    required this.theme,
-    required this.quote,
-  });
+  const _QuotePreviewCard({required this.theme, required this.quote});
 
   @override
   Widget build(BuildContext context) {
@@ -702,7 +805,8 @@ class _QuotePreviewCard extends StatelessWidget {
                       height: 1.4,
                       fontWeight: FontWeight.w600,
                     );
-                    final quoteText = quote.length > 90 && constraints.maxHeight < 150
+                    final quoteText =
+                        quote.length > 90 && constraints.maxHeight < 150
                         ? '${quote.substring(0, 90)}…'
                         : quote;
                     return Column(
@@ -765,7 +869,9 @@ class _VerseSkeleton extends StatelessWidget {
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
       ),
     );
