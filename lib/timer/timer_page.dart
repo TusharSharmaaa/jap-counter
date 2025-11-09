@@ -14,7 +14,7 @@ class TimerPage extends StatefulWidget {
 
 class _TimerPageState extends State<TimerPage> {
   // ---- minimal stable state ----
-  final List<int> _presets = const [5, 10, 15, 20, 30, 45, 60, 90];
+  final List<int> _presets = const [2, 5, 10, 15, 20, 30, 45, 60, 90];
   int _selectedMinutes = 5;
   _TimerState _state = _TimerState.idle;
   Duration _total = const Duration(minutes: 5);
@@ -23,7 +23,7 @@ class _TimerPageState extends State<TimerPage> {
   DateTime? _lastTickAt;
 
   // ambience placeholder
-  String _ambience = 'Om';
+  String _ambience = 'Mute';
 
   // ---- lifecycle ----
   @override
@@ -154,7 +154,7 @@ class _TimerPageState extends State<TimerPage> {
             // Header card
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: _HeaderCard(ambience: _ambience),
+              child: _HeaderCard(sound: _ambience),
             ),
             // The rest scrolls if needed (prevents any overflow on small screens)
             Expanded(
@@ -167,86 +167,32 @@ class _TimerPageState extends State<TimerPage> {
                     // Two-column compact controls: Duration | Ambience
                     LayoutBuilder(
                       builder: (context, c) {
-                        final isNarrow = c.maxWidth < 520;
-                        if (isNarrow) {
-                          return Column(
-                            children: [
-                              _DurationSection(
-                                presets: _presets,
-                                selected: _selectedMinutes,
-                                onSelect: _selectPreset,
-                              ),
-                              const SizedBox(height: 12),
-                              _AmbienceSection(
-                                selected: _ambience,
-                                onSelect: _selectAmbience,
-                              ),
-                            ],
-                          );
-                        }
+                        final duration = _DurationSection(
+                          presets: _presets,
+                          selected: _selectedMinutes,
+                          onSelect: _selectPreset,
+                          enabled: !isRunning,
+                        );
+                        final sound = _AmbienceSection(
+                          selected: _ambience,
+                          onSelect: _selectAmbience,
+                        );
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: _DurationSection(
-                                presets: _presets,
-                                selected: _selectedMinutes,
-                                onSelect: _selectPreset,
-                              ),
-                            ),
+                            Expanded(child: duration),
                             const SizedBox(width: 12),
-                            Expanded(
-                              child: _AmbienceSection(
-                                selected: _ambience,
-                                onSelect: _selectAmbience,
-                              ),
-                            ),
+                            Expanded(child: sound),
                           ],
                         );
                       },
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
                     // Big readout + progress
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: theme.dividerColor.withOpacity(.4),
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            _readout,
-                            style: theme.textTheme.displayLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: LinearProgressIndicator(
-                              value: _progress,
-                              minHeight: 10,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _state == _TimerState.completed
-                                ? 'Completed'
-                                : isRunning
-                                ? 'Running'
-                                : isPaused
-                                ? 'Paused'
-                                : 'Ready',
-                            style: theme.textTheme.labelLarge,
-                          ),
-                        ],
-                      ),
+                    _PrimaryTimerCard(
+                      readout: _readout,
+                      progress: _progress,
+                      state: _state,
                     ),
                     const SizedBox(height: 16),
                     // Controls
@@ -290,9 +236,84 @@ class _TimerPageState extends State<TimerPage> {
 }
 
 // --- small widgets ---
+class _PrimaryTimerCard extends StatelessWidget {
+  final String readout;
+  final double progress;
+  final _TimerState state;
+
+  const _PrimaryTimerCard({
+    required this.readout,
+    required this.progress,
+    required this.state,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.dividerColor.withOpacity(.35)),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withOpacity(.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            readout,
+            style: theme.textTheme.displayMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(value: progress, minHeight: 8),
+          ),
+          const SizedBox(height: 10),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Text(
+              _statusLabel,
+              key: ValueKey(state),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.primary,
+                letterSpacing: .5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String get _statusLabel {
+    switch (state) {
+      case _TimerState.running:
+        return 'Running';
+      case _TimerState.paused:
+        return 'Paused';
+      case _TimerState.completed:
+        return 'Completed';
+      case _TimerState.idle:
+      default:
+        return 'Ready';
+    }
+  }
+}
+
 class _HeaderCard extends StatelessWidget {
-  final String ambience;
-  const _HeaderCard({required this.ambience});
+  final String sound;
+  const _HeaderCard({required this.sound});
 
   @override
   Widget build(BuildContext context) {
@@ -331,9 +352,9 @@ class _HeaderCard extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.music_note, size: 18),
+              const Icon(Icons.graphic_eq, size: 18),
               const SizedBox(width: 4),
-              Text(ambience, style: theme.textTheme.labelLarge),
+              Text(sound, style: theme.textTheme.labelLarge),
             ],
           ),
         ],
@@ -346,10 +367,12 @@ class _DurationSection extends StatelessWidget {
   final List<int> presets;
   final int selected;
   final ValueChanged<int> onSelect;
+  final bool enabled;
   const _DurationSection({
     required this.presets,
     required this.selected,
     required this.onSelect,
+    required this.enabled,
   });
 
   @override
@@ -362,26 +385,29 @@ class _DurationSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: theme.dividerColor.withOpacity(.4)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Duration', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: presets.map((m) {
-              final s = m == selected;
-              return ChoiceChip(
-                label: Text('${m}m'),
-                selected: s,
-                onSelected: (_) => onSelect(m),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              );
-            }).toList(),
+      child: DropdownButtonFormField<int>(
+        value: selected,
+        icon: const Icon(Icons.expand_more),
+        decoration: InputDecoration(
+          labelText: 'Select time',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
           ),
-        ],
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 14,
+          ),
+        ),
+        items: presets
+            .map((m) => DropdownMenuItem(value: m, child: Text('$m minutes')))
+            .toList(),
+        onChanged: !enabled
+            ? null
+            : (value) {
+                if (value != null) onSelect(value);
+              },
       ),
     );
   }
@@ -392,7 +418,7 @@ class _AmbienceSection extends StatelessWidget {
   final ValueChanged<String> onSelect;
   const _AmbienceSection({required this.selected, required this.onSelect});
 
-  static const _items = ['Om', 'Flute', 'Birds', 'Water', 'Bell', 'Silent'];
+  static const _items = ['Mute', 'Om', 'Flute', 'Birds', 'Water', 'Bell'];
 
   @override
   Widget build(BuildContext context) {
@@ -404,26 +430,27 @@ class _AmbienceSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: theme.dividerColor.withOpacity(.4)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Ambience', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _items.map((name) {
-              final s = name == selected;
-              return ChoiceChip(
-                label: Text(name),
-                selected: s,
-                onSelected: (_) => onSelect(name),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              );
-            }).toList(),
+      child: DropdownButtonFormField<String>(
+        value: selected,
+        icon: const Icon(Icons.expand_more),
+        decoration: InputDecoration(
+          labelText: 'Select sound',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
           ),
-        ],
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 14,
+          ),
+        ),
+        items: _items
+            .map((name) => DropdownMenuItem(value: name, child: Text(name)))
+            .toList(),
+        onChanged: (value) {
+          if (value != null) onSelect(value);
+        },
       ),
     );
   }
