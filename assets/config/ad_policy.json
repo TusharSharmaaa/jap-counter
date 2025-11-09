@@ -9,8 +9,8 @@
     },
     "rewarded": {
       "daily_cap": 6,
-      "min_cooldown_seconds": 7200,
-      "skip_if_not_ready_after_ms": 1500
+      "min_cooldown_seconds": 0,
+      "skip_if_not_ready_after_ms": 4000
     },
     "banners": { "enabled": false },
     "native": { "enabled": false },
@@ -25,7 +25,7 @@
         "type": "rewarded", "enabled": true, "trigger": "on_share_streak_tap",
         "flow": ["show_rewarded","then_generate_share_card","then_share_intent"],
         "fallback_if_not_ready": "skip_ad_and_continue",
-        "caps": { "daily_cap": 3, "min_cooldown_seconds": 7200 }
+        "caps": { "daily_cap": 3, "min_cooldown_seconds": 0 }
       },
       "other_ads": { "enabled": false }
     },
@@ -35,7 +35,7 @@
         "type": "rewarded", "enabled": true, "trigger": "on_share_shloka_tap",
         "flow": ["show_rewarded","then_generate_share_card","then_share_intent"],
         "fallback_if_not_ready": "skip_ad_and_continue",
-        "caps": { "daily_cap": 4, "min_cooldown_seconds": 3600 }
+        "caps": { "daily_cap": 4, "min_cooldown_seconds": 0 }
       },
       "long_session_interstitial": {
         "type": "interstitial", "enabled": true, "trigger": "on_exit_gita_screen",
@@ -55,7 +55,7 @@
         "type": "rewarded", "enabled": true, "trigger": "on_timer_share_tap",
         "flow": ["show_rewarded","then_generate_share_card","then_share_intent"],
         "fallback_if_not_ready": "skip_ad_and_continue",
-        "caps": { "daily_cap": 3, "min_cooldown_seconds": 3600 }
+        "caps": { "daily_cap": 3, "min_cooldown_seconds": 0 }
       }
     },
     "settings": { "all_ads": { "enabled": false } }
