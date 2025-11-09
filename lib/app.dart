@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:confetti/confetti.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -10,7 +8,7 @@ import 'stats/streak_share_preview.dart';
 import 'stats/streak_badge.dart';
 import 'ads/rewarded.dart';
 import 'ads/interstitial_timer.dart';
-import 'content/content_page.dart';
+import 'content/gita_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
 import 'data/dedication_store.dart';
@@ -29,8 +27,6 @@ import 'theme/theme.dart';
 import 'data/language_store.dart';
 import 'l10n/app_localizations.dart';
 import 'sync/sync_service.dart';
-import 'analytics/local_summary.dart';
-import 'utils/streak_image_generator.dart';
 import 'utils/weekly_chart_data.dart';
 import 'counter/counter_page.dart';
 
@@ -103,7 +99,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   late final List<Widget> _pages = [
     const CounterPage(),
     _StatsPage(key: _statsKey),
-    const _ContentPage(),
+    const _GitaTab(),
     TimerPage(),
   ];
 
@@ -243,7 +239,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                 children: [
                   _navIcon(Icons.touch_app, 0, 'nav.counter'),
                   _navIcon(Icons.bar_chart, 1, 'nav.stats'),
-                  _navIcon(Icons.menu_book, 2, 'nav.content'),
+                  _navIcon(Icons.menu_book, 2, 'nav.gita'),
                   _navIcon(Icons.timer, 3, 'nav.timer'),
                   _navIcon(Icons.settings, 4, 'nav.settings'),
                 ],
@@ -1441,12 +1437,12 @@ class _LegendSwatch extends StatelessWidget {
   }
 }
 
-class _ContentPage extends StatelessWidget {
-  const _ContentPage();
+class _GitaTab extends StatelessWidget {
+  const _GitaTab();
 
   @override
   Widget build(BuildContext context) {
-    return const ContentPage(); // uses the new tabs screen
+    return const GitaPage();
   }
 }
 

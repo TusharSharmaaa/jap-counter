@@ -27,7 +27,7 @@ class AppStrings {
       // Navigation
       'nav.counter': 'Counter',
       'nav.stats': 'Stats',
-      'nav.content': 'Content',
+      'nav.gita': 'Gita',
       'nav.timer': 'Timer',
       'nav.settings': 'Settings',
 
@@ -170,7 +170,7 @@ class AppStrings {
       // Navigation
       'nav.counter': 'जप',
       'nav.stats': 'आँकड़े',
-      'nav.content': 'सामग्री',
+      'nav.gita': 'गीता',
       'nav.timer': 'घड़ी',
       'nav.settings': 'सेटिंग्स',
 
