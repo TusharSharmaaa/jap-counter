@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -118,6 +119,9 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
     } catch (e) {
       if (kDebugMode) debugPrint('[SharePreview] Share failed: $e');
     } finally {
+      unawaited(
+        AdManager.instance.preloadPlacement('stats.share_rewarded'),
+      );
       if (mounted) setState(() => _sharing = false);
     }
   }

@@ -14,7 +14,13 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await StreakStore.init();
   await MobileAds.instance.initialize(); // init-only, no requests yet
+  final requestConfig = RequestConfiguration(
+    testDeviceIds: ['TEST_DEVICE_ID'],
+  );
+  await MobileAds.instance.updateRequestConfiguration(requestConfig);
+  debugPrint('[AdInit] AdMob initialized');
   await AdManager.ensureInitialized();
+  AdManager.instance.preloadAll();
   await NotificationService.initialize();
   try {
     await NotificationService().scheduleDailyMotivation();

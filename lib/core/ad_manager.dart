@@ -94,6 +94,10 @@ class AdManager {
   }
 
   Future<void> _requestConsentIfNeeded() async {
+    if (kDebugMode) {
+      _serveNpa = true;
+      return;
+    }
     final consentConfig =
         (_global['consent'] as Map?)?.cast<String, dynamic>() ?? {};
     final useUmp = consentConfig['use_ump'] == true;
@@ -146,10 +150,10 @@ class AdManager {
         (preloadConfig['interstitial'] as List?)?.cast<String>() ?? [];
 
     for (final id in rewarded) {
-      unawaited(_preloadRewarded(id));
+      await _preloadRewarded(id);
     }
     for (final id in interstitial) {
-      unawaited(_preloadInterstitial(id));
+      await _preloadInterstitial(id);
     }
   }
 
@@ -219,6 +223,7 @@ class AdManager {
 
     if (ad == null) {
       _log(placementId, 'ad_failed_to_load');
+      _preloadRewarded(placementId);
       return false;
     }
 
@@ -232,11 +237,13 @@ class AdManager {
         _log(placementId, 'ad_dismissed');
         await _markServed('rewarded', placementId);
         ad.dispose();
+        _preloadRewarded(placementId);
         completer.complete(earned);
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
         _log(placementId, 'ad_failed_to_load', {'error': '$error'});
         ad.dispose();
+        _preloadRewarded(placementId);
         if (!completer.isCompleted) completer.complete(false);
       },
     );
@@ -253,6 +260,7 @@ class AdManager {
       );
     } catch (e) {
       ad.dispose();
+      _preloadRewarded(placementId);
       if (!completer.isCompleted) completer.complete(false);
     }
 
@@ -508,6 +516,9 @@ class AdManager {
         onAdLoaded: (ad) {
           timer?.cancel();
           if (!completer.isCompleted) {
+            if (kDebugMode) {
+              debugPrint('[AdManager] Rewarded loaded for $placementId');
+            }
             completer.complete(ad);
           } else {
             ad.dispose();
@@ -555,7 +566,12 @@ class AdManager {
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           timer?.cancel();
-          if (!completer.isCompleted) completer.complete(ad);
+          if (!completer.isCompleted) {
+            if (kDebugMode) {
+              debugPrint('[AdManager] Interstitial loaded for $placementId');
+            }
+            completer.complete(ad);
+          }
         },
         onAdFailedToLoad: (error) {
           timer?.cancel();
@@ -589,6 +605,26 @@ class AdManager {
     } else if (type == 'interstitial') {
       await _preloadInterstitial(placementId);
     }
+  }
+
+  Future<void> preloadAll() async {
+    await _init();
+    for (final entry in _rewardedUnitIds.keys) {
+      await _preloadRewarded(entry);
+    }
+    for (final entry in _interstitialUnitIds.keys) {
+      await _preloadInterstitial(entry);
+    }
+  }
+
+  Future<bool> showRewardedAd(String placementId,
+      {Duration? timeout}) async {
+    return maybeShowRewarded(placementId, timeout: timeout);
+  }
+
+  Future<bool> showInterstitialAd(String placementId,
+      {Duration? timeout}) async {
+    return maybeShowInterstitial(placementId, timeout: timeout);
   }
 
   Future<int> _getTodayCount(String key) async {

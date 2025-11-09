@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -39,7 +38,6 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
   String _ambienceId = 'mute';
   bool _visible = false;
   final SoundManager _soundManager = SoundManager.instance;
-  final GlobalKey _shareCardKey = GlobalKey();
   bool _shareBusy = false;
   int _todayMinutes = 0;
   int _lifetimeMinutes = 0;
@@ -245,7 +243,7 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     );
 
     if (!mounted) return;
-    await AdManager.instance.maybeShowInterstitial(
+    await AdManager.instance.showInterstitialAd(
       'timer.post_session_interstitial',
       timeout: const Duration(milliseconds: 1500),
     );
@@ -274,7 +272,6 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
       case _TimerState.completed:
         return '🌸 साधना पूर्ण हुई';
       case _TimerState.idle:
-      default:
         return '🙏 मन को शांत करें';
     }
   }
@@ -293,141 +290,61 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     if (_shareBusy) return;
     if (!mounted) return;
     setState(() => _shareBusy = true);
+
+    final caption = context.tr(
+      'timer.share.caption',
+      args: {
+        'today': _formatMinutes(_todayMinutes),
+        'lifetime': _formatMinutes(_lifetimeMinutes),
+      },
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    final successLabel = context.tr('common.share');
+
     try {
-      await AdManager.instance.maybeShowRewarded(
+      final adShown = await AdManager.instance.showRewardedAd(
         'timer.share_rewarded',
-        timeout: const Duration(milliseconds: 1500),
+        timeout: const Duration(seconds: 8),
       );
-
-      await Future.delayed(const Duration(milliseconds: 16));
-      final boundary =
-          _shareCardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) {
-        throw Exception('Share card not ready');
-      }
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
-
-      final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/timer_share_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(pngBytes);
-
-      final shareText = context.tr(
-        'timer.share.caption',
-        args: {
-          'today': _formatMinutes(_todayMinutes),
-          'lifetime': _formatMinutes(_lifetimeMinutes),
-        },
-      );
-
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          text: shareText,
+      unawaited(
+        AdManager.instance.recordEvent(
+          'timer.share_rewarded',
+          'attempt',
+          data: {'ad_shown': adShown},
         ),
       );
     } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('[TimerShare] failed: $e\n$st');
+        debugPrint('[TimerShare] rewarded load failed: $e\n$st');
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('timer.share.error'))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _shareBusy = false);
     }
-  }
 
-  Widget _buildShareCard(BuildContext context) {
-    final theme = Theme.of(context);
-    final todayLabel = context.tr('timer.share.today');
-    final lifetimeLabel = context.tr('timer.share.lifetime');
-    final title = context.tr('timer.share.cardTitle');
-    final subtitle = context.tr('timer.share.subtitle');
-    final todayValue = _formatMinutes(_todayMinutes);
-    final lifetimeValue = _formatMinutes(_lifetimeMinutes);
-    final onPrimary = Colors.white;
-    final muted = Colors.white.withOpacity(0.72);
+    if (!mounted) {
+      setState(() => _shareBusy = false);
+      return;
+    }
 
-    return RepaintBoundary(
-      key: _shareCardKey,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              theme.colorScheme.primary.withOpacity(0.92),
-              theme.colorScheme.secondary.withOpacity(0.75),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: theme.colorScheme.primary.withOpacity(0.25),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: onPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: muted,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: _ShareStatTile(
-                    label: todayLabel,
-                    value: todayValue,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _ShareStatTile(
-                    label: lifetimeLabel,
-                    value: lifetimeValue,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Divider(color: onPrimary.withOpacity(0.25), thickness: 1),
-            const SizedBox(height: 12),
-            Text(
-              'Radha Jap Counter',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: onPrimary,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.6,
-              ),
-            ),
-          ],
-        ),
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TimerShareSheet(
+        todayMinutes: _todayMinutes,
+        lifetimeMinutes: _lifetimeMinutes,
+        caption: caption,
       ),
     );
+
+    if (result == true && mounted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('$successLabel ✓'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    if (mounted) setState(() => _shareBusy = false);
   }
 
   String _ambienceLabel(BuildContext context) {
@@ -522,8 +439,6 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
                         ],
                       ),
                       const SizedBox(height: 32),
-                      _buildShareCard(context),
-                      const SizedBox(height: 12),
                       FilledButton.icon(
                         onPressed: _shareBusy ? null : _shareMeditation,
                         icon: _shareBusy
@@ -797,5 +712,242 @@ class _ShareStatTile extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _TimerShareCard extends StatelessWidget {
+  final String todayValue;
+  final String lifetimeValue;
+
+  const _TimerShareCard({
+    required this.todayValue,
+    required this.lifetimeValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final todayLabel = context.tr('timer.share.today');
+    final lifetimeLabel = context.tr('timer.share.lifetime');
+    final title = context.tr('timer.share.cardTitle');
+    final subtitle = context.tr('timer.share.subtitle');
+    final onPrimary = Colors.white;
+    final muted = Colors.white.withOpacity(0.72);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primary.withOpacity(0.92),
+            theme.colorScheme.secondary.withOpacity(0.75),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withOpacity(0.25),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: onPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: muted,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _ShareStatTile(
+                  label: todayLabel,
+                  value: todayValue,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _ShareStatTile(
+                  label: lifetimeLabel,
+                  value: lifetimeValue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Divider(color: onPrimary.withOpacity(0.25), thickness: 1),
+          const SizedBox(height: 12),
+          Text(
+            'Radha Jap Counter',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: onPrimary,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimerShareSheet extends StatefulWidget {
+  final int todayMinutes;
+  final int lifetimeMinutes;
+  final String caption;
+
+  const _TimerShareSheet({
+    required this.todayMinutes,
+    required this.lifetimeMinutes,
+    required this.caption,
+  });
+
+  @override
+  State<_TimerShareSheet> createState() => _TimerShareSheetState();
+}
+
+class _TimerShareSheetState extends State<_TimerShareSheet> {
+  final GlobalKey _cardKey = GlobalKey();
+  bool _sharing = false;
+
+  Future<void> _handleShare() async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final errorText = context.tr('timer.share.error');
+
+    try {
+      await Future.delayed(Duration.zero);
+      await WidgetsBinding.instance.endOfFrame;
+      final ctx = _cardKey.currentContext;
+      final render = ctx?.findRenderObject();
+      if (render is! RenderRepaintBoundary) {
+        throw Exception('Share boundary not ready');
+      }
+      final boundary = render;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/timer_share_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(pngBytes);
+      AdManager.instance.recordEvent(
+        'timer.share_rewarded',
+        'share_card_generated',
+      );
+
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], text: widget.caption),
+      );
+      AdManager.instance.recordEvent(
+        'timer.share_rewarded',
+        'share_intent_launched',
+      );
+      unawaited(
+        AdManager.instance.preloadPlacement('timer.share_rewarded'),
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[TimerShareSheet] share failed: $e\n$st');
+      }
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(errorText)));
+      }
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final todayValue = _formatMinutes(widget.todayMinutes);
+    final lifetimeValue = _formatMinutes(widget.lifetimeMinutes);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(context).padding.bottom + 28,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RepaintBoundary(
+                  key: _cardKey,
+                  child: _TimerShareCard(
+                    todayValue: todayValue,
+                    lifetimeValue: lifetimeValue,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _sharing ? null : _handleShare,
+                  icon: _sharing
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          ),
+                        )
+                      : const Icon(Icons.ios_share),
+                  label: Text(context.tr('common.share')),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatMinutes(int minutes) {
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    if (hours > 0) {
+      final minPart = mins.toString().padLeft(2, '0');
+      return '$hours h ${minPart}m';
+    }
+    return '$mins m';
   }
 }

@@ -306,9 +306,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     }
     if (_index == 2 && index != 2) {
       unawaited(
-        AdManager.instance.maybeShowInterstitial(
+        AdManager.instance.showInterstitialAd(
           'gita.long_session_interstitial',
-        ),
+          timeout: const Duration(seconds: 2),
+          ),
       );
       AdManager.instance.recordEvent('gita.session', 'end');
     }
@@ -343,6 +344,9 @@ class _StatsPageState extends State<_StatsPage> {
     super.initState();
     _confetti = ConfettiController(duration: const Duration(seconds: 3));
     _init();
+    unawaited(
+      AdManager.instance.preloadPlacement('stats.share_rewarded'),
+    );
 
     _loadAmbiencePref();
   }

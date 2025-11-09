@@ -10,7 +10,7 @@
     "rewarded": {
       "daily_cap": 6,
       "min_cooldown_seconds": 0,
-      "skip_if_not_ready_after_ms": 4000
+      "skip_if_not_ready_after_ms": 8000
     },
     "banners": { "enabled": false },
     "native": { "enabled": false },

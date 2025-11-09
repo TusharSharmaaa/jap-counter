@@ -11,8 +11,9 @@ Future<void> openShareMyStreak(
 }) async {
   if (!context.mounted) return;
 
-  final adShown = await AdManager.instance.maybeShowRewarded(
+  final adShown = await AdManager.instance.showRewardedAd(
     'stats.share_rewarded',
+    timeout: const Duration(seconds: 8),
   );
   AdManager.instance.recordEvent(
     'stats.share_rewarded',

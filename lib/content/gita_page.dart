@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -46,6 +48,9 @@ class _GitaPageState extends State<GitaPage> {
   void initState() {
     super.initState();
     _loadShloka();
+    unawaited(
+      AdManager.instance.preloadPlacement('gita.share_rewarded'),
+    );
   }
 
   @override
@@ -114,8 +119,9 @@ class _GitaPageState extends State<GitaPage> {
     setState(() => _sharing = true);
 
     try {
-      final adShown = await AdManager.instance.maybeShowRewarded(
+      final adShown = await AdManager.instance.showRewardedAd(
         'gita.share_rewarded',
+        timeout: const Duration(seconds: 8),
       );
       AdManager.instance.recordEvent(
         'gita.share_rewarded',
@@ -185,6 +191,9 @@ class _GitaPageState extends State<GitaPage> {
       if (mounted) {
         setState(() => _sharing = false);
       }
+      unawaited(
+        AdManager.instance.preloadPlacement('gita.share_rewarded'),
+      );
     }
   }
 
