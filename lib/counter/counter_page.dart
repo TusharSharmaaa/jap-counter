@@ -15,6 +15,7 @@ import '../data/goal_store.dart';
 import '../data/insight_store.dart';
 import '../data/session_store.dart';
 import '../gamify/gamify_store.dart';
+import '../l10n/app_localizations.dart';
 import '../notifications/notification_service.dart';
 import '../theme/glow_theme.dart';
 
@@ -43,7 +44,9 @@ class _CounterPageState extends State<CounterPage> {
   @override
   void initState() {
     super.initState();
-    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 3),
+    );
     _init();
   }
 
@@ -52,7 +55,8 @@ class _CounterPageState extends State<CounterPage> {
     final goalStore = await GoalStore.create();
     final prefs = await SharedPreferences.getInstance();
 
-    final congratulatedToday = goalStore.lastCongratsDate == GoalStore.todayKey();
+    final congratulatedToday =
+        goalStore.lastCongratsDate == GoalStore.todayKey();
 
     setState(() {
       _store = store;
@@ -118,16 +122,6 @@ class _CounterPageState extends State<CounterPage> {
       debugPrint('[Insights] Record failed: $e');
     }
 
-    try {
-      final xpRes = await GamifyStore.addXp(1);
-      if (xpRes['leveledUp'] == true) {
-        try {
-          HapticFeedback.mediumImpact();
-        } catch (_) {}
-        await _showLevelUpDialog(xpRes['level'] as int? ?? 1);
-      }
-    } catch (_) {}
-
     if (wasZero) {
       await ActivityStore.markTodayActive();
     }
@@ -137,7 +131,6 @@ class _CounterPageState extends State<CounterPage> {
       if (streak == 7 || streak == 21 || streak == 40) {
         try {
           await GamifyStore.awardBadge('streak_$streak');
-          await GamifyStore.addXp(30);
         } catch (_) {}
         try {
           HapticFeedback.mediumImpact();
@@ -163,32 +156,25 @@ class _CounterPageState extends State<CounterPage> {
         final streak = await ActivityStore.currentStreak();
         if (streak == 7 || streak == 21 || streak == 40) {
           final dedicationStore = await DedicationStore.create();
-          await dedicationStore.setNote('🔥 $streak-Day Streak — साधना निरंतर जारी है!');
+          await dedicationStore.setNote(
+            '🔥 $streak-Day Streak — साधना निरंतर जारी है!',
+          );
         }
       } catch (_) {}
       try {
         HapticFeedback.mediumImpact();
       } catch (_) {}
       _triggerPulse();
-      try {
-        final xpRes = await GamifyStore.addXp(20);
-        final next = xpRes['nextThreshold'] as int? ?? 0;
-        final xp = xpRes['xp'] as int? ?? 0;
-        final level = xpRes['level'] as int? ?? 1;
-        if (!mounted) return;
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text('🎯 Mala completed!  +20 XP  •  Level $level  ($xp/$next)'),
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        if (xpRes['leveledUp'] == true) {
-          await _showLevelUpDialog(level);
-        }
-      } catch (_) {}
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('🎯 Mala completed! साधना जारी रखें।'),
+            duration: Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       try {
         final sessions = await SessionStore.create();
         await sessions.addSession(type: 'jap', count: willBe);
@@ -224,38 +210,16 @@ class _CounterPageState extends State<CounterPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('🌼 लक्ष्य पूर्ण'),
-        content: Text('आपने आज $_dailyGoal माला${_dailyGoal == 1 ? '' : 'एँ'} पूरी कर ली हैं। साधना जारी रखें!'),
+        content: Text(
+          'आपने आज $_dailyGoal माला${_dailyGoal == 1 ? '' : 'एँ'} पूरी कर ली हैं। साधना जारी रखें!',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('राधे राधे')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('राधे राधे'),
+          ),
         ],
       ),
-    );
-  }
-
-  Future<void> _showLevelUpDialog(int newLevel) async {
-    if (!mounted) return;
-    await showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              const Icon(Icons.emoji_events, size: 26),
-              const SizedBox(width: 8),
-              const Text('Level Up!'),
-            ],
-          ),
-          content: Text('You reached Level $newLevel.\nKeep the साधना flowing ✨'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('जय राधे'),
-            ),
-          ],
-        );
-      },
     );
   }
 
@@ -287,9 +251,13 @@ class _CounterPageState extends State<CounterPage> {
           decoration: const InputDecoration(labelText: 'Goal (malas)'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, int.tryParse(controller.text) ?? _dailyGoal),
+            onPressed: () =>
+                Navigator.pop(ctx, int.tryParse(controller.text) ?? _dailyGoal),
             child: const Text('Save'),
           ),
         ],
@@ -415,72 +383,46 @@ class _CounterPageState extends State<CounterPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Row(
                         children: [
-                          Expanded(child: _StatTile(title: "Today's Japs", value: _today.toString())),
+                          Expanded(
+                            child: _StatTile(
+                              title: "Today's Japs",
+                              value: _today.toString(),
+                            ),
+                          ),
                           const SizedBox(width: 8),
-                          Expanded(child: _StatTile(title: "Malas", value: _malas.toString())),
+                          Expanded(
+                            child: _StatTile(
+                              title: "Malas",
+                              value: _malas.toString(),
+                            ),
+                          ),
                           const SizedBox(width: 8),
-                          Expanded(child: _StatTile(title: "Lifetime Malas", value: _lifetimeMalas.toString())),
+                          Expanded(
+                            child: _StatTile(
+                              title: "Lifetime Malas",
+                              value: _lifetimeMalas.toString(),
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 24),
-                    _MalaProgress(todayJaps: _today),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: theme.dividerColor),
-                          color: theme.colorScheme.surface.withOpacity(0.9),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'Goal: $_dailyGoal mala${_dailyGoal == 1 ? '' : 's'}',
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit, size: 18),
-                                  onPressed: _editGoal,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            LinearProgressIndicator(
-                              value: _goalProgress,
-                              minHeight: 10,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            const SizedBox(height: 6),
-                            Builder(
-                              builder: (_) {
-                                final status = _dailyGoal <= 0
-                                    ? 'No daily goal set'
-                                    : _goalCompletedShown
-                                        ? '✅ Goal met for today'
-                                        : 'Progress: $_malas / $_dailyGoal mala${_dailyGoal == 1 ? '' : 's'}';
-                                return Text(
-                                  status,
-                                  style: theme.textTheme.labelMedium,
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
+                    _GoalSummary(
+                      dailyGoal: _dailyGoal,
+                      goalProgress: _goalProgress,
+                      goalCompletedShown: _goalCompletedShown,
+                      malas: _malas,
+                      onEditGoal: _editGoal,
                     ),
-                    const SizedBox(height: 8),
                     Expanded(
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('Tap to Count', style: theme.textTheme.titleLarge),
+                            Text(
+                              'Tap to Count',
+                              style: theme.textTheme.titleLarge,
+                            ),
                             const SizedBox(height: 16),
                             AnimatedScale(
                               scale: _pulse ? 1.08 : 1.0,
@@ -493,14 +435,17 @@ class _CounterPageState extends State<CounterPage> {
                                   shape: BoxShape.circle,
                                   gradient: RadialGradient(
                                     colors: [
-                                      theme.colorScheme.primary.withOpacity(0.25),
+                                      theme.colorScheme.primary.withOpacity(
+                                        0.25,
+                                      ),
                                       theme.colorScheme.surface,
                                     ],
                                     radius: 0.85,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: theme.colorScheme.primary.withOpacity(0.3),
+                                      color: theme.colorScheme.primary
+                                          .withOpacity(0.3),
                                       blurRadius: 30,
                                       spreadRadius: 2,
                                     ),
@@ -509,14 +454,20 @@ class _CounterPageState extends State<CounterPage> {
                                 child: Center(
                                   child: Text(
                                     '$_today',
-                                    style: theme.textTheme.displayLarge?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      foreground: Paint()..shader = GlowTheme.linearGradient(context),
-                                    ),
+                                    style: theme.textTheme.displayLarge
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          foreground: Paint()
+                                            ..shader = GlowTheme.linearGradient(
+                                              context,
+                                            ),
+                                        ),
                                   ),
                                 ),
                               ),
                             ),
+                            const SizedBox(height: 20),
+                            _MalaCountdown(todayJaps: _today),
                           ],
                         ),
                       ),
@@ -566,34 +517,144 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-class _MalaProgress extends StatelessWidget {
+class _MalaCountdown extends StatelessWidget {
   final int todayJaps;
-  const _MalaProgress({required this.todayJaps});
+  const _MalaCountdown({required this.todayJaps});
 
   @override
   Widget build(BuildContext context) {
     final inThisMala = todayJaps % 108;
     final remaining = 108 - inThisMala;
     final progress = inThisMala / 108.0;
+    final theme = Theme.of(context);
+    final message = remaining == 108
+        ? context.tr('counter.mala.new')
+        : context.tr('counter.mala.remaining', args: {'count': '$remaining'});
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '$remaining more to complete this mala',
-            style: Theme.of(context).textTheme.bodyMedium,
-            textAlign: TextAlign.center,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          message,
+          style: theme.textTheme.labelLarge,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 6),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 220),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(value: progress, minHeight: 8),
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(value: progress),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
+class _GoalSummary extends StatelessWidget {
+  final int dailyGoal;
+  final double goalProgress;
+  final bool goalCompletedShown;
+  final int malas;
+  final VoidCallback onEditGoal;
+
+  const _GoalSummary({
+    required this.dailyGoal,
+    required this.goalProgress,
+    required this.goalCompletedShown,
+    required this.malas,
+    required this.onEditGoal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final language = AppLocalizationScope.of(context).language;
+    final suffix = language == 'hi'
+        ? (dailyGoal == 1 ? '' : 'एँ')
+        : (dailyGoal == 1 ? '' : 's');
+    final goalLabel = dailyGoal == 0
+        ? context.tr('counter.goal.cta')
+        : context.tr(
+            'counter.goal.label',
+            args: {'count': '$dailyGoal', 'suffix': suffix},
+          );
+
+    String statusKey;
+    Map<String, String>? statusArgs;
+    if (dailyGoal <= 0) {
+      statusKey = 'counter.goal.status.none';
+    } else if (goalCompletedShown) {
+      statusKey = 'counter.goal.status.met';
+    } else {
+      statusKey = 'counter.goal.status.progress';
+      statusArgs = {'malas': '$malas', 'goal': '$dailyGoal', 'suffix': suffix};
+    }
+    final statusText = context.tr(statusKey, args: statusArgs);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Material(
+        color: theme.colorScheme.surface.withOpacity(0.95),
+        elevation: 1,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onEditGoal,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.flag_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        goalLabel,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(statusText, style: theme.textTheme.bodySmall),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: goalProgress,
+                          minHeight: 6,
+                          backgroundColor: theme.colorScheme.primary
+                              .withOpacity(0.08),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.edit_outlined,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

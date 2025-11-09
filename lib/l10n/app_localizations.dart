@@ -128,6 +128,15 @@ class AppStrings {
       'badge.bronze': 'Bronze',
       'badge.new': 'New',
 
+      // Counter page
+      'counter.goal.cta': 'Set daily mala goal',
+      'counter.goal.label': 'Goal: {count} mala{suffix}',
+      'counter.goal.status.none': 'Tap to add a daily mala target',
+      'counter.goal.status.met': '✅ Goal met for today',
+      'counter.goal.status.progress': 'Progress: {malas} / {goal} mala{suffix}',
+      'counter.mala.new': 'Start a new mala',
+      'counter.mala.remaining': '{count} more japs will complete this mala',
+
       // Share card
       'share.appBar': 'Share My Streak',
       'share.title': '🌸 My Sadhana Journey 🌸',
@@ -251,6 +260,15 @@ class AppStrings {
       'badge.silver': 'रजत',
       'badge.bronze': 'कांस्य',
       'badge.new': 'नया',
+
+      // Counter page
+      'counter.goal.cta': 'दैनिक माला लक्ष्य चुनें',
+      'counter.goal.label': 'लक्ष्य: {count} माला{suffix}',
+      'counter.goal.status.none': 'दैनिक माला लक्ष्य जोड़ने हेतु टैप करें',
+      'counter.goal.status.met': '✅ लक्ष्य प्राप्त हो चुका है',
+      'counter.goal.status.progress': 'प्रगति: {malas} / {goal} माला{suffix}',
+      'counter.mala.new': 'नई माला प्रारंभ करें',
+      'counter.mala.remaining': '{count} और जप इस माला को पूर्ण करेंगे',
 
       // Share card
       'share.appBar': 'श्रंखला साझा करें',
