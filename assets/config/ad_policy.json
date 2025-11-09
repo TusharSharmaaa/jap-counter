@@ -1,0 +1,77 @@
+{
+  "version": "2025-11-09",
+  "global": {
+    "enable_ads": true,
+    "interstitial": {
+      "daily_cap": 3,
+      "min_cooldown_seconds": 300,
+      "skip_if_last_interstitial_within_seconds": 300
+    },
+    "rewarded": {
+      "daily_cap": 6,
+      "min_cooldown_seconds": 7200,
+      "skip_if_not_ready_after_ms": 1500
+    },
+    "banners": { "enabled": false },
+    "native": { "enabled": false },
+    "consent": { "use_ump": true, "serve_npa_if_declined": true },
+    "category_blocklist": ["gambling","adult","dating","political","violent","misleading"],
+    "fail_safe": { "action_must_continue_if_ad_fails": true, "dispose_on_close": true }
+  },
+  "placements": {
+    "counter": { "banners": { "enabled": false }, "native": { "enabled": false }, "interstitial": { "enabled": false }, "rewarded": { "enabled": false } },
+    "stats": {
+      "share_rewarded": {
+        "type": "rewarded", "enabled": true, "trigger": "on_share_streak_tap",
+        "flow": ["show_rewarded","then_generate_share_card","then_share_intent"],
+        "fallback_if_not_ready": "skip_ad_and_continue",
+        "caps": { "daily_cap": 3, "min_cooldown_seconds": 7200 }
+      },
+      "other_ads": { "enabled": false }
+    },
+    "gita": {
+      "reading": { "ads_during_reading": false },
+      "share_rewarded": {
+        "type": "rewarded", "enabled": true, "trigger": "on_share_shloka_tap",
+        "flow": ["show_rewarded","then_generate_share_card","then_share_intent"],
+        "fallback_if_not_ready": "skip_ad_and_continue",
+        "caps": { "daily_cap": 4, "min_cooldown_seconds": 3600 }
+      },
+      "long_session_interstitial": {
+        "type": "interstitial", "enabled": true, "trigger": "on_exit_gita_screen",
+        "conditions": { "min_shlokas_read": 8, "min_time_ms": 300000, "skip_if_rewarded_shown_within_seconds": 300 },
+        "caps": { "daily_cap": 1, "min_cooldown_seconds": 300 }
+      }
+    },
+    "timer": {
+      "during_meditation": { "ads_allowed": false },
+      "post_session_interstitial": {
+        "type": "interstitial","enabled": true,"trigger": "on_timer_complete_and_dialog_dismissed",
+        "pattern": "every_session",
+        "conditions": { "skip_if_session_minutes_lt": 0, "skip_if_any_interstitial_within_seconds": 300 },
+        "caps": { "daily_cap": 3, "min_cooldown_seconds": 300 }
+      },
+      "share_rewarded": {
+        "type": "rewarded", "enabled": true, "trigger": "on_timer_share_tap",
+        "flow": ["show_rewarded","then_generate_share_card","then_share_intent"],
+        "fallback_if_not_ready": "skip_ad_and_continue",
+        "caps": { "daily_cap": 3, "min_cooldown_seconds": 3600 }
+      }
+    },
+    "settings": { "all_ads": { "enabled": false } }
+  },
+  "preload": {
+    "rewarded": ["stats.share_rewarded","gita.share_rewarded","timer.share_rewarded"],
+    "interstitial": ["gita.long_session_interstitial","timer.post_session_interstitial"]
+  },
+  "ui_rules": {
+    "no_overlap_with_nav": true,
+    "fixed_height_placeholders": true,
+    "native_fixed_height_dp": 120,
+    "banner_fixed_height_dp": 50
+  },
+  "analytics": {
+    "events": ["ad_request","ad_loaded","ad_failed_to_load","ad_shown","ad_dismissed","ad_reward_earned","ad_skipped","share_card_generated","share_intent_launched"]
+  }
+}
+

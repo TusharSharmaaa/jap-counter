@@ -1,11 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../ads/rewarded.dart';
+import '../core/ad_manager.dart';
 import '../utils/quote_image_generator.dart';
 import 'gita_service.dart';
 import 'quote_theme.dart';
@@ -35,18 +34,24 @@ class _GitaPageState extends State<GitaPage> {
   static const _storeLink =
       'https://play.google.com/store/apps/details?id=com.example.jap_counter';
 
-  final RewardedGate _rewardedGate = RewardedGate();
   final QuoteTheme _shareTheme = QuoteTheme.presets().first;
 
   final int _chapter = 1;
   int _verse = 1;
   Future<GitaShloka?>? _currentFuture;
   bool _sharing = false;
+  String? _lastRecordedRef;
 
   @override
   void initState() {
     super.initState();
     _loadShloka();
+  }
+
+  @override
+  void dispose() {
+    AdManager.instance.recordEvent('gita.session', 'end');
+    super.dispose();
   }
 
   void _loadShloka() {
@@ -99,9 +104,9 @@ class _GitaPageState extends State<GitaPage> {
 
     await Clipboard.setData(ClipboardData(text: buffer.toString()));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Shloka copied to clipboard')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Shloka copied to clipboard')));
   }
 
   Future<void> _shareOnWhatsApp(GitaShloka shloka) async {
@@ -109,19 +114,17 @@ class _GitaPageState extends State<GitaPage> {
     setState(() => _sharing = true);
 
     try {
-      final loaded = await _rewardedGate.load();
-      if (loaded) {
-        try {
-          await _rewardedGate.showIfReady();
-        } catch (e) {
-          if (kDebugMode) {
-            debugPrint('[GitaPage] Rewarded show failed: $e');
-          }
-        }
-      }
+      final adShown = await AdManager.instance.maybeShowRewarded(
+        'gita.share_rewarded',
+      );
+      AdManager.instance.recordEvent(
+        'gita.share_rewarded',
+        'attempt',
+        data: {'ad_shown': adShown},
+      );
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('[GitaPage] Rewarded load failed: $e');
+        debugPrint('[GitaPage] Rewarded attempt failed: $e');
       }
     }
 
@@ -142,6 +145,10 @@ class _GitaPageState extends State<GitaPage> {
         note: shloka.ref,
         shareLink: _storeLink,
       );
+      AdManager.instance.recordEvent(
+        'gita.share_rewarded',
+        'share_card_generated',
+      );
       final shareText = [
         shloka.ref,
         if (shloka.translation.isNotEmpty) shloka.translation,
@@ -149,16 +156,17 @@ class _GitaPageState extends State<GitaPage> {
       ].join('\n\n');
 
       final result = await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(imagePath)],
-          text: shareText,
-          title: 'Share',
-        ),
+        ShareParams(files: [XFile(imagePath)], text: shareText, title: 'Share'),
+      );
+      AdManager.instance.recordEvent(
+        'gita.share_rewarded',
+        'share_intent_launched',
       );
 
       if (result.status == ShareResultStatus.unavailable) {
-        final waUri =
-            Uri.parse('whatsapp://send?text=${Uri.encodeComponent(shareText)}');
+        final waUri = Uri.parse(
+          'whatsapp://send?text=${Uri.encodeComponent(shareText)}',
+        );
         if (await canLaunchUrl(waUri)) {
           await launchUrl(waUri, mode: LaunchMode.externalApplication);
         }
@@ -169,7 +177,9 @@ class _GitaPageState extends State<GitaPage> {
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to share right now. Please try again.')),
+        const SnackBar(
+          content: Text('Unable to share right now. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -183,10 +193,7 @@ class _GitaPageState extends State<GitaPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gita'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Gita'), centerTitle: true),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -195,7 +202,10 @@ class _GitaPageState extends State<GitaPage> {
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 24,
+                  ),
                   child: FutureBuilder<GitaShloka?>(
                     future: _currentFuture,
                     builder: (context, snapshot) {
@@ -203,16 +213,29 @@ class _GitaPageState extends State<GitaPage> {
                         return _LoadingBody(theme: theme);
                       }
 
-                      if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
-                        return _ErrorBody(onRetry: () {
-                          setState(() {
-                            _loadShloka();
-                          });
-                        });
+                      if (snapshot.hasError ||
+                          !snapshot.hasData ||
+                          snapshot.data == null) {
+                        return _ErrorBody(
+                          onRetry: () {
+                            setState(() {
+                              _loadShloka();
+                            });
+                          },
+                        );
                       }
 
                       final shloka = snapshot.data!;
-                      WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchNext());
+                      if (_lastRecordedRef != shloka.ref) {
+                        _lastRecordedRef = shloka.ref;
+                        AdManager.instance.recordEvent(
+                          'gita.session',
+                          'shloka_read',
+                        );
+                      }
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _prefetchNext(),
+                      );
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -233,7 +256,9 @@ class _GitaPageState extends State<GitaPage> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: FilledButton.icon(
-                                  onPressed: _sharing ? null : () => _shareOnWhatsApp(shloka),
+                                  onPressed: _sharing
+                                      ? null
+                                      : () => _shareOnWhatsApp(shloka),
                                   icon: _sharing
                                       ? SizedBox(
                                           width: 16,
@@ -256,8 +281,6 @@ class _GitaPageState extends State<GitaPage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 24),
-                          const _NativeAdSlot(),
                           const SizedBox(height: 24),
                         ],
                       );
@@ -359,9 +382,7 @@ class _LoadingBody extends StatelessWidget {
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 240),
       child: Center(
-        child: CircularProgressIndicator(
-          color: theme.colorScheme.primary,
-        ),
+        child: CircularProgressIndicator(color: theme.colorScheme.primary),
       ),
     );
   }
@@ -381,14 +402,10 @@ class _ErrorBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(
-        Icons.error_outline,
-          size: 64,
-          color: theme.colorScheme.error,
-        ),
+        Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
         const SizedBox(height: 16),
         Text(
-        'Unable to load shloka.',
+          'Unable to load shloka.',
           textAlign: TextAlign.center,
           style: textTheme.titleMedium,
         ),
@@ -402,80 +419,3 @@ class _ErrorBody extends StatelessWidget {
     );
   }
 }
-
-class _NativeAdSlot extends StatefulWidget {
-  const _NativeAdSlot();
-
-  @override
-  State<_NativeAdSlot> createState() => _NativeAdSlotState();
-}
-
-class _NativeAdSlotState extends State<_NativeAdSlot> {
-  NativeAd? _nativeAd;
-  bool _loaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAd();
-  }
-
-  void _loadAd() {
-    _nativeAd = NativeAd(
-      adUnitId: 'ca-app-pub-3940256099942544/2247696110',
-      listener: NativeAdListener(
-        onAdLoaded: (ad) {
-          if (mounted) {
-            setState(() => _loaded = true);
-          }
-        },
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          if (kDebugMode) {
-            debugPrint('[GitaPage] Native ad failed: $error');
-          }
-          if (mounted) {
-            setState(() => _loaded = false);
-          }
-        },
-      ),
-      request: const AdRequest(),
-      nativeTemplateStyle: NativeTemplateStyle(
-        templateType: TemplateType.medium,
-      ),
-    )..load();
-  }
-
-  @override
-  void dispose() {
-    _nativeAd?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SizedBox(
-      height: 120,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-            border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
-          ),
-          child: _loaded && _nativeAd != null
-              ? AdWidget(ad: _nativeAd!)
-              : Center(
-                  child: Text(
-                    'Ad loading…',
-                    style: theme.textTheme.labelMedium,
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-}
-

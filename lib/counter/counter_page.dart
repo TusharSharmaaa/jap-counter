@@ -2,12 +2,10 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:confetti/confetti.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../ads/test_banner.dart';
 import '../data/activity_store.dart';
 import '../data/counter_store.dart';
 import '../data/dedication_store.dart';
@@ -90,7 +88,7 @@ class _CounterPageState extends State<CounterPage> {
       if (_soundEnabled) {
         try {
           _bellPlayer ??= AudioPlayer();
-          await _bellPlayer!.play(AssetSource('sounds/bell.mp3'));
+          await _bellPlayer!.play(AssetSource('audio/bell_end.mp3'));
         } catch (e) {
           debugPrint('[Counter] Bell play failed: $e');
         }
@@ -137,7 +135,7 @@ class _CounterPageState extends State<CounterPage> {
         } catch (_) {}
         try {
           final bell = AudioPlayer();
-          await bell.play(AssetSource('sounds/bell.mp3'));
+          await bell.play(AssetSource('audio/bell_end.mp3'));
         } catch (_) {}
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
@@ -297,7 +295,6 @@ class _CounterPageState extends State<CounterPage> {
           ),
         ),
         body: const Center(child: CircularProgressIndicator()),
-        bottomNavigationBar: const TestBanner(),
       );
     }
 
@@ -479,7 +476,6 @@ class _CounterPageState extends State<CounterPage> {
           ],
         ),
       ),
-      bottomNavigationBar: const TestBanner(),
     );
   }
 

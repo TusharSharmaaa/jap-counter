@@ -1,8 +1,20 @@
 import 'dart:async';
 
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../core/ad_manager.dart';
+import '../core/sound_manager.dart';
+import '../data/meditation_store.dart';
+import '../l10n/app_localizations.dart';
 
 enum _TimerState { idle, running, paused, completed }
 
@@ -13,7 +25,7 @@ class TimerPage extends StatefulWidget {
   State<TimerPage> createState() => _TimerPageState();
 }
 
-class _TimerPageState extends State<TimerPage> {
+class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
   // ---- minimal stable state ----
   final List<int> _presets = const [2, 5, 10, 15, 20, 30, 45, 60, 90];
   int _selectedMinutes = 5;
@@ -24,26 +36,61 @@ class _TimerPageState extends State<TimerPage> {
   DateTime? _lastTickAt;
 
   // ambience placeholder
-  String _ambience = 'Mute';
-  NativeAd? _nativeAd;
-  bool _isAdLoaded = false;
+  String _ambienceId = 'mute';
   bool _visible = false;
+  final SoundManager _soundManager = SoundManager.instance;
+  final GlobalKey _shareCardKey = GlobalKey();
+  bool _shareBusy = false;
+  int _todayMinutes = 0;
+  int _lifetimeMinutes = 0;
 
   // ---- lifecycle ----
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Future.delayed(const Duration(milliseconds: 150), () {
       if (mounted) setState(() => _visible = true);
     });
-    _loadNativeAd();
+    unawaited(_initialiseAudio());
+    unawaited(_loadMeditationStats());
+    unawaited(
+      AdManager.instance.preloadPlacement('timer.share_rewarded'),
+    );
+  }
+
+  Future<void> _initialiseAudio() async {
+    await _soundManager.init();
+    await _soundManager.setAmbience(_ambienceId);
+  }
+
+  Future<void> _loadMeditationStats() async {
+    final store = await MeditationStore.create();
+    if (!mounted) return;
+    setState(() {
+      _todayMinutes = store.todayMinutes;
+      _lifetimeMinutes = store.lifetimeMinutes;
+    });
   }
 
   @override
   void dispose() {
-    _nativeAd?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
+    unawaited(_soundManager.stopAmbience());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      unawaited(_soundManager.pauseAmbience());
+    } else if (state == AppLifecycleState.resumed &&
+        _state == _TimerState.running &&
+        _ambienceId != 'mute') {
+      unawaited(_soundManager.playAmbience());
+    }
   }
 
   // ---- actions (hooks kept simple; you can re-attach sound/ads later) ----
@@ -58,13 +105,21 @@ class _TimerPageState extends State<TimerPage> {
     });
   }
 
-  void _selectAmbience(String a) {
-    if (_ambience == a) return;
+  Future<void> _selectAmbience(String id) async {
+    if (_ambienceId == id) return;
     HapticFeedback.selectionClick();
-    setState(() => _ambience = a);
+    final safeId = id.toLowerCase();
+    setState(() => _ambienceId = safeId);
+    if (safeId == 'mute') {
+      await _soundManager.stopAmbience();
+    } else if (_state == _TimerState.running) {
+      await _soundManager.playAmbience(forceId: safeId);
+    } else {
+      await _soundManager.setAmbience(safeId, preload: true);
+    }
   }
 
-  void _start() {
+  Future<void> _start() async {
     if (_state == _TimerState.running) return;
     HapticFeedback.lightImpact();
     setState(() {
@@ -73,6 +128,12 @@ class _TimerPageState extends State<TimerPage> {
       _state = _TimerState.running;
       _lastTickAt = DateTime.now();
     });
+    if (_ambienceId != 'mute') {
+      await _soundManager.playAmbience(forceId: _ambienceId);
+    }
+    unawaited(
+      AdManager.instance.preloadPlacement('timer.post_session_interstitial'),
+    );
 
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(milliseconds: 200), (t) {
@@ -94,15 +155,19 @@ class _TimerPageState extends State<TimerPage> {
     HapticFeedback.selectionClick();
     _ticker?.cancel();
     setState(() => _state = _TimerState.paused);
+    unawaited(_soundManager.pauseAmbience());
   }
 
-  void _resume() {
+  Future<void> _resume() async {
     if (_state != _TimerState.paused) return;
     HapticFeedback.lightImpact();
     setState(() {
       _state = _TimerState.running;
       _lastTickAt = DateTime.now();
     });
+    if (_ambienceId != 'mute') {
+      await _soundManager.playAmbience(forceId: _ambienceId);
+    }
 
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(milliseconds: 200), (t) {
@@ -122,6 +187,7 @@ class _TimerPageState extends State<TimerPage> {
   void _reset() {
     HapticFeedback.selectionClick();
     _ticker?.cancel();
+    unawaited(_soundManager.stopAmbience());
     setState(() {
       _total = Duration(minutes: _selectedMinutes);
       _remaining = _total;
@@ -130,12 +196,59 @@ class _TimerPageState extends State<TimerPage> {
   }
 
   Future<void> _onComplete() async {
+    HapticFeedback.mediumImpact();
+    await _soundManager.stopAmbience();
+    await _soundManager.playBell();
     setState(() {
       _remaining = Duration.zero;
       _state = _TimerState.completed;
     });
-    // TODO: play gentle bell (fade-in), show summary dialog, then native ad
-    // Keep this minimal for stability right now.
+    final minutes = _total.inMinutes;
+    final medStore = await MeditationStore.create();
+    await medStore.addMinutes(minutes);
+    if (mounted) {
+      setState(() {
+        _todayMinutes = medStore.todayMinutes;
+        _lifetimeMinutes = medStore.lifetimeMinutes;
+      });
+    }
+    await AdManager.instance.recordEvent(
+      'timer.session',
+      'complete',
+      data: {'minutes': minutes.toDouble()},
+    );
+
+    if (!mounted) return;
+
+    final title = context.tr('timer.complete.title');
+    final message = context.tr(
+      'timer.complete.message',
+      args: {'minutes': '$minutes'},
+    );
+    final okLabel = context.tr('common.ok');
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(okLabel),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+    await AdManager.instance.maybeShowInterstitial(
+      'timer.post_session_interstitial',
+      timeout: const Duration(milliseconds: 1500),
+    );
   }
 
   // ---- derived ----
@@ -166,28 +279,164 @@ class _TimerPageState extends State<TimerPage> {
     }
   }
 
-  void _loadNativeAd() {
-    _nativeAd = NativeAd(
-      adUnitId: 'ca-app-pub-2816806517862101/3640704675',
-      factoryId: 'listTile',
-      request: const AdRequest(),
-      listener: NativeAdListener(
-        onAdLoaded: (ad) {
-          if (!mounted) return;
-          setState(() => _isAdLoaded = true);
+  String _formatMinutes(int minutes) {
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    if (hours > 0) {
+      final minPart = mins.toString().padLeft(2, '0');
+      return '$hours h ${minPart}m';
+    }
+    return '$mins m';
+  }
+
+  Future<void> _shareMeditation() async {
+    if (_shareBusy) return;
+    if (!mounted) return;
+    setState(() => _shareBusy = true);
+    try {
+      await AdManager.instance.maybeShowRewarded(
+        'timer.share_rewarded',
+        timeout: const Duration(milliseconds: 1500),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 16));
+      final boundary =
+          _shareCardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) {
+        throw Exception('Share card not ready');
+      }
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/timer_share_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(pngBytes);
+
+      final shareText = context.tr(
+        'timer.share.caption',
+        args: {
+          'today': _formatMinutes(_todayMinutes),
+          'lifetime': _formatMinutes(_lifetimeMinutes),
         },
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          debugPrint('Failed to load native ad: $error');
-        },
+      );
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: shareText,
+        ),
+      );
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[TimerShare] failed: $e\n$st');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('timer.share.error'))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _shareBusy = false);
+    }
+  }
+
+  Widget _buildShareCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final todayLabel = context.tr('timer.share.today');
+    final lifetimeLabel = context.tr('timer.share.lifetime');
+    final title = context.tr('timer.share.cardTitle');
+    final subtitle = context.tr('timer.share.subtitle');
+    final todayValue = _formatMinutes(_todayMinutes);
+    final lifetimeValue = _formatMinutes(_lifetimeMinutes);
+    final onPrimary = Colors.white;
+    final muted = Colors.white.withOpacity(0.72);
+
+    return RepaintBoundary(
+      key: _shareCardKey,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              theme.colorScheme.primary.withOpacity(0.92),
+              theme.colorScheme.secondary.withOpacity(0.75),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: theme.colorScheme.primary.withOpacity(0.25),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                color: onPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: muted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _ShareStatTile(
+                    label: todayLabel,
+                    value: todayValue,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _ShareStatTile(
+                    label: lifetimeLabel,
+                    value: lifetimeValue,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Divider(color: onPrimary.withOpacity(0.25), thickness: 1),
+            const SizedBox(height: 12),
+            Text(
+              'Radha Jap Counter',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: onPrimary,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ],
+        ),
       ),
-    )..load();
+    );
+  }
+
+  String _ambienceLabel(BuildContext context) {
+    return context.tr('timer.ambience.$_ambienceId');
   }
 
   // ---- UI ----
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isRunning = _state == _TimerState.running;
     final isPaused = _state == _TimerState.paused;
     final isIdle = _state == _TimerState.idle;
@@ -200,7 +449,7 @@ class _TimerPageState extends State<TimerPage> {
             // Header card
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: _HeaderCard(sound: _ambience),
+              child: _HeaderCard(soundLabel: _ambienceLabel(context)),
             ),
             // The rest scrolls if needed (prevents any overflow on small screens)
             Expanded(
@@ -223,7 +472,7 @@ class _TimerPageState extends State<TimerPage> {
                             enabled: !isRunning,
                           );
                           final sound = _AmbienceSection(
-                            selected: _ambience,
+                            selected: _ambienceId,
                             onSelect: _selectAmbience,
                           );
                           return Row(
@@ -272,41 +521,25 @@ class _TimerPageState extends State<TimerPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 48),
-                      // Native Ad Section moved near bottom controls
-                      _isAdLoaded
-                          ? Container(
-                              height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: theme.dividerColor.withOpacity(.2),
-                                ),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: AdWidget(ad: _nativeAd!),
-                              ),
-                            )
-                          : Container(
-                              height: 100,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: theme.dividerColor.withOpacity(.2),
-                                ),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'Ad loading...',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.black54,
+                      const SizedBox(height: 32),
+                      _buildShareCard(context),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: _shareBusy ? null : _shareMeditation,
+                        icon: _shareBusy
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Theme.of(context).colorScheme.onPrimary,
                                   ),
                                 ),
-                              ),
-                            ),
+                              )
+                            : const Icon(Icons.ios_share),
+                        label: Text(context.tr('timer.share.cta')),
+                      ),
                       const SizedBox(height: 48),
                     ],
                   ),
@@ -316,7 +549,6 @@ class _TimerPageState extends State<TimerPage> {
           ],
         ),
       ),
-      bottomNavigationBar: const SizedBox(height: 52), // banner reserve
     );
   }
 }
@@ -384,8 +616,8 @@ class _PrimaryTimerCard extends StatelessWidget {
 }
 
 class _HeaderCard extends StatelessWidget {
-  final String sound;
-  const _HeaderCard({required this.sound});
+  final String soundLabel;
+  const _HeaderCard({required this.soundLabel});
 
   @override
   Widget build(BuildContext context) {
@@ -426,7 +658,7 @@ class _HeaderCard extends StatelessWidget {
             children: [
               const Icon(Icons.graphic_eq, size: 18),
               const SizedBox(width: 4),
-              Text(sound, style: theme.textTheme.labelLarge),
+              Text(soundLabel, style: theme.textTheme.labelLarge),
             ],
           ),
         ],
@@ -485,12 +717,14 @@ class _DurationSection extends StatelessWidget {
   }
 }
 
+typedef AmbienceSelectCallback = Future<void> Function(String id);
+
 class _AmbienceSection extends StatelessWidget {
   final String selected;
-  final ValueChanged<String> onSelect;
+  final AmbienceSelectCallback onSelect;
   const _AmbienceSection({required this.selected, required this.onSelect});
 
-  static const _items = ['Mute', 'Om', 'Flute', 'Birds', 'Water', 'Bell'];
+  static const _options = ['mute', 'om', 'flute', 'birds', 'water'];
 
   @override
   Widget build(BuildContext context) {
@@ -506,7 +740,7 @@ class _AmbienceSection extends StatelessWidget {
         value: selected,
         icon: const Icon(Icons.expand_more),
         decoration: InputDecoration(
-          labelText: 'Select sound',
+          labelText: context.tr('timer.ambience.label'),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -517,13 +751,51 @@ class _AmbienceSection extends StatelessWidget {
             vertical: 14,
           ),
         ),
-        items: _items
-            .map((name) => DropdownMenuItem(value: name, child: Text(name)))
+        items: _options
+            .map(
+              (id) => DropdownMenuItem(
+                value: id,
+                child: Text(context.tr('timer.ambience.$id')),
+              ),
+            )
             .toList(),
         onChanged: (value) {
-          if (value != null) onSelect(value);
+          if (value != null) {
+            unawaited(onSelect(value));
+          }
         },
       ),
+    );
+  }
+}
+
+class _ShareStatTile extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ShareStatTile({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Colors.white70,
+                fontWeight: FontWeight.w500,
+              ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+      ],
     );
   }
 }

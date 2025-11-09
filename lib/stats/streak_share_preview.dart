@@ -11,9 +11,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/ad_manager.dart';
 import '../l10n/app_localizations.dart';
 import 'dedication_store.dart';
-import '../theme/brand.dart';
 
 String _toHindiDigits(int number) {
   const mapping = {
@@ -103,9 +103,17 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
         '${dir.path}/streak_share_${DateTime.now().millisecondsSinceEpoch}.png',
       );
       await file.writeAsBytes(pngBytes);
+      AdManager.instance.recordEvent(
+        'stats.share_rewarded',
+        'share_card_generated',
+      );
 
       await SharePlus.instance.share(
         ShareParams(files: [XFile(file.path)], text: shareText),
+      );
+      AdManager.instance.recordEvent(
+        'stats.share_rewarded',
+        'share_intent_launched',
       );
     } catch (e) {
       if (kDebugMode) debugPrint('[SharePreview] Share failed: $e');
@@ -157,6 +165,10 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
     } catch (_) {}
 
     await SharePlus.instance.share(ShareParams(text: shareText));
+    AdManager.instance.recordEvent(
+      'stats.share_rewarded',
+      'share_intent_launched',
+    );
   }
 
   @override

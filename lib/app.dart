@@ -1,18 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:confetti/confetti.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'stats/streak_share_preview.dart';
 import 'stats/streak_badge.dart';
-import 'ads/rewarded.dart';
-import 'ads/interstitial_timer.dart';
+import 'core/ad_manager.dart';
 import 'content/gita_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
 import 'data/dedication_store.dart';
-import 'ads/rewarded_share.dart';
 import 'stats/share_gate.dart';
 import 'stats/stats_ambience.dart';
 import 'settings/settings_page.dart';
@@ -40,8 +39,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    // Preload the rewarded ad used for "Share My Streak"
-    RewardedShareAd().preload();
     // Observe app lifecycle to keep the ad warmed up on resume
     WidgetsBinding.instance.addObserver(this);
 
@@ -57,8 +54,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           }
         }
       }
-      RewardedShareAd().preload();
-      TimerInterstitialGate.instance.preload();
       final counter = await CounterStore.create();
       final today = counter.todayJaps ~/ 108;
       await initializeDateFormatting(_language == 'hi' ? 'hi' : 'en');
@@ -82,12 +77,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // Ensure a rewarded ad is queued when user comes back to the app
-      RewardedShareAd().ensureWarm();
-    } else if (state == AppLifecycleState.paused) {
-      // ignore: unawaited_futures
-      SyncService.syncToday();
+    if (state == AppLifecycleState.paused) {
+      unawaited(SyncService.syncToday());
     }
   }
 
@@ -306,41 +297,22 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void _handleNavTap(int index) {
     if (_index == index) return;
     if (index == 1) {
-      RewardedShareAd().preload();
-      if (kDebugMode) {
-        final rem = RewardedShareAd().cooldownRemaining;
-        if (rem != null && rem > Duration.zero) {
-          debugPrint(
-            '[RewardedShareAd] Cooldown remaining: ${rem.inMinutes}m ${rem.inSeconds % 60}s',
-          );
-        } else {
-          debugPrint('[RewardedShareAd] No cooldown active.');
-        }
-      }
       _statsKey.currentState?.onBecameVisible();
     } else if (_index == 1) {
       _statsKey.currentState?.onBecameHidden();
     }
-    setState(() => _index = index);
-  }
-}
-
-class _BannerReserve extends StatelessWidget {
-  const _BannerReserve();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52, // reserved space for a standard banner
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(width: 0.5, color: Theme.of(context).dividerColor),
-          ),
+    if (index == 2) {
+      AdManager.instance.recordEvent('gita.session', 'start');
+    }
+    if (_index == 2 && index != 2) {
+      unawaited(
+        AdManager.instance.maybeShowInterstitial(
+          'gita.long_session_interstitial',
         ),
-        child: const Center(child: Text('Ad Banner (reserved)')),
-      ),
-    );
+      );
+      AdManager.instance.recordEvent('gita.session', 'end');
+    }
+    setState(() => _index = index);
   }
 }
 
@@ -352,7 +324,6 @@ class _StatsPage extends StatefulWidget {
 }
 
 class _StatsPageState extends State<_StatsPage> {
-  final RewardedGate _gate = RewardedGate();
   bool _shareBusy = false;
   late ConfettiController _confetti;
 
@@ -373,9 +344,6 @@ class _StatsPageState extends State<_StatsPage> {
     _confetti = ConfettiController(duration: const Duration(seconds: 3));
     _init();
 
-    // Warm up the rewarded ad in the background
-    // ignore: unawaited_futures
-    _gate.load();
     _loadAmbiencePref();
   }
 
@@ -464,19 +432,11 @@ class _StatsPageState extends State<_StatsPage> {
       return Scaffold(
         appBar: AppBar(title: Text(context.tr('stats.title'))),
         body: const Center(child: CircularProgressIndicator()),
-        bottomNavigationBar: const _BannerReserve(),
       );
     }
 
     final todayMalas = _today ~/ 108;
     final lifetimeMalas = _lifetime ~/ 108;
-    final cooling = RewardedShareAd().isCoolingDown;
-    final rem = RewardedShareAd().cooldownRemaining;
-    final remLabel = (rem != null && rem > Duration.zero)
-        ? (rem.inMinutes > 0
-              ? '${rem.inMinutes}m ${rem.inSeconds % 60}s'
-              : '${rem.inSeconds % 60}s')
-        : null;
     // Load goal (synchronously via FutureBuilder below to avoid blocking build)
 
     return Scaffold(
@@ -521,8 +481,6 @@ class _StatsPageState extends State<_StatsPage> {
             onRefresh: _refresh,
             child: _buildStatsList(
               context,
-              cooling,
-              remLabel,
               todayMalas,
               lifetimeMalas,
             ),
@@ -544,14 +502,11 @@ class _StatsPageState extends State<_StatsPage> {
           ),
         ],
       ),
-      bottomNavigationBar: const _BannerReserve(),
     );
   }
 
   Widget _buildStatsList(
     BuildContext context,
-    bool cooling,
-    String? remLabel,
     int todayMalas,
     int lifetimeMalas,
   ) {
@@ -997,12 +952,7 @@ class _StatsPageState extends State<_StatsPage> {
             label: Text(
               _shareBusy
                   ? context.tr('stats.sharePreparing')
-                  : (cooling
-                        ? context.tr(
-                            'stats.shareWait',
-                            args: {'time': remLabel ?? '…'},
-                          )
-                        : context.tr('stats.shareButton')),
+                  : context.tr('stats.shareButton'),
             ),
           ),
         ),

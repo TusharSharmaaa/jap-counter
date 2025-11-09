@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'app.dart';
+import 'core/ad_manager.dart';
 import 'firebase_options.dart';
 import 'data/streak_store.dart';
 import 'notifications/notification_service.dart';
@@ -13,6 +14,7 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await StreakStore.init();
   await MobileAds.instance.initialize(); // init-only, no requests yet
+  await AdManager.ensureInitialized();
   await NotificationService.initialize();
   try {
     await NotificationService().scheduleDailyMotivation();
@@ -41,9 +43,7 @@ class _RootAppState extends State<RootApp> {
     }
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: SplashPage(
-        onComplete: () => setState(() => _done = true),
-      ),
+      home: SplashPage(onComplete: () => setState(() => _done = true)),
     );
   }
 }

@@ -11,7 +11,7 @@ class StatsAmbience {
   Future<void> start() async {
     if (_playing) return;
     await _player.setVolume(0.25);
-    await _player.play(AssetSource('sounds/om.wav'));
+    await _player.play(AssetSource('audio/om_loop.wav'));
     _playing = true;
   }
 
@@ -27,4 +27,3 @@ class StatsAmbience {
     await _player.dispose();
   }
 }
-

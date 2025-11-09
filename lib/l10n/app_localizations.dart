@@ -45,6 +45,7 @@ class AppStrings {
       'common.reset': 'Reset',
       'common.on': 'On',
       'common.off': 'Off',
+      'common.ok': 'OK',
 
       // Home snackbars
       'home.snackbar.progress':
@@ -146,6 +147,25 @@ class AppStrings {
       'counter.mala.new': 'Start a new mala',
       'counter.mala.remaining': '{count} more japs will complete this mala',
 
+      // Timer
+      'timer.complete.title': 'Meditation Completed',
+      'timer.complete.message':
+          'You meditated for {minutes} minute(s). Take a deep breath before you continue.',
+      'timer.ambience.label': 'Select sound',
+      'timer.ambience.mute': 'Mute',
+      'timer.ambience.om': 'Om',
+      'timer.ambience.flute': 'Flute',
+      'timer.ambience.birds': 'Birds',
+      'timer.ambience.water': 'Water',
+      'timer.share.cardTitle': 'Meditation Snapshot',
+      'timer.share.subtitle': 'Keep showing up. Every breath counts.',
+      'timer.share.today': 'Today',
+      'timer.share.lifetime': 'Lifetime',
+      'timer.share.cta': 'Share meditation',
+      'timer.share.caption':
+          'Today: {today} · Lifetime: {lifetime} — Radha Jap Counter',
+      'timer.share.error': 'Unable to share right now. Please try again.',
+
       // Share card
       'share.appBar': 'Share My Streak',
       'share.title': '🌸 My Sadhana Journey 🌸',
@@ -188,6 +208,7 @@ class AppStrings {
       'common.reset': 'रीसेट',
       'common.on': 'चालू',
       'common.off': 'बंद',
+      'common.ok': 'ठीक है',
 
       // Home snackbars
       'home.snackbar.progress':
@@ -286,6 +307,25 @@ class AppStrings {
       'counter.goal.status.progress': 'प्रगति: {malas} / {goal} माला{suffix}',
       'counter.mala.new': 'नई माला प्रारंभ करें',
       'counter.mala.remaining': '{count} और जप इस माला को पूर्ण करेंगे',
+
+      // Timer
+      'timer.complete.title': 'साधना पूर्ण हुई',
+      'timer.complete.message':
+          'आपने {minutes} मिनट ध्यान किया। एक गहरी साँस लें और आगे बढ़ें।',
+      'timer.ambience.label': 'ध्वनि चुनें',
+      'timer.ambience.mute': 'मूक',
+      'timer.ambience.om': 'ॐ',
+      'timer.ambience.flute': 'बांसुरी',
+      'timer.ambience.birds': 'पक्षियों की ध्वनि',
+      'timer.ambience.water': 'जलधारा',
+      'timer.share.cardTitle': 'ध्यान सारांश',
+      'timer.share.subtitle': 'नित्य अभ्यास से ही मन स्थिर होता है।',
+      'timer.share.today': 'आज',
+      'timer.share.lifetime': 'कुल योग',
+      'timer.share.cta': 'ध्यान साझा करें',
+      'timer.share.caption':
+          'आज: {today} · कुल: {lifetime} — Radha Jap Counter',
+      'timer.share.error': 'अभी साझा नहीं कर सके। कृपया पुनः प्रयास करें।',
 
       // Share card
       'share.appBar': 'श्रंखला साझा करें',
