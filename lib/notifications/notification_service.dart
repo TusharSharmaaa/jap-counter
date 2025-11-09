@@ -13,7 +13,8 @@ class NotificationService {
   static final NotificationService _i = NotificationService._();
   factory NotificationService() => _i;
 
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
   bool _initialized = false;
 
   FlutterLocalNotificationsPlugin get plugin => _plugin;
@@ -41,19 +42,25 @@ class NotificationService {
       if (kDebugMode) debugPrint('[Notifications] TZ init failed: $e');
     }
 
-    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const AndroidInitializationSettings androidInit =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const DarwinInitializationSettings iosInit = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-    const InitializationSettings settings = InitializationSettings(android: androidInit, iOS: iosInit);
+    const InitializationSettings settings = InitializationSettings(
+      android: androidInit,
+      iOS: iosInit,
+    );
 
     await _plugin.initialize(settings);
 
     // Android channel
     await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(_channel);
 
     _initialized = true;
@@ -62,14 +69,32 @@ class NotificationService {
   /// Android 13+ runtime permission; safe no-op on lower versions/iOS.
   Future<bool> requestPermission() async {
     try {
-      final androidImpl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      final granted = await androidImpl?.requestNotificationsPermission() ?? true;
+      final androidImpl = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      final granted =
+          await androidImpl?.requestNotificationsPermission() ?? true;
       if (kDebugMode) debugPrint('[Notifications] permission: $granted');
       return granted;
     } catch (_) {
       // iOS handled by init; older Android doesn’t need runtime
       return true;
     }
+  }
+
+  Future<bool> areNotificationsAllowed() async {
+    try {
+      final androidImpl = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      final android = await androidImpl?.areNotificationsEnabled();
+      if (android != null) return android;
+    } catch (_) {
+      // ignored
+    }
+    return true;
   }
 
   /// Clears all pending notifications (does not remove the channel).
@@ -86,8 +111,8 @@ class NotificationService {
     final streakMsg = (streakDays >= 21)
         ? '🔥 21+ दिन की निरंतर साधना — अद्भुत है!'
         : (streakDays >= 7)
-            ? '🌸 7 दिन का अनुशासन — स्थिरता बनाए रखें।'
-            : '🙏 आज भी कुछ पल शांत बैठें।';
+        ? '🌸 7 दिन का अनुशासन — स्थिरता बनाए रखें।'
+        : '🙏 आज भी कुछ पल शांत बैठें।';
 
     final insights = await InsightStore.create();
     final malas = insights.getTodayMalas();
@@ -117,7 +142,8 @@ class NotificationService {
             ),
           ),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: DateTimeComponents.time,
         );
       } on PlatformException catch (e) {
@@ -156,7 +182,8 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         androidAllowWhileIdle: true,
         matchDateTimeComponents: DateTimeComponents.time,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
       );
     } on PlatformException catch (e) {
       if (kDebugMode) {
@@ -165,7 +192,9 @@ class NotificationService {
     }
 
     if (kDebugMode) {
-      debugPrint('[Notifications] Dynamic reminder scheduled for $time with count $todayJaps');
+      debugPrint(
+        '[Notifications] Dynamic reminder scheduled for $time with count $todayJaps',
+      );
     }
   }
 
@@ -178,8 +207,13 @@ class NotificationService {
     );
     const details = NotificationDetails(android: android);
     final tzNow = tz.TZDateTime.now(tz.local);
-    final tomorrow7am = tz.TZDateTime(tz.local, tzNow.year, tzNow.month, tzNow.day, 7)
-        .add(const Duration(days: 1));
+    final tomorrow7am = tz.TZDateTime(
+      tz.local,
+      tzNow.year,
+      tzNow.month,
+      tzNow.day,
+      7,
+    ).add(const Duration(days: 1));
     try {
       await _plugin.zonedSchedule(
         2001,
@@ -188,7 +222,8 @@ class NotificationService {
         tomorrow7am,
         details,
         androidAllowWhileIdle: true,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
       );
     } on PlatformException catch (e) {
@@ -206,7 +241,14 @@ class NotificationService {
     required String body,
   }) async {
     final now = tz.TZDateTime.now(tz.local);
-    var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    var scheduled = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
     if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }
@@ -229,12 +271,16 @@ class NotificationService {
         iOS: const DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time, // repeat daily at this time
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents:
+          DateTimeComponents.time, // repeat daily at this time
     );
 
     if (kDebugMode) {
-      debugPrint('[Notifications] Scheduled $hour:${minute.toString().padLeft(2, '0')} with: $title');
+      debugPrint(
+        '[Notifications] Scheduled $hour:${minute.toString().padLeft(2, '0')} with: $title',
+      );
     }
   }
 }
@@ -253,11 +299,29 @@ class _DailyNotification {
   });
 }
 
-_DailyNotification _dailyAt(String title, String body, int hour, int minute, {required int id}) {
+_DailyNotification _dailyAt(
+  String title,
+  String body,
+  int hour,
+  int minute, {
+  required int id,
+}) {
   final now = tz.TZDateTime.now(tz.local);
-  var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+  var scheduled = tz.TZDateTime(
+    tz.local,
+    now.year,
+    now.month,
+    now.day,
+    hour,
+    minute,
+  );
   if (scheduled.isBefore(now)) {
     scheduled = scheduled.add(const Duration(days: 1));
   }
-  return _DailyNotification(id: id, title: title, body: body, scheduledDate: scheduled);
+  return _DailyNotification(
+    id: id,
+    title: title,
+    body: body,
+    scheduledDate: scheduled,
+  );
 }

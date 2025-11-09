@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,12 +8,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../notifications/notification_service.dart';
 import '../data/goal_store.dart';
-import '../data/counter_store.dart';
-import '../data/activity_store.dart';
-import '../data/meditation_store.dart';
-import '../data/session_store.dart';
-import '../data/dedication_store.dart';
-import '../data/backup_service.dart';
 import '../legal/privacy_policy.dart';
 import '../legal/terms_conditions.dart';
 import 'about_page.dart';
@@ -39,7 +34,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _reminders = false;
-  bool _soundHaptics = true; // UI only; wire up when preferences exist
+  bool _remindersLocked = false;
   int _goalMalas = 1;
   bool _soundEnabled = true;
 
@@ -54,15 +49,32 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final gs = await GoalStore.create();
+    final ns = NotificationService();
+    await ns.init();
+    final allowed = await ns.areNotificationsAllowed();
+    final storedReminders = prefs.getBool(_keyReminders) ?? true;
+    final shouldEnable = allowed || storedReminders;
+    if (allowed && shouldEnable) {
+      await ns.scheduleDefaults();
+    }
     if (!mounted) return;
     setState(() {
-      _reminders = prefs.getBool(_keyReminders) ?? true;
+      _remindersLocked = allowed;
+      _reminders = shouldEnable;
       _goalMalas = gs.dailyMalasGoal;
       _soundEnabled = prefs.getBool('settings.soundEnabled') ?? true;
     });
   }
 
   Future<void> _toggleReminders(bool value) async {
+    if (_remindersLocked && !value) {
+      HapticFeedback.selectionClick();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('settings.notifications.locked'))),
+      );
+      return;
+    }
+    HapticFeedback.lightImpact();
     setState(() => _reminders = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyReminders, value);
@@ -72,384 +84,167 @@ class _SettingsPageState extends State<SettingsPage> {
       await ns.init();
       final allowed = await ns.requestPermission();
       if (allowed) await ns.scheduleDefaults();
+      if (!allowed) {
+        setState(() => _reminders = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('settings.notifications.denied'))),
+        );
+      }
     } else {
       final plugin = FlutterLocalNotificationsPlugin();
       await plugin.cancelAll();
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = widget.themeMode == ThemeMode.dark;
+  Future<void> _toggleBell(bool value) async {
+    HapticFeedback.lightImpact();
+    setState(() => _soundEnabled = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('settings.soundEnabled', value);
+  }
 
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: 140,
-            backgroundColor: scheme.surface,
-            flexibleSpace: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    scheme.primary.withValues(alpha: 0.16),
-                    scheme.secondary.withValues(alpha: 0.10),
-                    scheme.surface,
-                  ],
-                ),
-              ),
-              child: FlexibleSpaceBar(
-                titlePadding: const EdgeInsetsDirectional.only(
-                  start: 16,
-                  bottom: 12,
-                ),
-                title: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.tr('settings.title'),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: scheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      context.tr('settings.subtitle'),
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: GlowCard(
-              child: Column(
+  Future<void> _shareApp() async {
+    HapticFeedback.selectionClick();
+    const pkg = 'com.example.jap_counter';
+    final link = 'https://play.google.com/store/apps/details?id=$pkg';
+    await SharePlus.instance.share(
+      ShareParams(text: link, subject: 'Radha Jap Counter'),
+    );
+  }
+
+  Future<void> _rateOnPlayStore() async {
+    HapticFeedback.selectionClick();
+    const pkg = 'com.example.jap_counter';
+    final marketUri = Uri.parse('market://details?id=$pkg');
+    final webUri = Uri.parse(
+      'https://play.google.com/store/apps/details?id=$pkg',
+    );
+    if (await canLaunchUrl(marketUri)) {
+      await launchUrl(marketUri);
+    } else {
+      await launchUrl(webUri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _openGoalSheet() async {
+    var temp = _goalMalas;
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
+          child: StatefulBuilder(
+            builder: (context, setModalState) {
+              final label = _formatGoalLabel(context, temp);
+              const quickOptions = [0, 1, 2, 3, 5, 8, 10];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _sectionHeader(
-                    context,
-                    Icons.notifications_active,
-                    context.tr('settings.notifications'),
+                  Text(
+                    context.tr('settings.goal.title'),
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              context.tr('settings.notifications.daily'),
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              context.tr('settings.notifications.desc'),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Switch(value: _reminders, onChanged: _toggleReminders),
-                    ],
+                  const SizedBox(height: 6),
+                  Text(
+                    context.tr('settings.goal.subtitle'),
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: GlowCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionHeader(
-                    context,
-                    Icons.flag,
-                    context.tr('settings.goal'),
+                  const SizedBox(height: 20),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: quickOptions.map((option) {
+                      final optionLabel = _formatGoalLabel(context, option);
+                      return ChoiceChip(
+                        label: Text(optionLabel),
+                        selected: temp == option,
+                        onSelected: (_) {
+                          HapticFeedback.selectionClick();
+                          setModalState(() => temp = option);
+                        },
+                      );
+                    }).toList(),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              context.tr('settings.goal.title'),
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              context.tr('settings.goal.subtitle'),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text('$_goalMalas'),
-                    ],
-                  ),
+                  const SizedBox(height: 16),
                   Slider(
                     min: 0,
                     max: 20,
                     divisions: 20,
-                    value: _goalMalas.toDouble(),
-                    label: '$_goalMalas',
-                    onChanged: (v) => setState(() => _goalMalas = v.round()),
-                    onChangeEnd: (v) async {
-                      final gs = await GoalStore.create();
-                      await gs.setDailyMalasGoal(v.round());
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(context.tr('settings.goal.updated')),
-                            duration: const Duration(seconds: 1),
-                          ),
-                        );
-                      }
+                    value: temp.toDouble(),
+                    label: '$temp',
+                    onChanged: (value) {
+                      HapticFeedback.lightImpact();
+                      setModalState(() => temp = value.round());
                     },
                   ),
-                ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: GlowCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionHeader(
-                    context,
-                    Icons.volume_up,
-                    context.tr('settings.sound'),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      label,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Expanded(
-                        child: Text(
-                          context.tr('settings.sound.action'),
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(context.tr('common.cancel')),
                       ),
-                      Switch(
-                        value: _soundHaptics,
-                        onChanged: (value) =>
-                            setState(() => _soundHaptics = value),
+                      const SizedBox(width: 12),
+                      FilledButton(
+                        onPressed: () => Navigator.pop<int>(context, temp),
+                        child: Text(context.tr('common.save')),
                       ),
                     ],
                   ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(context.tr('settings.sound.malaBell')),
-                    value: _soundEnabled,
-                    onChanged: (v) async {
-                      setState(() => _soundEnabled = v);
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.setBool('settings.soundEnabled', v);
-                    },
-                  ),
                 ],
-              ),
-            ),
+              );
+            },
           ),
-          SliverToBoxAdapter(
-            child: GlowCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionHeader(
-                    context,
-                    Icons.language,
-                    context.tr('settings.language'),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    context.tr('settings.language.subtitle'),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<String>(
-                    segments: [
-                      ButtonSegment(
-                        value: 'en',
-                        label: Text(context.tr('common.english')),
-                      ),
-                      ButtonSegment(
-                        value: 'hi',
-                        label: Text(context.tr('common.hindi')),
-                      ),
-                    ],
-                    selected: {widget.language},
-                    onSelectionChanged: (selection) {
-                      final value = selection.first;
-                      widget.onLanguageChanged(value);
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: GlowCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionHeader(
-                    context,
-                    Icons.info_outline,
-                    context.tr('settings.about'),
-                  ),
-                  const SizedBox(height: 12),
-                  _pillButton(
-                    context,
-                    label: context.tr('settings.privacy'),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const PrivacyPolicyPage(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _pillButton(
-                    context,
-                    label: context.tr('settings.terms'),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const TermsConditionsPage(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ListTile(
-                    leading: const Icon(Icons.info_outline),
-                    title: Text(context.tr('settings.aboutApp')),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AboutPage()),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _rateCard(context),
-                ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: GlowCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionHeader(
-                    context,
-                    Icons.backup,
-                    context.tr('settings.data'),
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    icon: const Icon(Icons.cloud_upload),
-                    label: Text(context.tr('settings.data.export')),
-                    onPressed: () async {
-                      await BackupService.exportToJson();
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.delete_forever),
-                    label: Text(context.tr('settings.data.reset')),
-                    onPressed: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (_) => AlertDialog(
-                          title: Text(context.tr('settings.data.resetConfirm')),
-                          content: Text(
-                            context.tr('settings.data.resetMessage'),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: Text(context.tr('common.cancel')),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: Text(context.tr('common.reset')),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirmed != true) return;
+        );
+      },
+    );
 
-                      final counter = await CounterStore.create();
-                      await counter.resetAll();
-                      await ActivityStore.resetAll();
-                      final meditation = await MeditationStore.create();
-                      await meditation.resetAll();
-                      final sessions = await SessionStore.create();
-                      await sessions.clear();
-                      final goal = await GoalStore.create();
-                      await goal.setDailyMalasGoal(1);
-                      final dedication = await DedicationStore.create();
-                      await dedication.setNote('');
+    if (result == null) return;
 
-                      if (!mounted) return;
-                      await _load();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            context.tr('settings.data.resetSuccess'),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-              child: SizedBox(
-                height: 54,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () async {
-                    const pkg = 'com.example.jap_counter';
-                    final link =
-                        'https://play.google.com/store/apps/details?id=$pkg';
-                    await SharePlus.instance.share(
-                      ShareParams(text: link, subject: 'Radha Jap Counter'),
-                    );
-                  },
-                  child: Text(context.tr('common.shareApp')),
-                ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr('settings.theme'),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<bool>(
+    setState(() => _goalMalas = result);
+    final gs = await GoalStore.create();
+    await gs.setDailyMalasGoal(result);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.tr('settings.goal.updated')),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.themeMode == ThemeMode.dark;
+    final language = widget.language;
+    final goalLabel = _formatGoalLabel(context, _goalMalas);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(context.tr('settings.title'))),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          children: [
+            _SettingsSection(
+              icon: Icons.dark_mode,
+              title: context.tr('settings.theme'),
+              children: [
+                Center(
+                  child: SegmentedButton<bool>(
                     segments: [
                       ButtonSegment(
                         value: false,
@@ -461,116 +256,176 @@ class _SettingsPageState extends State<SettingsPage> {
                         label: Text(context.tr('common.dark')),
                         icon: const Icon(Icons.dark_mode),
                       ),
-                ],
-                selected: {isDark},
-                onSelectionChanged: (selection) {
-                  final dark = selection.first;
+                    ],
+                    selected: {isDark},
+                    onSelectionChanged: (selection) {
+                      final dark = selection.first;
+                      HapticFeedback.selectionClick();
                       widget.onThemeModeChanged(
                         dark ? ThemeMode.dark : ThemeMode.light,
                       );
-                },
+                    },
                   ),
-                ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(child: _aboutFooter(context)),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionHeader(BuildContext context, IconData icon, String title) {
-    final cs = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: cs.primary.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: cs.primary),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ],
-    );
-  }
-
-  Widget _pillButton(
-    BuildContext context, {
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    final divider = Theme.of(context).dividerColor.withValues(alpha: 0.5);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        height: 48,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: Theme.of(context).colorScheme.surface,
-          border: Border.all(color: divider),
-        ),
-        alignment: Alignment.center,
-        child: Text(label, style: Theme.of(context).textTheme.titleMedium),
-      ),
-    );
-  }
-
-  Widget _rateCard(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.primary.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            'Rate on Play Store — Radha Jap Counter',
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 44,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-              onPressed: () async {
-                const pkg = 'com.example.jap_counter';
-                final marketUri = Uri.parse('market://details?id=$pkg');
-                final webUri = Uri.parse(
-                  'https://play.google.com/store/apps/details?id=$pkg',
-                );
-                if (await canLaunchUrl(marketUri)) {
-                  await launchUrl(marketUri);
-                } else {
-                  await launchUrl(webUri, mode: LaunchMode.externalApplication);
-                }
-              },
-              child: const Text('Rate on Play Store'),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            _SettingsSection(
+              icon: Icons.language,
+              title: context.tr('settings.language'),
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      context.tr('settings.language.subtitle'),
+                      style: Theme.of(context).textTheme.bodySmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: SegmentedButton<String>(
+                        segments: [
+                          ButtonSegment(
+                            value: 'en',
+                            label: Text(context.tr('common.english')),
+                          ),
+                          ButtonSegment(
+                            value: 'hi',
+                            label: Text(context.tr('common.hindi')),
+                          ),
+                        ],
+                        selected: {widget.language},
+                        onSelectionChanged: (selection) {
+                          final value = selection.first;
+                          HapticFeedback.selectionClick();
+                          widget.onLanguageChanged(value);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _SettingsSection(
+              icon: Icons.music_note,
+              title: context.tr('settings.sound'),
+              children: [
+                _SettingsSwitchTile(
+                  icon: Icons.music_note_outlined,
+                  title: context.tr('settings.sound.malaBell'),
+                  subtitle: context.tr('settings.sound.action'),
+                  value: _soundEnabled,
+                  onChanged: _toggleBell,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _SettingsSection(
+              icon: Icons.flag,
+              title: context.tr('settings.goal'),
+              children: [
+                _SettingsActionTile(
+                  icon: Icons.flag_outlined,
+                  title: context.tr('settings.goal.title'),
+                  subtitle: context.tr('settings.goal.subtitle'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ValuePill(label: goalLabel),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.chevron_right),
+                    ],
+                  ),
+                  onTap: _openGoalSheet,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _SettingsSection(
+              icon: Icons.notifications_active,
+              title: context.tr('settings.notifications'),
+              children: [
+                _SettingsSwitchTile(
+                  icon: Icons.alarm,
+                  title: context.tr('settings.notifications.daily'),
+                  subtitle: _remindersLocked
+                      ? context.tr('settings.notifications.locked')
+                      : context.tr('settings.notifications.desc'),
+                  value: _reminders,
+                  onChanged: _toggleReminders,
+                  enabled: !_remindersLocked,
+                  onDisabledTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          context.tr('settings.notifications.locked'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _SettingsSection(
+              icon: Icons.info_outline,
+              title: context.tr('settings.about'),
+              children: [
+                _SettingsActionTile(
+                  icon: Icons.share_rounded,
+                  title: context.tr('common.shareApp'),
+                  onTap: _shareApp,
+                ),
+                _SettingsActionTile(
+                  icon: Icons.star_rate_rounded,
+                  title: context.tr('settings.rate'),
+                  subtitle: context.tr('settings.rate.subtitle'),
+                  onTap: _rateOnPlayStore,
+                ),
+                _SettingsActionTile(
+                  icon: Icons.privacy_tip_outlined,
+                  title: context.tr('settings.privacy'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const PrivacyPolicyPage(),
+                    ),
+                  ),
+                ),
+                _SettingsActionTile(
+                  icon: Icons.article_outlined,
+                  title: context.tr('settings.terms'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const TermsConditionsPage(),
+                    ),
+                  ),
+                ),
+                _SettingsActionTile(
+                  icon: Icons.info_outline,
+                  title: context.tr('settings.aboutApp'),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const AboutPage())),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _aboutFooter(context),
+          ],
+        ),
       ),
     );
+  }
+
+  String _formatGoalLabel(BuildContext context, int value) {
+    if (value == 0) return context.tr('common.off');
+    final language = widget.language;
+    if (language == 'hi') {
+      return '$value माला${value == 1 ? '' : 'एँ'}';
+    }
+    return '$value mala${value == 1 ? '' : 's'}';
   }
 
   Widget _aboutFooter(BuildContext context) {
@@ -592,6 +447,182 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _SettingsSection extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final List<Widget> children;
+
+  const _SettingsSection({
+    required this.icon,
+    required this.title,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GlowCard(
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _SettingsIconCircle(icon: icon, color: cs.primary),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const Divider(height: 20),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsSwitchTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final bool enabled;
+  final VoidCallback? onDisabledTap;
+
+  const _SettingsSwitchTile({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+    this.onDisabledTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: _SettingsIconCircle(
+        icon: icon,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      title: Text(
+        title,
+        style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      subtitle: subtitle == null ? null : Text(subtitle!),
+      trailing: Switch.adaptive(
+        value: value,
+        onChanged: enabled ? onChanged : null,
+      ),
+      onTap: () {
+        if (enabled) {
+          onChanged(!value);
+        } else {
+          onDisabledTap?.call();
+        }
+      },
+    );
+  }
+}
+
+class _SettingsActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  const _SettingsActionTile({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: _SettingsIconCircle(
+        icon: icon,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      title: Text(
+        title,
+        style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      subtitle: subtitle == null ? null : Text(subtitle!),
+      trailing: trailing ?? const Icon(Icons.chevron_right),
+      onTap: onTap == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onTap!();
+            },
+    );
+  }
+}
+
+class _SettingsIconCircle extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+
+  const _SettingsIconCircle({required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withOpacity(0.12),
+      ),
+      child: Icon(icon, color: color),
+    );
+  }
+}
+
+class _ValuePill extends StatelessWidget {
+  final String label;
+
+  const _ValuePill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.primary.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: cs.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }

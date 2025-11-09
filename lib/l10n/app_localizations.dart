@@ -43,6 +43,8 @@ class AppStrings {
       'common.english': 'English',
       'common.hindi': 'Hindi',
       'common.reset': 'Reset',
+      'common.on': 'On',
+      'common.off': 'Off',
 
       // Home snackbars
       'home.snackbar.progress':
@@ -98,6 +100,11 @@ class AppStrings {
       'settings.notifications': 'Notifications',
       'settings.notifications.daily': 'Daily Reminders',
       'settings.notifications.desc': 'Get reminded to maintain your streak',
+      'settings.notifications.locked':
+          'Notifications already enabled in system settings',
+      'settings.notifications.denied':
+          'Permission denied. Enable notifications from system settings.',
+      'settings.notifications.systemOn': 'On (system)',
       'settings.goal': 'Daily Goal',
       'settings.goal.title': 'Target Malas per Day',
       'settings.goal.subtitle':
@@ -110,6 +117,8 @@ class AppStrings {
       'settings.privacy': 'Privacy Policy',
       'settings.terms': 'Terms & Conditions',
       'settings.aboutApp': 'About App',
+      'settings.rate': 'Rate on Play Store',
+      'settings.rate.subtitle': 'Share love & feedback with the community',
       'settings.data': 'Data Management',
       'settings.data.export': 'Export Backup',
       'settings.data.reset': 'Reset All Data',
@@ -177,6 +186,8 @@ class AppStrings {
       'common.english': 'English',
       'common.hindi': 'हिन्दी',
       'common.reset': 'रीसेट',
+      'common.on': 'चालू',
+      'common.off': 'बंद',
 
       // Home snackbars
       'home.snackbar.progress':
@@ -231,6 +242,10 @@ class AppStrings {
       'settings.notifications': 'सूचनाएँ',
       'settings.notifications.daily': 'दैनिक अनुस्मारक',
       'settings.notifications.desc': 'श्रंखला बनाए रखने की याद दिलाएँ',
+      'settings.notifications.locked': 'सूचनाएँ सिस्टम सेटिंग्स से चालू हैं',
+      'settings.notifications.denied':
+          'अनुमति अस्वीकृत। सिस्टम सेटिंग्स में सूचनाएँ चालू करें।',
+      'settings.notifications.systemOn': 'सिस्टम द्वारा चालू',
       'settings.goal': 'दैनिक लक्ष्य',
       'settings.goal.title': 'प्रति दिन लक्षित माला',
       'settings.goal.subtitle':
@@ -243,6 +258,8 @@ class AppStrings {
       'settings.privacy': 'गोपनीयता नीति',
       'settings.terms': 'नियम व शर्तें',
       'settings.aboutApp': 'ऐप के बारे में',
+      'settings.rate': 'प्ले स्टोर पर रेट करें',
+      'settings.rate.subtitle': 'समुदाय के साथ अपना अनुभव साझा करें',
       'settings.data': 'डेटा प्रबंधन',
       'settings.data.export': 'बैकअप निर्यात करें',
       'settings.data.reset': 'सभी डेटा रीसेट करें',
