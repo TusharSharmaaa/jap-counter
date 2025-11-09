@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 enum _TimerState { idle, running, paused, completed }
 
@@ -24,10 +25,23 @@ class _TimerPageState extends State<TimerPage> {
 
   // ambience placeholder
   String _ambience = 'Mute';
+  NativeAd? _nativeAd;
+  bool _isAdLoaded = false;
+  bool _visible = false;
 
   // ---- lifecycle ----
   @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) setState(() => _visible = true);
+    });
+    _loadNativeAd();
+  }
+
+  @override
   void dispose() {
+    _nativeAd?.dispose();
     _ticker?.cancel();
     super.dispose();
   }
@@ -138,6 +152,38 @@ class _TimerPageState extends State<TimerPage> {
     return '$m:$ss';
   }
 
+  String get _statusText {
+    switch (_state) {
+      case _TimerState.running:
+        return '🕉️ साधना जारी है...';
+      case _TimerState.paused:
+        return '⏸️ ध्यान विराम';
+      case _TimerState.completed:
+        return '🌸 साधना पूर्ण हुई';
+      case _TimerState.idle:
+      default:
+        return '🙏 मन को शांत करें';
+    }
+  }
+
+  void _loadNativeAd() {
+    _nativeAd = NativeAd(
+      adUnitId: 'ca-app-pub-2816806517862101/3640704675',
+      factoryId: 'listTile',
+      request: const AdRequest(),
+      listener: NativeAdListener(
+        onAdLoaded: (ad) {
+          if (!mounted) return;
+          setState(() => _isAdLoaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          debugPrint('Failed to load native ad: $error');
+        },
+      ),
+    )..load();
+  }
+
   // ---- UI ----
   @override
   Widget build(BuildContext context) {
@@ -161,69 +207,109 @@ class _TimerPageState extends State<TimerPage> {
               child: SingleChildScrollView(
                 physics: const ClampingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Two-column compact controls: Duration | Ambience
-                    LayoutBuilder(
-                      builder: (context, c) {
-                        final duration = _DurationSection(
-                          presets: _presets,
-                          selected: _selectedMinutes,
-                          onSelect: _selectPreset,
-                          enabled: !isRunning,
-                        );
-                        final sound = _AmbienceSection(
-                          selected: _ambience,
-                          onSelect: _selectAmbience,
-                        );
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: duration),
-                            const SizedBox(width: 12),
-                            Expanded(child: sound),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    // Big readout + progress
-                    _PrimaryTimerCard(
-                      readout: _readout,
-                      progress: _progress,
-                      state: _state,
-                    ),
-                    const SizedBox(height: 16),
-                    // Controls
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: isRunning
-                                ? _pause
-                                : (isPaused ? _resume : _start),
-                            child: Text(
-                              isRunning
-                                  ? 'Pause'
-                                  : isPaused
-                                  ? 'Resume'
-                                  : 'Start',
+                child: AnimatedOpacity(
+                  opacity: _visible ? 1 : 0,
+                  duration: const Duration(milliseconds: 700),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Two-column compact controls: Duration | Ambience
+                      LayoutBuilder(
+                        builder: (context, c) {
+                          final duration = _DurationSection(
+                            presets: _presets,
+                            selected: _selectedMinutes,
+                            onSelect: _selectPreset,
+                            enabled: !isRunning,
+                          );
+                          final sound = _AmbienceSection(
+                            selected: _ambience,
+                            onSelect: _selectAmbience,
+                          );
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: duration),
+                              const SizedBox(width: 12),
+                              Expanded(child: sound),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      // Big readout + progress
+                      _PrimaryTimerCard(
+                        readout: _readout,
+                        progress: _progress,
+                        statusText: _statusText,
+                      ),
+                      const SizedBox(height: 24),
+                      // Controls
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: isRunning
+                                  ? _pause
+                                  : (isPaused ? _resume : _start),
+                              child: Text(
+                                isRunning
+                                    ? 'Pause'
+                                    : isPaused
+                                    ? 'Resume'
+                                    : 'Start',
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: (isIdle && _remaining == _total)
-                                ? null
-                                : _reset,
-                            child: const Text('Reset'),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: (isIdle && _remaining == _total)
+                                  ? null
+                                  : _reset,
+                              child: const Text('Reset'),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: 48),
+                      // Native Ad Section moved near bottom controls
+                      _isAdLoaded
+                          ? Container(
+                              height: 100,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: theme.dividerColor.withOpacity(.2),
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: AdWidget(ad: _nativeAd!),
+                              ),
+                            )
+                          : Container(
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: theme.dividerColor.withOpacity(.2),
+                                ),
+                              ),
+                              child: const Center(
+                                child: Text(
+                                  'Ad loading...',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                              ),
+                            ),
+                      const SizedBox(height: 48),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -239,12 +325,12 @@ class _TimerPageState extends State<TimerPage> {
 class _PrimaryTimerCard extends StatelessWidget {
   final String readout;
   final double progress;
-  final _TimerState state;
+  final String statusText;
 
   const _PrimaryTimerCard({
     required this.readout,
     required this.progress,
-    required this.state,
+    required this.statusText,
   });
 
   @override
@@ -283,8 +369,8 @@ class _PrimaryTimerCard extends StatelessWidget {
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 250),
             child: Text(
-              _statusLabel,
-              key: ValueKey(state),
+              statusText,
+              key: ValueKey(statusText),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.primary,
                 letterSpacing: .5,
@@ -294,20 +380,6 @@ class _PrimaryTimerCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String get _statusLabel {
-    switch (state) {
-      case _TimerState.running:
-        return 'Running';
-      case _TimerState.paused:
-        return 'Paused';
-      case _TimerState.completed:
-        return 'Completed';
-      case _TimerState.idle:
-      default:
-        return 'Ready';
-    }
   }
 }
 
