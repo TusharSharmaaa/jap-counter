@@ -8,14 +8,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../core/ad_manager.dart';
 import '../core/sound_manager.dart';
 import '../data/meditation_store.dart';
 import '../l10n/app_localizations.dart';
-
-enum _TimerState { idle, running, paused, completed }
+import 'timer_service.dart';
 
 class TimerPage extends StatefulWidget {
   const TimerPage({super.key});
@@ -24,15 +24,14 @@ class TimerPage extends StatefulWidget {
   State<TimerPage> createState() => _TimerPageState();
 }
 
-class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
+class _TimerPageState extends State<TimerPage>
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   // ---- minimal stable state ----
   final List<int> _presets = const [2, 5, 10, 15, 20, 30, 45, 60, 90];
-  int _selectedMinutes = 5;
-  _TimerState _state = _TimerState.idle;
-  Duration _total = const Duration(minutes: 5);
-  Duration _remaining = const Duration(minutes: 5);
-  Timer? _ticker;
-  DateTime? _lastTickAt;
+  int _selectedMinutes = TimerService.defaultTarget.inMinutes;
+  late final TimerService _timerService;
+  String? _activeRunId;
+  bool _wasRunning = false;
 
   // ambience placeholder
   String _ambienceId = 'mute';
@@ -42,22 +41,43 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
   int _todayMinutes = 0;
   int _lifetimeMinutes = 0;
 
+  @override
+  bool get wantKeepAlive => true;
+
   // ---- lifecycle ----
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (mounted) setState(() => _visible = true);
-    });
-    unawaited(_initialiseAudio());
-    unawaited(_loadMeditationStats());
-    unawaited(AdManager.instance.preloadPlacement('timer.share_rewarded'));
+    _timerService = TimerService();
+    _timerService.addListener(_handleServiceUpdate);
+    Future.microtask(_bootstrap);
   }
 
-  Future<void> _initialiseAudio() async {
+  Future<void> _bootstrap() async {
+    await _timerService.load();
     await _soundManager.init();
-    await _soundManager.setAmbience(_ambienceId);
+    _ambienceId = _timerService.sound;
+    if (_ambienceId != 'mute') {
+      await _soundManager.setAmbience(_ambienceId, preload: true);
+      if (_timerService.running) {
+        await _soundManager.playAmbience(forceId: _ambienceId);
+      }
+    } else {
+      await _soundManager.setAmbience(_ambienceId);
+    }
+    _selectedMinutes = _timerService.target.inMinutes;
+    _wasRunning = _timerService.running;
+    _activeRunId = _timerService.runId.isEmpty ? null : _timerService.runId;
+
+    if (mounted) {
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted) setState(() => _visible = true);
+      });
+    }
+
+    unawaited(_loadMeditationStats());
+    unawaited(AdManager.instance.preloadPlacement('timer.share_rewarded'));
   }
 
   Future<void> _loadMeditationStats() async {
@@ -72,7 +92,8 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _ticker?.cancel();
+    _timerService.removeListener(_handleServiceUpdate);
+    _timerService.dispose();
     unawaited(_soundManager.stopAmbience());
     super.dispose();
   }
@@ -82,124 +103,132 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       unawaited(_soundManager.pauseAmbience());
-    } else if (state == AppLifecycleState.resumed &&
-        _state == _TimerState.running &&
-        _ambienceId != 'mute') {
-      unawaited(_soundManager.playAmbience());
+    } else if (state == AppLifecycleState.resumed) {
+      if (_timerService.running && _ambienceId != 'mute') {
+        unawaited(_soundManager.playAmbience(forceId: _ambienceId));
+      }
+      _timerService.refresh();
     }
+  }
+
+  Duration get _remaining => _timerService.remaining;
+
+  Duration get _target => _timerService.target;
+
+  bool get _isRunning => _timerService.running;
+
+  bool get _isIdle => !_timerService.running && _remaining == _target;
+
+  bool get _isCompleted =>
+      !_timerService.running && _remaining == Duration.zero;
+
+  bool get _isPaused =>
+      !_timerService.running && !_isIdle && !_isCompleted && !_timerService.isPristine;
+
+  bool get _isPristine => _timerService.isPristine;
+
+  void _handleServiceUpdate() {
+    final svc = _timerService;
+    final nowRunning = svc.running;
+    final newMinutes = svc.target.inMinutes;
+    final newSound = svc.sound;
+
+    if (_activeRunId != null && svc.consumeCompletion(_activeRunId!)) {
+      _activeRunId = null;
+      unawaited(_onComplete());
+    }
+
+    if (_ambienceId != newSound) {
+      if (newSound == 'mute') {
+        unawaited(_soundManager.stopAmbience());
+      } else if (nowRunning) {
+        unawaited(_soundManager.playAmbience(forceId: newSound));
+      } else {
+        unawaited(_soundManager.setAmbience(newSound, preload: true));
+      }
+    } else if (!_wasRunning && nowRunning && newSound != 'mute') {
+      unawaited(_soundManager.playAmbience(forceId: newSound));
+    } else if (_wasRunning && !nowRunning && newSound != 'mute') {
+      unawaited(_soundManager.pauseAmbience());
+    }
+
+    if (mounted) {
+      setState(() {
+        _selectedMinutes = newMinutes;
+        _ambienceId = newSound;
+      });
+    }
+
+    _wasRunning = nowRunning;
   }
 
   // ---- actions (hooks kept simple; you can re-attach sound/ads later) ----
   void _selectPreset(int m) {
-    if (_state == _TimerState.running) return;
+    if (_timerService.running) return;
     HapticFeedback.selectionClick();
-    setState(() {
-      _selectedMinutes = m;
-      _total = Duration(minutes: m);
-      _remaining = _total;
-      _state = _TimerState.idle;
-    });
+    _activeRunId = null;
+    _selectedMinutes = m;
+    unawaited(_timerService.selectDuration(Duration(minutes: m)));
+    if (mounted) setState(() {});
   }
 
   Future<void> _selectAmbience(String id) async {
-    if (_ambienceId == id) return;
-    HapticFeedback.selectionClick();
+    if (_timerService.running) return;
     final safeId = id.toLowerCase();
-    setState(() => _ambienceId = safeId);
-    if (safeId == 'mute') {
-      await _soundManager.stopAmbience();
-    } else if (_state == _TimerState.running) {
-      await _soundManager.playAmbience(forceId: safeId);
-    } else {
-      await _soundManager.setAmbience(safeId, preload: true);
-    }
+    if (_ambienceId == safeId) return;
+    HapticFeedback.selectionClick();
+    _ambienceId = safeId;
+    if (mounted) setState(() {});
+    await _timerService.selectSound(safeId);
   }
 
   Future<void> _start() async {
-    if (_state == _TimerState.running) return;
+    if (_timerService.running) return;
     HapticFeedback.lightImpact();
-    setState(() {
-      _total = Duration(minutes: _selectedMinutes);
-      _remaining = _total;
-      _state = _TimerState.running;
-      _lastTickAt = DateTime.now();
-    });
+    final isFreshRun = _timerService.remaining == _timerService.target ||
+        _activeRunId == null ||
+        _timerService.remaining == Duration.zero;
+    if (isFreshRun || (_activeRunId ?? '').isEmpty) {
+      _activeRunId = DateTime.now().microsecondsSinceEpoch.toString();
+    }
+    await _timerService.start(runId: _activeRunId);
     if (_ambienceId != 'mute') {
       await _soundManager.playAmbience(forceId: _ambienceId);
     }
     unawaited(
       AdManager.instance.preloadPlacement('timer.post_session_interstitial'),
     );
-
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(milliseconds: 200), (t) {
-      final now = DateTime.now();
-      final elapsed = now.difference(_lastTickAt ?? now);
-      _lastTickAt = now;
-      final next = _remaining - elapsed;
-      if (next <= Duration.zero) {
-        t.cancel();
-        _onComplete();
-      } else {
-        if (mounted) setState(() => _remaining = next);
-      }
-    });
+    if (mounted) setState(() {});
   }
 
-  void _pause() {
-    if (_state != _TimerState.running) return;
+  Future<void> _pause() async {
+    if (!_timerService.running) return;
     HapticFeedback.selectionClick();
-    _ticker?.cancel();
-    setState(() => _state = _TimerState.paused);
-    unawaited(_soundManager.pauseAmbience());
+    await _timerService.pause();
+    await _soundManager.pauseAmbience();
+    if (mounted) setState(() {});
   }
 
   Future<void> _resume() async {
-    if (_state != _TimerState.paused) return;
-    HapticFeedback.lightImpact();
-    setState(() {
-      _state = _TimerState.running;
-      _lastTickAt = DateTime.now();
-    });
-    if (_ambienceId != 'mute') {
-      await _soundManager.playAmbience(forceId: _ambienceId);
+    if (_timerService.running || _timerService.remaining == Duration.zero) {
+      return;
     }
-
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(milliseconds: 200), (t) {
-      final now = DateTime.now();
-      final elapsed = now.difference(_lastTickAt ?? now);
-      _lastTickAt = now;
-      final next = _remaining - elapsed;
-      if (next <= Duration.zero) {
-        t.cancel();
-        _onComplete();
-      } else {
-        if (mounted) setState(() => _remaining = next);
-      }
-    });
+    return _start();
   }
 
-  void _reset() {
+  Future<void> _reset() async {
     HapticFeedback.selectionClick();
-    _ticker?.cancel();
-    unawaited(_soundManager.stopAmbience());
-    setState(() {
-      _total = Duration(minutes: _selectedMinutes);
-      _remaining = _total;
-      _state = _TimerState.idle;
-    });
+    _activeRunId = null;
+    await _timerService.reset();
+    await _soundManager.stopAmbience();
+    if (mounted) setState(() {});
   }
 
   Future<void> _onComplete() async {
     HapticFeedback.mediumImpact();
     await _soundManager.stopAmbience();
     await _soundManager.playBell();
-    setState(() {
-      _remaining = Duration.zero;
-      _state = _TimerState.completed;
-    });
-    final minutes = _total.inMinutes;
+    final minutes = _timerService.target.inMinutes;
     final medStore = await MeditationStore.create();
     await medStore.addMinutes(minutes);
     if (mounted) {
@@ -216,24 +245,17 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
 
     if (!mounted) return;
 
-    final title = context.tr('timer.complete.title');
-    final message = context.tr(
-      'timer.complete.message',
-      args: {'minutes': '$minutes'},
-    );
-    final okLabel = context.tr('common.ok');
-
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(title),
-          content: Text(message),
+          title: const Text('Meditation complete'),
+          content: const Text('Your session has finished.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(okLabel),
+              child: const Text('OK'),
             ),
           ],
         );
@@ -241,17 +263,14 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     );
 
     if (!mounted) return;
+    _activeRunId = null;
     await AdManager.instance.maybeShowInterstitial(
       'timer.post_session_interstitial',
     );
   }
 
   // ---- derived ----
-  double get _progress {
-    if (_total.inMilliseconds == 0) return 0;
-    final done = _total.inMilliseconds - _remaining.inMilliseconds;
-    return (done / _total.inMilliseconds).clamp(0, 1).toDouble();
-  }
+  double get _progress => _timerService.progress;
 
   String get _readout {
     final s = _remaining.inSeconds.clamp(0, 24 * 60 * 60);
@@ -261,16 +280,16 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
   }
 
   String get _statusText {
-    switch (_state) {
-      case _TimerState.running:
-        return '🕉️ साधना जारी है...';
-      case _TimerState.paused:
-        return '⏸️ ध्यान विराम';
-      case _TimerState.completed:
-        return '🌸 साधना पूर्ण हुई';
-      case _TimerState.idle:
-        return '🙏 मन को शांत करें';
+    if (_timerService.running) {
+      return '🕉️ साधना जारी है...';
     }
+    if (_isCompleted) {
+      return '🌸 Meditation complete';
+    }
+    if (_isPaused) {
+      return '⏸️ ध्यान विराम';
+    }
+    return '🙏 मन को शांत करें';
   }
 
   String _formatMinutes(int minutes) {
@@ -351,115 +370,130 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
   // ---- UI ----
   @override
   Widget build(BuildContext context) {
-    final isRunning = _state == _TimerState.running;
-    final isPaused = _state == _TimerState.paused;
-    final isIdle = _state == _TimerState.idle;
+    super.build(context);
+    return ChangeNotifierProvider<TimerService>.value(
+      value: _timerService,
+      child: Consumer<TimerService>(
+        builder: (context, svc, _) {
+          final isRunning = svc.running;
+          final remaining = svc.remaining;
+          final target = svc.target;
+          final isIdle = !isRunning && remaining == target;
+          final isCompleted = !isRunning && remaining == Duration.zero;
+          final isPaused =
+              !isRunning && !isIdle && !isCompleted && !svc.isPristine;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Timer'), centerTitle: true),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header card
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: _HeaderCard(soundLabel: _ambienceLabel(context)),
-            ),
-            // The rest scrolls if needed (prevents any overflow on small screens)
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: AnimatedOpacity(
-                  opacity: _visible ? 1 : 0,
-                  duration: const Duration(milliseconds: 700),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Two-column compact controls: Duration | Ambience
-                      LayoutBuilder(
-                        builder: (context, c) {
-                          final duration = _DurationSection(
-                            presets: _presets,
-                            selected: _selectedMinutes,
-                            onSelect: _selectPreset,
-                            enabled: !isRunning,
-                          );
-                          final sound = _AmbienceSection(
-                            selected: _ambienceId,
-                            onSelect: _selectAmbience,
-                          );
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: duration),
-                              const SizedBox(width: 12),
-                              Expanded(child: sound),
-                            ],
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      // Big readout + progress
-                      _PrimaryTimerCard(
-                        readout: _readout,
-                        progress: _progress,
-                        statusText: _statusText,
-                      ),
-                      const SizedBox(height: 24),
-                      // Controls
-                      Row(
-                        children: [
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: isRunning
-                                  ? _pause
-                                  : (isPaused ? _resume : _start),
-                              child: Text(
-                                isRunning
-                                    ? 'Pause'
-                                    : isPaused
-                                    ? 'Resume'
-                                    : 'Start',
-                              ),
+          VoidCallback? primaryAction;
+          if (isRunning) {
+            primaryAction = () => unawaited(_pause());
+          } else if (isPaused) {
+            primaryAction = () => unawaited(_resume());
+          } else {
+            primaryAction = () => unawaited(_start());
+          }
+
+          final primaryLabel =
+              isRunning ? 'Pause' : (isPaused ? 'Resume' : 'Start');
+          final resetAction =
+              (isIdle && svc.isPristine) ? null : () => unawaited(_reset());
+
+          return Scaffold(
+            appBar: AppBar(title: const Text('Timer'), centerTitle: true),
+            body: SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: _HeaderCard(soundLabel: _ambienceLabel(context)),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: AnimatedOpacity(
+                        opacity: _visible ? 1 : 0,
+                        duration: const Duration(milliseconds: 700),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            LayoutBuilder(
+                              builder: (context, _) {
+                                final duration = _DurationSection(
+                                  presets: _presets,
+                                  selected: _selectedMinutes,
+                                  onSelect: _selectPreset,
+                                  enabled: !isRunning,
+                                );
+                                final sound = _AmbienceSection(
+                                  selected: _ambienceId,
+                                  onSelect: _selectAmbience,
+                                  enabled: !isRunning,
+                                );
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: duration),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: sound),
+                                  ],
+                                );
+                              },
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: (isIdle && _remaining == _total)
-                                  ? null
-                                  : _reset,
-                              child: const Text('Reset'),
+                            const SizedBox(height: 24),
+                            _PrimaryTimerCard(
+                              readout: _readout,
+                              progress: _progress,
+                              statusText: _statusText,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 32),
-                      FilledButton.icon(
-                        onPressed: _shareBusy ? null : _shareMeditation,
-                        icon: _shareBusy
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Theme.of(context).colorScheme.onPrimary,
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed: primaryAction,
+                                    child: Text(primaryLabel),
                                   ),
                                 ),
-                              )
-                            : const Icon(Icons.ios_share),
-                        label: Text(context.tr('timer.share.cta')),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: resetAction,
+                                    child: const Text('Reset'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+                            FilledButton.icon(
+                              onPressed: _shareBusy ? null : _shareMeditation,
+                              icon: _shareBusy
+                                  ? SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                          Theme.of(context)
+                                              .colorScheme
+                                              .onPrimary,
+                                        ),
+                                      ),
+                                    )
+                                  : const Icon(Icons.ios_share),
+                              label: Text(context.tr('timer.share.cta')),
+                            ),
+                            const SizedBox(height: 48),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 48),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -629,12 +663,15 @@ class _DurationSection extends StatelessWidget {
   }
 }
 
-typedef AmbienceSelectCallback = Future<void> Function(String id);
-
 class _AmbienceSection extends StatelessWidget {
   final String selected;
-  final AmbienceSelectCallback onSelect;
-  const _AmbienceSection({required this.selected, required this.onSelect});
+  final Future<void> Function(String id) onSelect;
+  final bool enabled;
+  const _AmbienceSection({
+    required this.selected,
+    required this.onSelect,
+    required this.enabled,
+  });
 
   static const _options = ['mute', 'om', 'flute', 'birds', 'water'];
 
@@ -671,11 +708,13 @@ class _AmbienceSection extends StatelessWidget {
               ),
             )
             .toList(),
-        onChanged: (value) {
-          if (value != null) {
-            unawaited(onSelect(value));
-          }
-        },
+        onChanged: !enabled
+            ? null
+            : (value) {
+                if (value != null) {
+                  unawaited(onSelect(value));
+                }
+              },
       ),
     );
   }

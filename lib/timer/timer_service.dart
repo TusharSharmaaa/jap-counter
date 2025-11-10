@@ -1,0 +1,217 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class TimerService extends ChangeNotifier {
+  // Pref keys
+  static const _kTargetSecs = 'timer_target_secs';
+  static const _kAccumulatedSecs = 'timer_accumulated_secs';
+  static const _kStartedAtMillis = 'timer_started_at_millis';
+  static const _kRunning = 'timer_running';
+  static const _kSoundKey = 'timer_sound';
+  static const _kRunId = 'timer_run_id';
+  static const _kCompletedFlag = 'timer_completed_flag';
+
+  // Defaults
+  static const Duration defaultTarget = Duration(minutes: 2);
+
+  Duration _target = defaultTarget;
+  Duration _accumulated = Duration.zero;
+  DateTime? _startedAt;
+  String _sound = 'mute';
+  String _runId = '';
+  bool _running = false;
+  bool _completedThisRun = false;
+  Timer? _ticker;
+
+  Duration get target => _target;
+  bool get running => _running;
+  String get sound => _sound;
+  String get runId => _runId;
+  bool get completed => _completedThisRun;
+
+  Duration get elapsed {
+    if (!_running || _startedAt == null) {
+      return _accumulated;
+    }
+    return _accumulated + DateTime.now().difference(_startedAt!);
+  }
+
+  Duration get remaining {
+    final remainder = _target - elapsed;
+    return remainder.isNegative ? Duration.zero : remainder;
+  }
+
+  double get progress {
+    final totalMillis = _target.inMilliseconds;
+    if (totalMillis <= 0) return 1;
+    final done = elapsed.inMilliseconds.clamp(0, totalMillis);
+    return done / totalMillis;
+  }
+
+  bool get isPristine =>
+      !_running && _accumulated == Duration.zero && _startedAt == null;
+
+  bool get _hasInFlightTicker => _ticker != null;
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final targetSecs = prefs.getInt(_kTargetSecs);
+    final accumSecs = prefs.getInt(_kAccumulatedSecs);
+    final startedMillis = prefs.getInt(_kStartedAtMillis);
+    final running = prefs.getBool(_kRunning);
+    final sound = prefs.getString(_kSoundKey);
+    _runId = prefs.getString(_kRunId) ?? '';
+    _completedThisRun = prefs.getBool(_kCompletedFlag) ?? false;
+
+    _target = Duration(seconds: targetSecs ?? defaultTarget.inSeconds);
+    _accumulated = Duration(seconds: accumSecs ?? 0);
+    _sound = (sound ?? 'mute').toLowerCase();
+
+    if (running == true && startedMillis != null) {
+      _startedAt =
+          DateTime.fromMillisecondsSinceEpoch(startedMillis, isUtc: false);
+      _running = true;
+      _startTicker();
+    } else {
+      _running = false;
+      _startedAt = null;
+      _stopTicker();
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> _persist() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kTargetSecs, _target.inSeconds);
+    await prefs.setInt(_kAccumulatedSecs, _accumulated.inSeconds);
+    if (_startedAt != null) {
+      await prefs.setInt(
+        _kStartedAtMillis,
+        _startedAt!.millisecondsSinceEpoch,
+      );
+    } else {
+      await prefs.remove(_kStartedAtMillis);
+    }
+    await prefs.setBool(_kRunning, _running);
+    await prefs.setString(_kSoundKey, _sound);
+    await prefs.setString(_kRunId, _runId);
+    await prefs.setBool(_kCompletedFlag, _completedThisRun);
+  }
+
+  void _startTicker() {
+    _stopTicker();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!_running) return;
+      if (remaining == Duration.zero) {
+        unawaited(_complete());
+        return;
+      }
+      notifyListeners();
+    });
+    notifyListeners();
+  }
+
+  void _stopTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
+
+  Future<void> start({String? runId}) async {
+    if (_running) return;
+    final newRunId = runId ??
+        (_runId.isEmpty
+            ? DateTime.now().microsecondsSinceEpoch.toString()
+            : _runId);
+    final wasCompleted = remaining == Duration.zero && !_running;
+    final isNewRun = wasCompleted || _runId.isEmpty || _accumulated == Duration.zero;
+    if (isNewRun) {
+      _accumulated = Duration.zero;
+    }
+    _runId = newRunId;
+    _completedThisRun = false;
+    _startedAt = DateTime.now();
+    _running = true;
+    _startTicker();
+    await _persist();
+  }
+
+  Future<void> pause() async {
+    if (!_running) return;
+    _accumulated = elapsed;
+    _startedAt = null;
+    _running = false;
+    _stopTicker();
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> reset() async {
+    _stopTicker();
+    _running = false;
+    _startedAt = null;
+    _accumulated = Duration.zero;
+    _completedThisRun = false;
+    _runId = '';
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> selectDuration(Duration duration) async {
+    if (_running) return;
+    _target = duration;
+    _accumulated = Duration.zero;
+    _startedAt = null;
+    _completedThisRun = false;
+    _runId = '';
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> selectSound(String soundId) async {
+    if (_running) return;
+    _sound = soundId.toLowerCase();
+    _completedThisRun = false;
+    _runId = '';
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> _complete() async {
+    if (_completedThisRun) return;
+    _completedThisRun = true;
+    _accumulated = _target;
+    _running = false;
+    _startedAt = null;
+    _stopTicker();
+    await _persist();
+    notifyListeners();
+  }
+
+  bool consumeCompletion(String runId) {
+    final shouldShow = _completedThisRun && _runId.isNotEmpty && _runId == runId;
+    if (shouldShow) {
+      _completedThisRun = false;
+      _runId = '';
+      unawaited(_persist());
+    }
+    return shouldShow;
+  }
+
+  void refresh() {
+    if (_running && !_hasInFlightTicker) {
+      _startTicker();
+    } else {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopTicker();
+    super.dispose();
+  }
+}
+

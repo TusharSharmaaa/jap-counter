@@ -44,6 +44,7 @@ dependencies:
   audio_session: ^0.1.18
   audioplayers: ^6.1.0
   wakelock_plus: ^1.2.7
+  provider: ^6.1.2
   path_provider: ^2.1.5
   http: ^1.5.0
   font_awesome_flutter: ^10.7.0

@@ -1,22 +1,28 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum TimerPrefKeys { minutes, sound }
-
 class TimerPrefs {
-  static const _kMinutes = 'timer_minutes';
-  static const _kSound = 'timer_sound'; // enum index
+  static const String lastDurationKey = 'timer_target_secs';
+  static const String lastSoundKey = 'timer_sound';
 
-  final SharedPreferences _prefs;
-  TimerPrefs._(this._prefs);
+  static const int defaultDurationSecs = 120;
 
-  static Future<TimerPrefs> create() async {
-    final p = await SharedPreferences.getInstance();
-    return TimerPrefs._(p);
+  static Future<int> readDurationSecs() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(lastDurationKey) ?? defaultDurationSecs;
   }
 
-  int get minutes => _prefs.getInt(_kMinutes) ?? 10;
-  Future<void> setMinutes(int m) => _prefs.setInt(_kMinutes, m);
+  static Future<void> writeDurationSecs(int seconds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(lastDurationKey, seconds);
+  }
 
-  int get soundIndex => _prefs.getInt(_kSound) ?? 0; // 0 = mute
-  Future<void> setSoundIndex(int i) => _prefs.setInt(_kSound, i);
+  static Future<String> readSound() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getString(lastSoundKey) ?? 'mute').toLowerCase();
+  }
+
+  static Future<void> writeSound(String soundId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(lastSoundKey, soundId.toLowerCase());
+  }
 }
