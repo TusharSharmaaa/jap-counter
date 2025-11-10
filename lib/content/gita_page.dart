@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/ad_manager.dart';
+import '../core/gita_progress_manager.dart';
 import '../utils/quote_image_generator.dart';
 import 'gita_service.dart';
 import 'quote_theme.dart';
@@ -38,19 +39,50 @@ class _GitaPageState extends State<GitaPage> {
 
   final QuoteTheme _shareTheme = QuoteTheme.presets().first;
 
-  final int _chapter = 1;
+  int _chapter = 1;
   int _verse = 1;
   Future<GitaShloka?>? _currentFuture;
   bool _sharing = false;
   String? _lastRecordedRef;
+  bool _initializing = true;
 
   @override
   void initState() {
     super.initState();
-    _loadShloka();
-    unawaited(
-      AdManager.instance.preloadPlacement('gita.share_rewarded'),
-    );
+    unawaited(_initProgress());
+    unawaited(AdManager.instance.preloadPlacement('gita.share_rewarded'));
+  }
+
+  Future<void> _initProgress() async {
+    try {
+      final (chapter, shlok) = await GitaProgressManager.loadProgress();
+      if (!mounted) return;
+      final shouldAnnounce = chapter != 1 || shlok != 1;
+      setState(() {
+        _chapter = chapter;
+        _verse = shlok;
+        _loadShloka();
+        _initializing = false;
+      });
+      if (shouldAnnounce) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Resumed from Chapter $chapter • Shlok $shlok'),
+            ),
+          );
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _chapter = 1;
+        _verse = 1;
+        _loadShloka();
+        _initializing = false;
+      });
+    }
   }
 
   @override
@@ -75,19 +107,21 @@ class _GitaPageState extends State<GitaPage> {
     GitaService.prefetch(_chapter, _verse + 1);
   }
 
-  void _prevVerse() {
+  Future<void> _prevVerse() async {
     if (_verse <= 1) return;
     setState(() {
       _verse -= 1;
       _loadShloka();
     });
+    await GitaProgressManager.saveProgress(_chapter, _verse);
   }
 
-  void _nextVerse() {
+  Future<void> _nextVerse() async {
     setState(() {
       _verse += 1;
       _loadShloka();
     });
+    await GitaProgressManager.saveProgress(_chapter, _verse);
   }
 
   Future<void> _copyShloka(GitaShloka shloka) async {
@@ -119,7 +153,7 @@ class _GitaPageState extends State<GitaPage> {
     setState(() => _sharing = true);
 
     try {
-      final adShown = await AdManager.instance.showRewardedAd(
+      final adShown = await AdManager.instance.maybeShowRewarded(
         'gita.share_rewarded',
         timeout: const Duration(seconds: 8),
       );
@@ -191,9 +225,7 @@ class _GitaPageState extends State<GitaPage> {
       if (mounted) {
         setState(() => _sharing = false);
       }
-      unawaited(
-        AdManager.instance.preloadPlacement('gita.share_rewarded'),
-      );
+      unawaited(AdManager.instance.preloadPlacement('gita.share_rewarded'));
     }
   }
 
@@ -218,6 +250,10 @@ class _GitaPageState extends State<GitaPage> {
                   child: FutureBuilder<GitaShloka?>(
                     future: _currentFuture,
                     builder: (context, snapshot) {
+                      if (_initializing) {
+                        return _LoadingBody(theme: theme);
+                      }
+
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return _LoadingBody(theme: theme);
                       }
@@ -258,7 +294,9 @@ class _GitaPageState extends State<GitaPage> {
                             children: [
                               Expanded(
                                 child: OutlinedButton(
-                                  onPressed: _verse > 1 ? _prevVerse : null,
+                                  onPressed: _verse > 1
+                                      ? () => _prevVerse()
+                                      : null,
                                   child: const Text('Prev'),
                                 ),
                               ),
@@ -284,7 +322,7 @@ class _GitaPageState extends State<GitaPage> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: OutlinedButton(
-                                  onPressed: _nextVerse,
+                                  onPressed: () => _nextVerse(),
                                   child: const Text('Next'),
                                 ),
                               ),

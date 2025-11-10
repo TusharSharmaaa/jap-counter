@@ -52,9 +52,7 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     });
     unawaited(_initialiseAudio());
     unawaited(_loadMeditationStats());
-    unawaited(
-      AdManager.instance.preloadPlacement('timer.share_rewarded'),
-    );
+    unawaited(AdManager.instance.preloadPlacement('timer.share_rewarded'));
   }
 
   Future<void> _initialiseAudio() async {
@@ -243,9 +241,8 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     );
 
     if (!mounted) return;
-    await AdManager.instance.showInterstitialAd(
+    await AdManager.instance.maybeShowInterstitial(
       'timer.post_session_interstitial',
-      timeout: const Duration(milliseconds: 1500),
     );
   }
 
@@ -302,7 +299,7 @@ class _TimerPageState extends State<TimerPage> with WidgetsBindingObserver {
     final successLabel = context.tr('common.share');
 
     try {
-      final adShown = await AdManager.instance.showRewardedAd(
+      final adShown = await AdManager.instance.maybeShowRewarded(
         'timer.share_rewarded',
         timeout: const Duration(seconds: 8),
       );
@@ -698,17 +695,17 @@ class _ShareStatTile extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Colors.white70,
-                fontWeight: FontWeight.w500,
-              ),
+            color: Colors.white70,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           value,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );
@@ -777,10 +774,7 @@ class _TimerShareCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _ShareStatTile(
-                  label: todayLabel,
-                  value: todayValue,
-                ),
+                child: _ShareStatTile(label: todayLabel, value: todayValue),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -863,9 +857,7 @@ class _TimerShareSheetState extends State<_TimerShareSheet> {
         'timer.share_rewarded',
         'share_intent_launched',
       );
-      unawaited(
-        AdManager.instance.preloadPlacement('timer.share_rewarded'),
-      );
+      unawaited(AdManager.instance.preloadPlacement('timer.share_rewarded'));
       if (mounted) Navigator.of(context).pop(true);
     } catch (e, st) {
       if (kDebugMode) {
