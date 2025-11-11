@@ -1236,6 +1236,8 @@ class AdManager {
     _prefs = await SharedPreferences.getInstance();
     _policyLoaded = true;
     _updateActiveAdUnitIds();
+    _adMobInitialized = true;
+    _bootstrapFuture = Future<void>.value();
   }
 
   @visibleForTesting
