@@ -38,6 +38,8 @@ class _CounterPageState extends State<CounterPage> {
   late final ConfettiController _confettiController;
   bool _confettiShownRecently = false;
   bool _glowActive = false;
+  int _currentMalaCountDisplay = 0;
+  Timer? _malaResetTimer;
 
   @override
   void initState() {
@@ -63,6 +65,7 @@ class _CounterPageState extends State<CounterPage> {
       _dailyGoal = goalStore.dailyMalasGoal;
       _goalCompletedShown = congratulatedToday;
       _soundEnabled = prefs.getBool('settings.soundEnabled') ?? true;
+      _currentMalaCountDisplay = _calculateCurrentMalaDisplay(store.todayJaps);
       _loading = false;
     });
   }
@@ -109,6 +112,7 @@ class _CounterPageState extends State<CounterPage> {
     final store = _store;
     if (store == null) return;
 
+    _cancelMalaResetTimer();
     final wasZero = _today == 0;
     final willBe = _today + 1;
     await store.increment();
@@ -181,10 +185,19 @@ class _CounterPageState extends State<CounterPage> {
 
     if (!mounted) return;
 
+    final updatedToday = store.todayJaps;
+    final remainder = updatedToday % 108;
+    final malaCompleted = remainder == 0 && updatedToday > 0;
+
     setState(() {
-      _today = store.todayJaps;
+      _today = updatedToday;
       _lifetime = store.lifetimeJaps;
+      _currentMalaCountDisplay = malaCompleted ? 108 : remainder;
     });
+
+    if (malaCompleted) {
+      _scheduleMalaReset();
+    }
 
     await _checkGoalCompletion();
 
@@ -228,6 +241,29 @@ class _CounterPageState extends State<CounterPage> {
     Future.delayed(const Duration(seconds: 3), () {
       _confettiShownRecently = false;
     });
+  }
+
+  void _scheduleMalaReset() {
+    _cancelMalaResetTimer();
+    _malaResetTimer = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      setState(() {
+        _currentMalaCountDisplay = 0;
+      });
+    });
+  }
+
+  void _cancelMalaResetTimer() {
+    _malaResetTimer?.cancel();
+    _malaResetTimer = null;
+  }
+
+  int _calculateCurrentMalaDisplay(int todayJaps) {
+    final remainder = todayJaps % 108;
+    if (remainder == 0 && todayJaps > 0) {
+      return 0;
+    }
+    return remainder;
   }
 
   int get _malas => _today ~/ 108;
@@ -464,7 +500,10 @@ class _CounterPageState extends State<CounterPage> {
                               ),
                             ),
                             const SizedBox(height: 20),
-                            _MalaCountdown(todayJaps: _today),
+                            _MalaProgressDisplay(
+                              currentMalaCount: _currentMalaCountDisplay,
+                              malasCompleted: _malas,
+                            ),
                           ],
                         ),
                       ),
@@ -483,6 +522,7 @@ class _CounterPageState extends State<CounterPage> {
   void dispose() {
     _confettiController.dispose();
     _bellPlayer?.dispose();
+    _cancelMalaResetTimer();
     super.dispose();
   }
 }
@@ -513,35 +553,40 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-class _MalaCountdown extends StatelessWidget {
-  final int todayJaps;
-  const _MalaCountdown({required this.todayJaps});
+class _MalaProgressDisplay extends StatelessWidget {
+  final int currentMalaCount;
+  final int malasCompleted;
+  const _MalaProgressDisplay({
+    required this.currentMalaCount,
+    required this.malasCompleted,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final inThisMala = todayJaps % 108;
-    final remaining = 108 - inThisMala;
-    final progress = inThisMala / 108.0;
     final theme = Theme.of(context);
-    final message = remaining == 108
-        ? context.tr('counter.mala.new')
-        : context.tr('counter.mala.remaining', args: {'count': '$remaining'});
+    final normalized = currentMalaCount.clamp(0, 108).toInt();
+    final progress = normalized / 108.0;
+    final primaryLabelStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.2,
+    );
+    final captionStyle = theme.textTheme.bodySmall?.copyWith(
+      color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+    );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          message,
-          style: theme.textTheme.labelLarge,
+          '$normalized / 108',
+          style: primaryLabelStyle,
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 6),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 220),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(value: progress, minHeight: 8),
-          ),
+        const SizedBox(height: 4),
+        Text(
+          'Malas completed: $malasCompleted',
+          style: captionStyle ?? theme.textTheme.bodySmall,
+          textAlign: TextAlign.center,
         ),
       ],
     );
