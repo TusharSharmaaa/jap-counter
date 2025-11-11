@@ -12,6 +12,8 @@ class TimerService extends ChangeNotifier {
   static const _kSoundKey = 'timer_sound';
   static const _kRunId = 'timer_run_id';
   static const _kCompletedFlag = 'timer_completed_flag';
+  static const _kRecordedSecs = 'timer_recorded_secs';
+  static const _kLastActiveMillis = 'timer_last_active_millis';
 
   // Defaults
   static const Duration defaultTarget = Duration(minutes: 2);
@@ -24,6 +26,7 @@ class TimerService extends ChangeNotifier {
   bool _running = false;
   bool _completedThisRun = false;
   Timer? _ticker;
+  int _recordedSeconds = 0;
 
   Duration get target => _target;
   bool get running => _running;
@@ -42,6 +45,8 @@ class TimerService extends ChangeNotifier {
     final remainder = _target - elapsed;
     return remainder.isNegative ? Duration.zero : remainder;
   }
+
+  bool get hasProgress => elapsed > Duration.zero;
 
   double get progress {
     final totalMillis = _target.inMilliseconds;
@@ -64,23 +69,63 @@ class TimerService extends ChangeNotifier {
     final sound = prefs.getString(_kSoundKey);
     _runId = prefs.getString(_kRunId) ?? '';
     _completedThisRun = prefs.getBool(_kCompletedFlag) ?? false;
+    _recordedSeconds = prefs.getInt(_kRecordedSecs) ?? 0;
 
     _target = Duration(seconds: targetSecs ?? defaultTarget.inSeconds);
     _accumulated = Duration(seconds: accumSecs ?? 0);
     _sound = (sound ?? 'mute').toLowerCase();
 
+    var needsPersist = false;
+    final lastActiveMillis = prefs.getInt(_kLastActiveMillis);
+    final now = DateTime.now();
+    if (lastActiveMillis != null) {
+      final lastActive =
+          DateTime.fromMillisecondsSinceEpoch(lastActiveMillis, isUtc: false);
+      if (!_isSameDay(lastActive, now)) {
+        _resetForNewDay();
+        needsPersist = true;
+      }
+    }
+
     if (running == true && startedMillis != null) {
-      _startedAt =
-          DateTime.fromMillisecondsSinceEpoch(startedMillis, isUtc: false);
-      _running = true;
-      _startTicker();
+      _startedAt = DateTime.fromMillisecondsSinceEpoch(
+        startedMillis,
+        isUtc: false,
+      );
+      if (_startedAt != null && !_isSameDay(_startedAt!, now)) {
+        _resetForNewDay();
+        needsPersist = true;
+      } else if (_remainingFor(now) > Duration.zero) {
+        _running = true;
+        _startTicker();
+      } else {
+        _running = false;
+        _startedAt = null;
+        _accumulated = _target;
+        _completedThisRun = true;
+        _recordedSeconds = _target.inSeconds;
+        needsPersist = true;
+      }
     } else {
       _running = false;
       _startedAt = null;
       _stopTicker();
     }
 
+    if (needsPersist) {
+      await _persist();
+    }
+
     notifyListeners();
+  }
+
+  Duration _remainingFor(DateTime anchor) {
+    final elapsedSinceStart = (_startedAt != null && _running)
+        ? anchor.difference(_startedAt!)
+        : Duration.zero;
+    final totalElapsed = _accumulated + elapsedSinceStart;
+    final remainder = _target - totalElapsed;
+    return remainder.isNegative ? Duration.zero : remainder;
   }
 
   Future<void> _persist() async {
@@ -99,6 +144,11 @@ class TimerService extends ChangeNotifier {
     await prefs.setString(_kSoundKey, _sound);
     await prefs.setString(_kRunId, _runId);
     await prefs.setBool(_kCompletedFlag, _completedThisRun);
+    await prefs.setInt(_kRecordedSecs, _recordedSeconds);
+    await prefs.setInt(
+      _kLastActiveMillis,
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   void _startTicker() {
@@ -129,6 +179,7 @@ class TimerService extends ChangeNotifier {
     final isNewRun = wasCompleted || _runId.isEmpty || _accumulated == Duration.zero;
     if (isNewRun) {
       _accumulated = Duration.zero;
+      _recordedSeconds = 0;
     }
     _runId = newRunId;
     _completedThisRun = false;
@@ -155,6 +206,7 @@ class TimerService extends ChangeNotifier {
     _accumulated = Duration.zero;
     _completedThisRun = false;
     _runId = '';
+    _recordedSeconds = 0;
     await _persist();
     notifyListeners();
   }
@@ -166,15 +218,15 @@ class TimerService extends ChangeNotifier {
     _startedAt = null;
     _completedThisRun = false;
     _runId = '';
+    _recordedSeconds = 0;
     await _persist();
     notifyListeners();
   }
 
   Future<void> selectSound(String soundId) async {
-    if (_running) return;
-    _sound = soundId.toLowerCase();
-    _completedThisRun = false;
-    _runId = '';
+    final normalized = soundId.toLowerCase();
+    if (_sound == normalized) return;
+    _sound = normalized;
     await _persist();
     notifyListeners();
   }
@@ -185,6 +237,7 @@ class TimerService extends ChangeNotifier {
     _accumulated = _target;
     _running = false;
     _startedAt = null;
+    _recordedSeconds = _target.inSeconds;
     _stopTicker();
     await _persist();
     notifyListeners();
@@ -207,6 +260,45 @@ class TimerService extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<int> captureUncreditedMinutes({bool forceFull = false}) async {
+    final totalSecs = forceFull ? _target.inSeconds : elapsed.inSeconds;
+    final cappedSecs = totalSecs.clamp(0, _target.inSeconds);
+    final deltaSecs = cappedSecs - _recordedSeconds;
+    if (deltaSecs <= 0) {
+      return 0;
+    }
+
+    int minutes;
+    if (forceFull) {
+      minutes = (deltaSecs / 60).ceil();
+      _recordedSeconds = cappedSecs;
+    } else {
+      if (deltaSecs < 60) {
+        return 0;
+      }
+      minutes = deltaSecs ~/ 60;
+      _recordedSeconds += minutes * 60;
+      if (_recordedSeconds > cappedSecs) {
+        _recordedSeconds = cappedSecs;
+      }
+    }
+    await _persist();
+    return minutes;
+  }
+
+  void _resetForNewDay() {
+    _running = false;
+    _startedAt = null;
+    _accumulated = Duration.zero;
+    _completedThisRun = false;
+    _runId = '';
+    _recordedSeconds = 0;
+    _stopTicker();
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   void dispose() {

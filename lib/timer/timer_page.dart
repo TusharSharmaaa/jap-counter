@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/ad_manager.dart';
 import '../core/sound_manager.dart';
@@ -55,29 +56,68 @@ class _TimerPageState extends State<TimerPage>
   }
 
   Future<void> _bootstrap() async {
-    await _timerService.load();
-    await _soundManager.init();
+    final timerFuture = _timerService.load();
+    final soundInit = _soundManager.init();
+
+    await timerFuture;
+
+    if (!mounted) return;
+
     _ambienceId = _timerService.sound;
-    if (_ambienceId != 'mute') {
-      await _soundManager.setAmbience(_ambienceId, preload: true);
-      if (_timerService.running) {
-        await _soundManager.playAmbience(forceId: _ambienceId);
-      }
-    } else {
-      await _soundManager.setAmbience(_ambienceId);
-    }
     _selectedMinutes = _timerService.target.inMinutes;
     _wasRunning = _timerService.running;
     _activeRunId = _timerService.runId.isEmpty ? null : _timerService.runId;
+    _revealContent();
 
-    if (mounted) {
-      Future.delayed(const Duration(milliseconds: 150), () {
-        if (mounted) setState(() => _visible = true);
-      });
-    }
+    if (mounted) setState(() {});
 
+    unawaited(_ensureWakelockActive(_timerService.running));
+    unawaited(_syncAmbience(soundInit));
     unawaited(_loadMeditationStats());
     unawaited(AdManager.instance.preloadPlacement('timer.share_rewarded'));
+  }
+
+  Future<void> _syncAmbience(Future<void> soundInit) async {
+    try {
+      await soundInit;
+      final targetSound = _timerService.sound;
+      if (targetSound != 'mute') {
+        await _soundManager.setAmbience(targetSound, preload: true);
+        if (_timerService.running) {
+          await _soundManager.playAmbience(forceId: targetSound);
+        }
+      } else {
+        await _soundManager.setAmbience(targetSound);
+      }
+      unawaited(_ensureWakelockActive(_timerService.running));
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[TimerPage] ambience sync failed: $e\n$st');
+      }
+    }
+  }
+
+  Future<void> _ensureWakelockActive(bool active) async {
+    try {
+      if (active) {
+        await WakelockPlus.enable();
+      } else {
+        await WakelockPlus.disable();
+      }
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[TimerPage] Wakelock toggle failed: $e\n$st');
+      }
+    }
+  }
+
+  void _revealContent() {
+    if (_visible) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_visible) {
+        setState(() => _visible = true);
+      }
+    });
   }
 
   Future<void> _loadMeditationStats() async {
@@ -89,12 +129,46 @@ class _TimerPageState extends State<TimerPage>
     });
   }
 
+  Future<void> _pauseForInterruption() async {
+    final wasRunning = _timerService.running;
+    if (wasRunning) {
+      await _timerService.pause();
+      await _soundManager.pauseAmbience();
+      _wasRunning = false;
+      await _ensureWakelockActive(false);
+    }
+    await _commitProgress();
+    if (wasRunning && mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _commitProgress({bool forceFull = false}) async {
+    final minutes =
+        await _timerService.captureUncreditedMinutes(forceFull: forceFull);
+    if (minutes <= 0) return;
+    final store = await MeditationStore.create();
+    await store.addMinutes(minutes);
+    if (!mounted) return;
+    setState(() {
+      _todayMinutes = store.todayMinutes;
+      _lifetimeMinutes = store.lifetimeMinutes;
+    });
+  }
+
+  Future<void> _finalizeSessionOnExit() async {
+    await _pauseForInterruption();
+    await _ensureWakelockActive(false);
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timerService.removeListener(_handleServiceUpdate);
+    unawaited(_finalizeSessionOnExit());
     _timerService.dispose();
     unawaited(_soundManager.stopAmbience());
+    unawaited(_ensureWakelockActive(false));
     super.dispose();
   }
 
@@ -102,12 +176,15 @@ class _TimerPageState extends State<TimerPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      unawaited(_soundManager.pauseAmbience());
+      unawaited(_pauseForInterruption());
+    } else if (state == AppLifecycleState.detached) {
+      unawaited(_finalizeSessionOnExit());
     } else if (state == AppLifecycleState.resumed) {
       if (_timerService.running && _ambienceId != 'mute') {
         unawaited(_soundManager.playAmbience(forceId: _ambienceId));
       }
       _timerService.refresh();
+      unawaited(_ensureWakelockActive(_timerService.running));
     }
   }
 
@@ -159,6 +236,12 @@ class _TimerPageState extends State<TimerPage>
       });
     }
 
+    if (!_wasRunning && nowRunning) {
+      unawaited(_ensureWakelockActive(true));
+    } else if (_wasRunning && !nowRunning) {
+      unawaited(_ensureWakelockActive(false));
+    }
+
     _wasRunning = nowRunning;
   }
 
@@ -173,13 +256,28 @@ class _TimerPageState extends State<TimerPage>
   }
 
   Future<void> _selectAmbience(String id) async {
-    if (_timerService.running) return;
     final safeId = id.toLowerCase();
     if (_ambienceId == safeId) return;
     HapticFeedback.selectionClick();
-    _ambienceId = safeId;
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        _ambienceId = safeId;
+      });
+    } else {
+      _ambienceId = safeId;
+    }
     await _timerService.selectSound(safeId);
+    if (_timerService.running) {
+      if (safeId == 'mute') {
+        await _soundManager.stopAmbience();
+      } else {
+        await _soundManager.setAmbience(safeId, preload: true);
+        await _soundManager.playAmbience(forceId: safeId);
+      }
+    } else {
+      await _soundManager.setAmbience(safeId, preload: true);
+    }
+    unawaited(_ensureWakelockActive(_timerService.running));
   }
 
   Future<void> _start() async {
@@ -191,10 +289,13 @@ class _TimerPageState extends State<TimerPage>
     if (isFreshRun || (_activeRunId ?? '').isEmpty) {
       _activeRunId = DateTime.now().microsecondsSinceEpoch.toString();
     }
-    await _timerService.start(runId: _activeRunId);
     if (_ambienceId != 'mute') {
-      await _soundManager.playAmbience(forceId: _ambienceId);
+      await _soundManager.setAmbience(_ambienceId, preload: true);
+    } else {
+      await _soundManager.stopAmbience();
     }
+    await _timerService.start(runId: _activeRunId);
+    await _ensureWakelockActive(true);
     unawaited(
       AdManager.instance.preloadPlacement('timer.post_session_interstitial'),
     );
@@ -206,6 +307,8 @@ class _TimerPageState extends State<TimerPage>
     HapticFeedback.selectionClick();
     await _timerService.pause();
     await _soundManager.pauseAmbience();
+    await _ensureWakelockActive(false);
+    await _commitProgress();
     if (mounted) setState(() {});
   }
 
@@ -218,6 +321,12 @@ class _TimerPageState extends State<TimerPage>
 
   Future<void> _reset() async {
     HapticFeedback.selectionClick();
+    if (_timerService.running) {
+      await _timerService.pause();
+      await _soundManager.pauseAmbience();
+    }
+    await _ensureWakelockActive(false);
+    await _commitProgress();
     _activeRunId = null;
     await _timerService.reset();
     await _soundManager.stopAmbience();
@@ -228,19 +337,24 @@ class _TimerPageState extends State<TimerPage>
     HapticFeedback.mediumImpact();
     await _soundManager.stopAmbience();
     await _soundManager.playBell();
-    final minutes = _timerService.target.inMinutes;
-    final medStore = await MeditationStore.create();
-    await medStore.addMinutes(minutes);
-    if (mounted) {
-      setState(() {
-        _todayMinutes = medStore.todayMinutes;
-        _lifetimeMinutes = medStore.lifetimeMinutes;
-      });
+    await _ensureWakelockActive(false);
+    final addedMinutes =
+        await _timerService.captureUncreditedMinutes(forceFull: true);
+    final targetMinutes = _timerService.target.inMinutes;
+    if (addedMinutes > 0) {
+      final medStore = await MeditationStore.create();
+      await medStore.addMinutes(addedMinutes);
+      if (mounted) {
+        setState(() {
+          _todayMinutes = medStore.todayMinutes;
+          _lifetimeMinutes = medStore.lifetimeMinutes;
+        });
+      }
     }
     await AdManager.instance.recordEvent(
       'timer.session',
       'complete',
-      data: {'minutes': minutes.toDouble()},
+      data: {'minutes': targetMinutes.toDouble()},
     );
 
     if (!mounted) return;
@@ -427,7 +541,7 @@ class _TimerPageState extends State<TimerPage>
                                 final sound = _AmbienceSection(
                                   selected: _ambienceId,
                                   onSelect: _selectAmbience,
-                                  enabled: !isRunning,
+                                  enabled: true,
                                 );
                                 return Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
