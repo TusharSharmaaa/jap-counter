@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'xp_store.dart';
+
 /// Tracks meditation minutes: today + lifetime, with daily reset.
 class MeditationStore {
   static const _kTodayMinutes = 'med_today_minutes';
@@ -24,6 +26,10 @@ class MeditationStore {
     final life = _prefs.getInt(_kLifetimeMinutes) ?? 0;
     await _prefs.setInt(_kTodayMinutes, today + minutes);
     await _prefs.setInt(_kLifetimeMinutes, life + minutes);
+    if (minutes > 0) {
+      final xp = await XPStore.create();
+      await xp.addXP(minutes ~/ 5);
+    }
   }
 
   int get todayMinutes {
@@ -59,5 +65,11 @@ class MeditationStore {
     final m = now.month.toString().padLeft(2, '0');
     final d = now.day.toString().padLeft(2, '0');
     return '$y$m$d';
+  }
+
+  Future<void> resetAll() async {
+    await _prefs.remove(_kTodayMinutes);
+    await _prefs.remove(_kLifetimeMinutes);
+    await _prefs.remove(_kLastDate);
   }
 }

@@ -1,28 +1,37 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:confetti/confetti.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
+import 'package:provider/provider.dart';
 import 'stats/streak_share_preview.dart';
-import 'ads/rewarded.dart';
-import 'content/content_page.dart';
+import 'stats/streak_badge.dart';
+import 'core/ad_manager.dart';
+import 'content/gita_page.dart';
 import 'timer/timer_page.dart';
 import 'data/meditation_store.dart';
-import 'ads/rewarded_share.dart';
+import 'data/dedication_store.dart';
 import 'stats/share_gate.dart';
+import 'stats/stats_ambience.dart';
+import 'settings/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/notification_service.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'legal/privacy_policy.dart';
-import 'legal/terms_conditions.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'data/activity_store.dart';
-import 'package:jap_counter/data/counter_store.dart';
-import 'package:jap_counter/data/meditation_store.dart';
-import 'ads/test_banner.dart';
 import 'data/counter_store.dart';
-
+import 'data/goal_store.dart';
+import 'theme/neumorph.dart';
+import 'gamify/gamify_store.dart';
+import 'theme/theme.dart';
+import 'data/language_store.dart';
+import 'l10n/app_localizations.dart';
+import 'sync/sync_service.dart';
+import 'utils/weekly_chart_data.dart';
+import 'counter/counter_page.dart';
+import 'timer/timer_service.dart';
+import 'core/sound_manager.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class App extends StatefulWidget {
   const App({super.key});
@@ -31,69 +40,114 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> with WidgetsBindingObserver {
+  late final TimerService _timerService;
+
   @override
   void initState() {
     super.initState();
-    // Preload the rewarded ad used for "Share My Streak"
-    RewardedShareAd().preload();
     // Observe app lifecycle to keep the ad warmed up on resume
     WidgetsBinding.instance.addObserver(this);
+    _timerService = TimerService();
+    unawaited(_timerService.load());
 
     _loadThemeMode();
+    _loadLanguage();
     _initNotifications(); // fire-and-forget
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      for (final page in _pages) {
+        if (page is StatefulWidget) {
+          final key = page.key;
+          if (key is GlobalKey) {
+            key.currentState;
+          }
+        }
+      }
+      final counter = await CounterStore.create();
+      final today = counter.todayJaps ~/ 108;
+      await initializeDateFormatting(_language == 'hi' ? 'hi' : 'en');
+      final msg = today > 0
+          ? _translate('home.snackbar.progress', args: {'count': '$today'})
+          : _translate('home.snackbar.start');
+      if (mounted) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        messenger
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(msg),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+      }
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // Ensure a rewarded ad is queued when user comes back to the app
-      RewardedShareAd().ensureWarm();
+    if (state == AppLifecycleState.paused) {
+      unawaited(SyncService.syncToday());
+    } else if (state == AppLifecycleState.resumed) {
+      unawaited(_timerService.load());
     }
   }
+
   int _index = 0;
-  // Theme state (will be wired to Settings toggle next)
-  ThemeMode _themeMode = ThemeMode.light;
-  static const _themeKey = 'themeMode';
+  final GlobalKey<_StatsPageState> _statsKey = GlobalKey<_StatsPageState>();
+  ThemeMode _themeMode = ThemeMode.system;
+  String _language = 'en';
 
-
-  // Minimal Material 3 themes
-  final ThemeData _lightTheme = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
-    colorSchemeSeed: const Color(0xFFFF6F00), // saffron accent vibe
-  );
-
-  final ThemeData _darkTheme = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
-    colorSchemeSeed: const Color(0xFF6A1B9A), // plum/gold vibe base
-  );
-
-
-  final _pages = const [
-    _CounterPage(),
-    _StatsPage(),
-    _ContentPage(),
+  late final List<Widget> _pages = [
+    const CounterPage(),
+    _StatsPage(key: _statsKey),
+    const _GitaTab(),
     TimerPage(),
-    _SettingsPage(),
   ];
 
   Future<void> _loadThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_themeKey);
-    if (saved == 'dark') {
-      setState(() => _themeMode = ThemeMode.dark);
-    } else if (saved == 'light') {
-      setState(() => _themeMode = ThemeMode.light);
+    final stored = prefs.getInt('themeMode') ?? ThemeMode.system.index;
+    final values = ThemeMode.values;
+    final mode = (stored >= 0 && stored < values.length)
+        ? values[stored]
+        : ThemeMode.system;
+    if (mounted) {
+      setState(() => _themeMode = mode);
     } else {
-      setState(() => _themeMode = ThemeMode.light);
+      _themeMode = mode;
     }
+  }
+
+  Future<void> _loadLanguage() async {
+    final lang = await LanguageStore.current();
+    if (mounted) {
+      setState(() => _language = lang);
+    } else {
+      _language = lang;
+    }
+  }
+
+  Future<void> _setLanguage(String language) async {
+    if (language == _language) return;
+    await LanguageStore.save(language);
+    if (!mounted) return;
+    await initializeDateFormatting(language == 'hi' ? 'hi' : 'en');
+    setState(() => _language = language);
+  }
+
+  String _translate(String key, {Map<String, String>? args}) {
+    var value = AppStrings.resolve(_language, key);
+    if (args != null) {
+      args.forEach((k, v) {
+        value = value.replaceAll('{$k}', v);
+      });
+    }
+    return value;
   }
 
   Future<void> _saveThemeMode(ThemeMode mode) async {
     final prefs = await SharedPreferences.getInstance();
-    final value = mode == ThemeMode.dark ? 'dark' : 'light';
-    await prefs.setString(_themeKey, value);
+    await prefs.setInt('themeMode', mode.index);
   }
 
   Future<void> _initNotifications() async {
@@ -109,307 +163,206 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Radha Jap Counter',
-      theme: _lightTheme,
-      darkTheme: _darkTheme,
-      themeMode: _themeMode,
-      home: Scaffold(
-        body: _index == 4
-            ? SettingsPage(
-          themeMode: _themeMode,
-          onThemeModeChanged: (mode) {
-            setState(() => _themeMode = mode);
-            _saveThemeMode(mode);
-          },        )
-            : _pages[_index],
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) {
-            // If user navigates to Stats tab, preload rewarded ad
-            if (i == 1) { // 0=Counter, 1=Stats, 2=Content, 3=Timer, 4=Settings
-              RewardedShareAd().preload();
-
-              // DEV ONLY: print remaining cooldown to console for quick checks
-              if (kDebugMode) {
-                final rem = RewardedShareAd().cooldownRemaining;
-                if (rem != null && rem > Duration.zero) {
-                  debugPrint('[RewardedShareAd] Cooldown remaining: ${rem.inMinutes}m ${rem.inSeconds % 60}s');
-                } else {
-                  debugPrint('[RewardedShareAd] No cooldown active.');
-                }
-              }
-            }
-
-            setState(() => _index = i);
-          },
-          destinations: const [
-
-            NavigationDestination(icon: Icon(Icons.touch_app), label: 'Counter'),
-            NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Stats'),
-            NavigationDestination(icon: Icon(Icons.menu_book), label: 'Content'),
-            NavigationDestination(icon: Icon(Icons.timer), label: 'Timer'),
-            NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
-          ],
+    return ChangeNotifierProvider<TimerService>.value(
+      value: _timerService,
+      child: MaterialApp(
+        title: 'Radha Jap Counter',
+        theme: buildTheme(Brightness.light),
+        darkTheme: buildTheme(Brightness.dark),
+        themeMode: _themeMode,
+        builder: (context, child) => AppLocalizationScope(
+          language: _language,
+          child: child ?? const SizedBox.shrink(),
         ),
-      ),
-      debugShowCheckedModeBanner: false,
-    );
-  }
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-}
-
-class _BannerReserve extends StatelessWidget {
-  const _BannerReserve();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52, // reserved space for a standard banner
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(width: 0.5, color: Theme.of(context).dividerColor)),
-        ),
-        child: const Center(child: Text('Ad Banner (reserved)')),
-      ),
-    );
-  }
-}
-
-
-class _CounterPage extends StatefulWidget {
-  const _CounterPage();
-
-  @override
-  State<_CounterPage> createState() => _CounterPageState();
-}
-
-class _CounterPageState extends State<_CounterPage> {
-  CounterStore? _store;
-  bool _loading = true;
-  int _today = 0;
-  int _lifetime = 0;
-  bool _pulse = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _init();
-  }
-
-  Future<void> _init() async {
-    final s = await CounterStore.create(); // enforces daily reset
-    setState(() {
-      _store = s;
-      _today = s.todayJaps;
-      _lifetime = s.lifetimeJaps;
-      _loading = false;
-    });
-  }
-
-  Future<void> _inc() async {
-    final s = _store;
-    if (s == null) return;
-
-    final wasZero = _today == 0;            // track 0 → 1 transition
-    final willBe = _today + 1; // value after this tap
-    await s.increment();
-// If this was the first jap of the day, mark today as active
-    if (wasZero) {
-      await ActivityStore.markTodayActive();
-    }
-    // If first jap today, check for streak milestones
-    if (wasZero) {
-      final streak = await ActivityStore.currentStreak();
-      if (mounted && (streak == 7 || streak == 21 || streak == 40)) {
-        HapticFeedback.mediumImpact();
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text('✨ $streak-day streak! Keep going.'),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-      }
-    }
-    if (!mounted) return;
-
-    // Light tap feedback every press
-    HapticFeedback.selectionClick();
-
-    // Stronger feedback + toast on completing a mala (108, 216, 324, ...)
-    if (willBe % 108 == 0) {
-      HapticFeedback.mediumImpact();
-      // Trigger pulse animation
-      setState(() => _pulse = true);
-      Future.delayed(const Duration(milliseconds: 250), () {
-        if (mounted) setState(() => _pulse = false);
-      });
-
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('🎯 Mala completed!'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-    }
-
-    setState(() {
-      _today = s.todayJaps;
-      _lifetime = s.lifetimeJaps;
-    });
-  }
-
-  int get _malas => _today ~/ 108;
-  int get _lifetimeMalas => _lifetime ~/ 108;
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Counter')),
-        body: const Center(child: CircularProgressIndicator()),
-        bottomNavigationBar: const TestBanner(),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Counter')),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Expanded(child: _StatTile(title: "Today's Japs", value: _today.toString())),
-                const SizedBox(width: 8),
-                Expanded(child: _StatTile(title: "Malas", value: _malas.toString())),
-                const SizedBox(width: 8),
-                Expanded(child: _StatTile(title: "Lifetime Malas", value: _lifetimeMalas.toString())),
+        home: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Theme.of(context).colorScheme.surface.withOpacity(0.95),
+                Theme.of(context).colorScheme.primary.withOpacity(0.05),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          const SizedBox(height: 8),
-          _MalaProgress(todayJaps: _today),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Center(
-              child: GestureDetector(
-                onTap: _inc,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.25)),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Tap to Count', style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 12),
-                      AnimatedScale(
-                        scale: _pulse ? 1.12 : 1.0,
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOut,
-                        child: Text('$_today', style: Theme.of(context).textTheme.displaySmall),
-                      ),
-                    ],
-                  ),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final offset = Tween<Offset>(
+                  begin: const Offset(0.03, 0.02),
+                  end: Offset.zero,
+                ).animate(animation);
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(position: offset, child: child),
+                );
+              },
+              child: (_index == 4)
+                  ? SettingsPage(
+                      key: const ValueKey('settings'),
+                      themeMode: _themeMode,
+                      language: _language,
+                      onThemeModeChanged: (mode) {
+                        setState(() => _themeMode = mode);
+                        _saveThemeMode(mode);
+                      },
+                      onLanguageChanged: _setLanguage,
+                    )
+                  : KeyedSubtree(
+                      key: ValueKey('tab-$_index'),
+                      child: _pages[_index],
+                    ),
+            ),
+            bottomNavigationBar: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      offset: const Offset(2, 2),
+                      blurRadius: 6,
+                    ),
+                    BoxShadow(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      offset: const Offset(-2, -2),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _navIcon(Icons.touch_app, 0, 'nav.counter'),
+                    _navIcon(Icons.bar_chart, 1, 'nav.stats'),
+                    _navIcon(Icons.menu_book, 2, 'nav.gita'),
+                    _navIcon(Icons.timer, 3, 'nav.timer'),
+                    _navIcon(Icons.settings, 4, 'nav.settings'),
+                  ],
                 ),
               ),
             ),
           ),
-        ],
+        ),
+        debugShowCheckedModeBanner: false,
       ),
-      bottomNavigationBar: const TestBanner(),
     );
   }
-}
-
-class _StatTile extends StatelessWidget {
-  final String title;
-  final String value;
-  const _StatTile({required this.title, required this.value});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 68,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.labelMedium),
-          const Spacer(),
-          Text(value, style: Theme.of(context).textTheme.titleLarge),
-        ],
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timerService.dispose();
+    super.dispose();
+  }
+
+  Widget _navIcon(IconData icon, int idx, String labelKey) {
+    final active = _index == idx;
+    final theme = Theme.of(context);
+    final color = active
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _handleNavTap(idx),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          decoration: BoxDecoration(
+            color: active
+                ? theme.colorScheme.primary.withValues(alpha: 0.15)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                    ),
+                  ]
+                : const [],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(height: 4),
+              Text(
+                _translate(labelKey),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: active ? FontWeight.w600 : null,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
-}
 
-class _MalaProgress extends StatelessWidget {
-  final int todayJaps;
-  const _MalaProgress({required this.todayJaps});
+  void _handleNavTap(int index) {
+    if (_index == index) return;
+    final leavingTimer = _index == 3 && index != 3;
+    if (leavingTimer) {
+      unawaited(_pauseTimerForNav());
+    }
+    if (index == 1) {
+      _statsKey.currentState?.onBecameVisible();
+    } else if (_index == 1) {
+      _statsKey.currentState?.onBecameHidden();
+    }
+    if (index == 2) {
+      AdManager.instance.recordEvent('gita.session', 'start');
+    }
+    if (_index == 2 && index != 2) {
+      unawaited(
+        AdManager.instance.maybeShowInterstitial(
+          'gita.long_session_interstitial',
+        ),
+      );
+      AdManager.instance.recordEvent('gita.session', 'end');
+    }
+    setState(() => _index = index);
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final inThisMala = todayJaps % 108;
-    final remaining = 108 - inThisMala;
-    final progress = inThisMala / 108.0;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '$remaining more to complete this mala',
-            style: Theme.of(context).textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(value: progress),
-          ),
-        ],
-      ),
-    );
+  Future<void> _pauseTimerForNav() async {
+    if (!_timerService.running) return;
+    try {
+      await _timerService.pause();
+    } catch (_) {
+      // ignore pause errors
+    }
+    try {
+      await SoundManager.instance.pauseAmbience();
+    } catch (_) {
+      // ignore audio errors
+    }
+    try {
+      await WakelockPlus.disable();
+    } catch (_) {
+      // ignore wakelock errors
+    }
   }
 }
-
 
 class _StatsPage extends StatefulWidget {
-  const _StatsPage();
+  const _StatsPage({super.key});
 
   @override
   State<_StatsPage> createState() => _StatsPageState();
 }
 
 class _StatsPageState extends State<_StatsPage> {
-  final RewardedGate _gate = RewardedGate();
   bool _shareBusy = false;
+  late ConfettiController _confetti;
 
   CounterStore? _store;
   bool _loading = true;
@@ -417,599 +370,1065 @@ class _StatsPageState extends State<_StatsPage> {
   int _lifetime = 0;
   int _todayMin = 0;
   int _lifetimeMin = 0;
+  // NEW: user’s dedication text (persisted via DedicationStore)
+  String _dedication = '';
+  static const _ambienceKey = 'stats.ambience.enabled';
+  bool _ambienceEnabled = false;
 
   @override
   void initState() {
     super.initState();
+    _confetti = ConfettiController(duration: const Duration(seconds: 3));
     _init();
+    unawaited(AdManager.instance.preloadPlacement('stats.share_rewarded'));
 
-    // Warm up the rewarded ad in the background
-    // ignore: unawaited_futures
-    _gate.load();
+    _loadAmbiencePref();
+  }
+
+  @override
+  void dispose() {
+    _confetti.dispose();
+    StatsAmbience.instance.stop();
+    super.dispose();
+  }
+
+  Future<void> _loadAmbiencePref() async {
+    final p = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => _ambienceEnabled = p.getBool(_ambienceKey) ?? false);
+  }
+
+  Future<void> _saveAmbiencePref(bool v) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_ambienceKey, v);
+  }
+
+  void onBecameVisible() {
+    if (_ambienceEnabled) {
+      StatsAmbience.instance.start();
+    }
+  }
+
+  void onBecameHidden() {
+    StatsAmbience.instance.stop();
   }
 
   Future<void> _refresh() async {
     final s = await CounterStore.create();
     final mstore = await MeditationStore.create();
+    final dstore = await DedicationStore.create();
+    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
 
     if (!mounted) return;
     setState(() {
-      _store = s;
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
 
       _todayMin = mstore.todayMinutes;
       _lifetimeMin = mstore.lifetimeMinutes;
+      _dedication = dstore.note;
     });
     // Also ensure today is marked active on manual refresh
     if (s.todayJaps > 0) {
       await ActivityStore.markTodayActive();
     }
+
+    final streak = await ActivityStore.currentStreak();
+    if ([7, 21, 40].contains(streak)) {
+      _confetti.play();
+    }
   }
 
   Future<void> _init() async {
     final s = await CounterStore.create(); // uses same prefs + new-day reset
-
-    // NEW: meditation store
     final mstore = await MeditationStore.create();
-
+    final dstore = await DedicationStore.create();
+    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
     setState(() {
-      _store = s;
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
       _loading = false;
 
-      // NEW:
       _todayMin = mstore.todayMinutes;
       _lifetimeMin = mstore.lifetimeMinutes;
+      _dedication = dstore.note;
     });
     // Ensure today is recorded as active if user already has japs today
     if (s.todayJaps > 0) {
       await ActivityStore.markTodayActive();
     }
 
+    final streak = await ActivityStore.currentStreak();
+    if ([7, 21, 40].contains(streak)) {
+      _confetti.play();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Stats')),
+        appBar: AppBar(title: Text(context.tr('stats.title'))),
         body: const Center(child: CircularProgressIndicator()),
-        bottomNavigationBar: const _BannerReserve(), // keep reserved for now
       );
     }
 
     final todayMalas = _today ~/ 108;
     final lifetimeMalas = _lifetime ~/ 108;
-    final cooling = RewardedShareAd().isCoolingDown;
-    final rem = RewardedShareAd().cooldownRemaining;
-    final remLabel = (rem != null && rem > Duration.zero)
-        ? (rem.inMinutes > 0 ? '${rem.inMinutes}m ${rem.inSeconds % 60}s' : '${rem.inSeconds % 60}s')
-        : null;
+    // Load goal (synchronously via FutureBuilder below to avoid blocking build)
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Stats')),
-        body: RefreshIndicator(
-          onRefresh: _refresh,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-
-              // Top tiles
-          Row(
-            children: [
-              Expanded(child: _StatTile(title: "Today's Japs", value: _today.toString())),
-              const SizedBox(width: 8),
-              Expanded(child: _StatTile(title: "Today's Malas", value: todayMalas.toString())),
-              const SizedBox(width: 8),
-              Expanded(child: _StatTile(title: "Lifetime Malas", value: lifetimeMalas.toString())),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Meditation minutes tiles
-          Row(
-            children: [
-              Expanded(child: _StatTile(title: "Today's Meditation (min)", value: _todayMin.toString())),
-              const SizedBox(width: 8),
-              Expanded(child: _StatTile(title: "Lifetime Meditation (min)", value: _lifetimeMin.toString())),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-
-          // Dedication note placeholder (read-only for now)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Theme.of(context).dividerColor),
-            ),
-            child: Text(
-              "Dedication: (coming soon)",
-              style: Theme.of(context).textTheme.bodyMedium,
+      appBar: AppBar(
+        title: Text(context.tr('stats.title')),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                Colors.transparent,
+              ],
             ),
           ),
+        ),
+        actions: [
+          IconButton(
+            tooltip: _ambienceEnabled
+                ? context.tr('stats.ambience.on')
+                : context.tr('stats.ambience.off'),
+            icon: Icon(
+              _ambienceEnabled ? Icons.spatial_audio_off : Icons.spatial_audio,
+            ),
+            onPressed: () async {
+              final next = !_ambienceEnabled;
+              setState(() => _ambienceEnabled = next);
+              await _saveAmbiencePref(next);
+              if (next) {
+                StatsAmbience.instance.start();
+              } else {
+                StatsAmbience.instance.stop();
+              }
+            },
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _refresh,
+            child: _buildStatsList(context, todayMalas, lifetimeMalas),
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confetti,
+              blastDirectionality: BlastDirectionality.explosive,
+              emissionFrequency: 0.05,
+              numberOfParticles: 20,
+              colors: const [
+                Colors.orange,
+                Colors.yellow,
+                Colors.pink,
+                Colors.white,
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          const SizedBox(height: 16),
-
-          // Share My Streak (no rewarded, no image yet)
-          SizedBox(
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: _shareBusy ? null : () async {
-                setState(() => _shareBusy = true);
-                try {
-                  // Show gate; do not navigate from inside the ad callback.
-                  // Load current jap stats for Share Preview
-                  final counter = await CounterStore.create();
-                  final int todayJaps = counter.todayJaps;
-                  final int lifetimeMalas = counter.lifetimeMalas;
-
-// TODO: integrate streak from ActivityStore when ready
-                  final int streakDays = 0;
-
-                  if (kDebugMode) debugPrint('[Stats] Share button tapped → calling gateShareMyStreak');
-                  final earned = await gateShareMyStreak(
-                    context,
-                    onEarned: () async {},
-                    todayJaps: todayJaps,
-                    lifetimeMalas: lifetimeMalas,
-                    streakDays: streakDays,
-                  );
-                  if (!mounted) return;
-
-                  if (kDebugMode) {
-                    debugPrint('[Stats] gateShareMyStreak → earned=$earned');
-                  }
-
-                  if (earned) {
-                    if (kDebugMode) debugPrint('[Stats] Opening StreakSharePreviewPage…');
-                    final todayMalas = _today ~/ 108;
-                    final lifetimeMalas = _lifetime ~/ 108;
-                    final streak = await ActivityStore.currentStreak();
-
-                    if (!mounted) return;
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => StreakSharePreviewPage(
-                          todayJaps: _today,
-                          lifetimeMalas: lifetimeMalas,
-                          streakDays: streak,
+  Widget _buildStatsList(
+    BuildContext context,
+    int todayMalas,
+    int lifetimeMalas,
+  ) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Theme.of(context).dividerColor),
+          ),
+          child: FutureBuilder<int>(
+            future: ActivityStore.currentStreak(),
+            builder: (context, snap) {
+              final streak = snap.data ?? 0;
+              final theme = Theme.of(context);
+              if (streak == 7 || streak == 21 || streak == 40) {
+                if (_confetti.state != ConfettiControllerState.playing) {
+                  _confetti.play();
+                }
+              }
+              String streakMessage;
+              if (streak == 0) {
+                streakMessage = context.tr('stats.noActiveStreak');
+              } else if (streak == 7) {
+                streakMessage = context.tr('stats.streakMessage.7');
+              } else if (streak == 21) {
+                streakMessage = context.tr('stats.streakMessage.21');
+              } else if (streak == 40) {
+                streakMessage = context.tr('stats.streakMessage.40');
+              } else {
+                streakMessage = context.tr(
+                  'stats.streakMessage.generic',
+                  args: {'days': '$streak'},
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        context.tr('stats.currentStreak'),
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.15,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '🔥 $streak',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    );
-                  } else {
-                    if (kDebugMode) debugPrint('[Stats] Not earned → no navigation');
-                  }                  // If not earned, share_gate already shows a SnackBar message.
-                } finally {
-                  if (mounted) setState(() => _shareBusy = false);
-                }
-              },
-
-              icon: const Icon(Icons.ios_share),
-              label: Text(
-                _shareBusy
-                    ? "Preparing…"
-                    : (cooling ? "Wait ${remLabel ?? ''}" : "Share My Streak"),
-              ),            )
-
-
+                    ],
+                  ),
+                  if (streak > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: StreakBadge(streakDays: streak),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      streakMessage,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
-
-          const SizedBox(height: 24),
-// Days active count
-              FutureBuilder<int>(
-                future: ActivityStore.totalActiveDays(),
-                builder: (context, snap) {
-                  final count = snap.data ?? 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      "Days Active: $count",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  );
-                },
-              ),
-
-              FutureBuilder<int>(
-                future: ActivityStore.currentStreak(),
-                builder: (context, snap) {
-                  final streak = snap.data ?? 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      streak > 0
-                          ? "🔥 Current Streak: $streak day${streak == 1 ? '' : 's'}"
-                          : "No active streak yet",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  );
-                },
-              ),
-
-              // Calendar stub block (we'll wire real data/colors later)
-// Calendar (last 35 days; colored when active)
-              Text("Calendar", style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 6),
-              const _CalendarHeader(),
-              const SizedBox(height: 6),
-              const _WeekdayRow(),
-              const SizedBox(height: 6),
-              const _ActivityCalendar(days: 35),
-            ],
-      ),
         ),
-      bottomNavigationBar: const _BannerReserve(), // reserved; no real ad here yet
+        FutureBuilder<Set<String>>(
+          future: GamifyStore.badges(),
+          builder: (context, snapshot) {
+            final badges = snapshot.data ?? <String>{};
+            if (badges.isEmpty) return const SizedBox.shrink();
+
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: badges.map((badge) {
+                  final label = switch (badge) {
+                    'streak_7' => context.tr('stats.badge.streak7'),
+                    'streak_21' => context.tr('stats.badge.streak21'),
+                    'streak_40' => context.tr('stats.badge.streak40'),
+                    _ => badge,
+                  };
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: Neo.pill(context),
+                    child: Text(
+                      label,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  );
+                }).toList(),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _NeoTile(
+                title: context.tr('stats.metric.todayJaps'),
+                value: _today.toString(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _NeoTile(
+                title: context.tr('stats.metric.todayMalas'),
+                value: todayMalas.toString(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _NeoTile(
+                title: context.tr('stats.metric.lifetimeMalas'),
+                value: lifetimeMalas.toString(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _NeoTile(
+                title: context.tr('stats.metric.todayMeditation'),
+                value: _todayMin.toString(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _NeoTile(
+                title: context.tr('stats.metric.lifetimeMeditation'),
+                value: _lifetimeMin.toString(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        FutureBuilder<int>(
+          future: (() async {
+            final gs = await GoalStore.create();
+            return gs.dailyMalasGoal;
+          })(),
+          builder: (context, snap) {
+            final goal = snap.data ?? 1;
+            final reached = todayMalas >= goal;
+            return Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    reached ? Icons.check_circle : Icons.flag,
+                    color: reached
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.outline,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr(
+                        reached
+                            ? 'stats.dailyGoal.met'
+                            : 'stats.dailyGoal.pending',
+                        args: {'todayMalas': '$todayMalas', 'goal': '$goal'},
+                      ),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: WeeklyChartData.build(),
+          builder: (context, snap) {
+            final data = snap.data ?? [];
+            if (data.isEmpty) return const SizedBox.shrink();
+            final theme = Theme.of(context);
+            final maxMalas = data.fold<int>(0, (prev, element) {
+              final val = element['value'] as int? ?? 0;
+              return val > prev ? val : prev;
+            });
+            final safeMax = maxMalas == 0 ? 1 : maxMalas;
+
+            return Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.dividerColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.tr('stats.progressTitle'),
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 164,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: data.map((e) {
+                        final val = e['value'] as int? ?? 0;
+                        final dayLabel = e['day'] as String? ?? '';
+                        final dateLabel = e['dateLabel'] as String? ?? '';
+                        final normalized = val == 0 ? 0.0 : val / safeMax;
+                        final barHeight = val == 0
+                            ? 6.0
+                            : (normalized * 96).clamp(14.0, 96.0);
+
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surfaceVariant
+                                        .withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '$val',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  curve: Curves.easeOutCubic,
+                                  height: barHeight,
+                                  width: 14,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.bottomCenter,
+                                      end: Alignment.topCenter,
+                                      colors: [
+                                        theme.colorScheme.primary,
+                                        theme.colorScheme.primaryContainer,
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: theme.colorScheme.primary
+                                            .withOpacity(0.2),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  alignment: Alignment.topCenter,
+                                  child: val > 0
+                                      ? Icon(
+                                          Icons.energy_savings_leaf,
+                                          size: 12,
+                                          color: theme.colorScheme.onPrimary,
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  dayLabel,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  dateLabel,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        FutureBuilder<String>(
+          future: DedicationStore.create().then((s) => s.note),
+          builder: (context, snap) {
+            final note = snap.data ?? '';
+            final dedicationText = note.isEmpty
+                ? context.tr('stats.dedication.empty')
+                : context.tr('stats.dedication.title', args: {'note': note});
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.favorite, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      dedicationText,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final controller = TextEditingController(text: note);
+                      final updated = await showDialog<String>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Text(context.tr('stats.dedication.editTitle')),
+                          content: TextField(
+                            controller: controller,
+                            maxLines: 3,
+                            textInputAction: TextInputAction.done,
+                            decoration: InputDecoration(
+                              hintText: context.tr('stats.dedication.hint'),
+                              border: const OutlineInputBorder(),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, null),
+                              child: Text(context.tr('common.cancel')),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.pop(ctx, controller.text.trim()),
+                              child: Text(context.tr('common.save')),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (updated != null) {
+                        final ds = await DedicationStore.create();
+                        await ds.setNote(updated);
+                        if (context.mounted) setState(() {});
+                      }
+                    },
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: Text(context.tr('common.edit')),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 48,
+          child: FilledButton.icon(
+            onPressed: _shareBusy
+                ? null
+                : () async {
+                    setState(() => _shareBusy = true);
+                    try {
+                      final counter = await CounterStore.create();
+                      final int todayJaps = counter.todayJaps;
+                      final int lifetimeMalasLocal = counter.lifetimeMalas;
+                      final int streakDays =
+                          await ActivityStore.currentStreak();
+                      debugPrint(
+                        '[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
+                      );
+                      await openShareMyStreak(
+                        context,
+                        todayJaps: todayJaps,
+                        lifetimeMalas: lifetimeMalasLocal,
+                        streakDays: streakDays,
+                      );
+                    } finally {
+                      if (context.mounted) setState(() => _shareBusy = false);
+                    }
+                  },
+            onLongPress: () async {
+              final counter = await CounterStore.create();
+              final int todayJaps = counter.todayJaps;
+              final int lifetimeMalasLocal = counter.lifetimeMalas;
+              final int streakDays = await ActivityStore.currentStreak();
+              debugPrint(
+                '[Stats][DEV] Long-press bypass → opening preview directly',
+              );
+              if (!context.mounted) return;
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StreakSharePreviewPage(
+                    todayJaps: todayJaps,
+                    lifetimeMalas: lifetimeMalasLocal,
+                    streakDays: streakDays,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.ios_share),
+            label: Text(
+              _shareBusy
+                  ? context.tr('stats.sharePreparing')
+                  : context.tr('stats.shareButton'),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        FutureBuilder<int>(
+          future: ActivityStore.totalActiveDays(),
+          builder: (context, snap) {
+            final count = snap.data ?? 0;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                context.tr('stats.daysActive', args: {'count': '$count'}),
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            );
+          },
+        ),
+        Text(
+          context.tr('stats.calendar'),
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 6),
+        _ActivityCalendar(todayJaps: _today, todayMalas: todayMalas),
+      ],
+    );
+  }
+
+  Widget _metricTile(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        Text(label, style: const TextStyle(fontSize: 13)),
+      ],
     );
   }
 }
 
-class _CalendarStub extends StatelessWidget {
-  const _CalendarStub();
+// --- Re-add missing _NeoTile widget (used in StatsPage) ---
+class _NeoTile extends StatelessWidget {
+  final String title;
+  final String value;
+  const _NeoTile({required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    // Simple 7x5 grid placeholder (no real dates/colors yet)
-    const rows = 5;
-    const cols = 7;
-    return AspectRatio(
-      aspectRatio: cols / rows,
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: cols,
-          mainAxisSpacing: 6,
-          crossAxisSpacing: 6,
-        ),
-        itemCount: rows * cols,
-        itemBuilder: (context, i) {
-          return Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(context).dividerColor),
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            offset: const Offset(3, 3),
+            blurRadius: 6,
+          ),
+          BoxShadow(
+            color: Colors.white.withOpacity(0.6),
+            offset: const Offset(-3, -3),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
             ),
-          );
-        },
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+
 class _ActivityCalendar extends StatefulWidget {
-  final int days; // how many days to show (e.g., 35 = 5 rows x 7 cols)
-  const _ActivityCalendar({this.days = 35});
+  final int todayJaps;
+  final int todayMalas;
+
+  const _ActivityCalendar({super.key, this.todayJaps = 0, this.todayMalas = 0});
 
   @override
   State<_ActivityCalendar> createState() => _ActivityCalendarState();
 }
 
 class _ActivityCalendarState extends State<_ActivityCalendar> {
-  Map<String, bool>? _recent; // yyyy-MM-dd -> active?
-  Set<String>? _streak;       // dates that are part of the current streak
+  Map<String, _DailyHistoryEntry>? _history;
+  DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime? _selectedDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadHistory();
   }
 
-  Future<void> _load() async {
-    final data = await ActivityStore.recentDays(days: widget.days);
-    final streakLen = await ActivityStore.currentStreak();
+  @override
+  void didUpdateWidget(covariant _ActivityCalendar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.todayJaps != widget.todayJaps ||
+        oldWidget.todayMalas != widget.todayMalas) {
+      _loadHistory();
+    }
+  }
 
-    // Build a set of ISO dates for the last [streakLen] days (today inclusive)
-    final now = DateTime.now();
-    final streakDates = <String>{};
-    for (int i = 0; i < streakLen; i++) {
-      final d = DateTime(now.year, now.month, now.day).subtract(Duration(days: i));
-      final y = d.year.toString().padLeft(4, '0');
-      final m = d.month.toString().padLeft(2, '0');
-      final dd = d.day.toString().padLeft(2, '0');
-      streakDates.add('$y-$m-$dd');
+  Future<void> _loadHistory() async {
+    final raw = await ActivityStore.getDailyHistory();
+    final parsed = <String, _DailyHistoryEntry>{};
+
+    for (final entry in raw.entries) {
+      final value = entry.value;
+      if (value is Map<String, dynamic>) {
+        final japs = (value['japs'] as num?)?.round() ?? 0;
+        final malas = (value['malas'] as num?)?.round() ?? 0;
+        parsed[entry.key] = _DailyHistoryEntry(japs: japs, malas: malas);
+      }
     }
 
     if (!mounted) return;
+    setState(() => _history = parsed);
+  }
+
+  void _changeMonth(int offset) {
+    final target = DateTime(_visibleMonth.year, _visibleMonth.month + offset);
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    if (target.isAfter(currentMonth)) return;
     setState(() {
-      _recent = data;
-      _streak = streakDates;
+      _visibleMonth = target;
+      _selectedDate = DateTime(target.year, target.month, 1);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final recent = _recent;
-    if (recent == null) {
-      return const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()));
+    final history = _history;
+    if (history == null) {
+      return const SizedBox(
+        height: 180,
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
 
-    // Oldest -> newest so the latest day appears at the end.
-    final keys = recent.keys.toList().reversed.toList();
-    final values = keys.map((k) => recent[k] ?? false).toList();
-    final streak = _streak ?? const <String>{};
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month);
+    final monthStart = DateTime(_visibleMonth.year, _visibleMonth.month, 1);
+    final startOffset = monthStart.weekday % 7; // Sunday-first grid
+    final startDate = monthStart.subtract(Duration(days: startOffset));
+    const totalCells = 42; // 6 rows
+    final dates = List.generate(
+      totalCells,
+      (i) => startDate.add(Duration(days: i)),
+    );
+    final canGoForward = _visibleMonth.isBefore(currentMonth);
 
-    const cols = 7;
-    final rows = (values.length / cols).ceil();
+    final selected = _selectedDate;
+    final selectedEntry = selected == null
+        ? const _DailyHistoryEntry(japs: 0, malas: 0)
+        : _entryFor(selected);
 
-    return AspectRatio(
-      aspectRatio: cols / rows,
-      child: GridView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: cols,
-          mainAxisSpacing: 6,
-          crossAxisSpacing: 6,
-        ),
-        itemCount: rows * cols,
-        itemBuilder: (context, i) {
-          final active = i < values.length ? values[i] : false;
-          final key = i < keys.length ? keys[i] : null;
-          final isStreak = key != null && streak.contains(key);
-
-          // Active days are filled; streak days get a stronger fill + thicker border.
-          final base = Theme.of(context).colorScheme.primary;
-          final fill = active
-              ? (isStreak ? base.withOpacity(0.95) : base.withOpacity(0.65))
-              : Colors.transparent;
-          final borderColor = isStreak
-              ? base.withOpacity(0.9)
-              : Theme.of(context).dividerColor;
-          final borderWidth = isStreak ? 2.0 : 1.0;
-
-          return Container(
-            decoration: BoxDecoration(
-              color: fill,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: borderColor, width: borderWidth),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.chevron_left),
+              onPressed: () => _changeMonth(-1),
             ),
-          );
-        },
+            Expanded(
+              child: Center(
+                child: Text(
+                  DateFormat('MMMM yyyy').format(_visibleMonth),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.chevron_right),
+              onPressed: canGoForward ? () => _changeMonth(1) : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+              .map(
+                (d) => Expanded(
+                  child: Center(
+                    child: Text(
+                      d,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 8),
+        AspectRatio(
+          aspectRatio: 7 / 6,
+          child: GridView.builder(
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+            ),
+            itemCount: dates.length,
+            itemBuilder: (context, index) {
+              final date = dates[index];
+              final entry = _entryFor(date);
+              final malas = entry.malas;
+              final isCurrentMonth =
+                  date.month == _visibleMonth.month &&
+                  date.year == _visibleMonth.year;
+              final isFuture = date.isAfter(
+                DateTime(now.year, now.month, now.day),
+              );
+              final isSelected =
+                  selected != null && DateUtils.isSameDay(selected, date);
+              final isToday = DateUtils.isSameDay(date, now);
+
+              final fill = _colorForMalas(malas, theme, isCurrentMonth);
+              final borderColor = isSelected
+                  ? theme.colorScheme.primary
+                  : theme.dividerColor.withOpacity(isCurrentMonth ? 1 : 0.4);
+              final textColor = isCurrentMonth
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.onSurface.withOpacity(0.4);
+
+              return GestureDetector(
+                onTap: isFuture
+                    ? null
+                    : () {
+                        setState(() => _selectedDate = date);
+                      },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  decoration: BoxDecoration(
+                    color: fill,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: borderColor,
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${date.day}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildLegend(context),
+        if (selected != null) ...[
+          const SizedBox(height: 12),
+          _buildSelectionSummary(context, selected, selectedEntry),
+        ],
+      ],
+    );
+  }
+
+  _DailyHistoryEntry _entryFor(DateTime date) {
+    final history = _history;
+    if (history == null) return const _DailyHistoryEntry(japs: 0, malas: 0);
+    if (DateUtils.isSameDay(date, DateTime.now())) {
+      return _DailyHistoryEntry(
+        japs: widget.todayJaps,
+        malas: widget.todayMalas,
+      );
+    }
+    return history[_dateKey(date)] ??
+        const _DailyHistoryEntry(japs: 0, malas: 0);
+  }
+
+  String _dateKey(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
+
+  Color _colorForMalas(int malas, ThemeData theme, bool isCurrentMonth) {
+    Color base;
+    if (malas >= 15) {
+      base = Colors.deepOrange.shade200;
+    } else if (malas >= 8) {
+      base = Colors.teal.shade200;
+    } else if (malas >= 5) {
+      base = Colors.green.shade200;
+    } else if (malas >= 1) {
+      base = Colors.amber.shade100;
+    } else {
+      base = theme.brightness == Brightness.dark
+          ? theme.colorScheme.surface
+          : Colors.white;
+    }
+    return isCurrentMonth ? base : base.withOpacity(0.45);
+  }
+
+  Widget _buildLegend(BuildContext context) {
+    final theme = Theme.of(context);
+    final zero = _colorForMalas(0, theme, true);
+    final few = _colorForMalas(1, theme, true);
+    final some = _colorForMalas(5, theme, true);
+    final plenty = _colorForMalas(8, theme, true);
+    final intense = _colorForMalas(15, theme, true);
+    return Wrap(
+      spacing: 16,
+      runSpacing: 8,
+      children: [
+        _LegendSwatch(color: zero, label: context.tr('stats.legend.zero')),
+        _LegendSwatch(color: few, label: context.tr('stats.legend.few')),
+        _LegendSwatch(color: some, label: context.tr('stats.legend.some')),
+        _LegendSwatch(color: plenty, label: context.tr('stats.legend.plenty')),
+        _LegendSwatch(
+          color: intense,
+          label: context.tr('stats.legend.intense'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionSummary(
+    BuildContext context,
+    DateTime date,
+    _DailyHistoryEntry entry,
+  ) {
+    final theme = Theme.of(context);
+    final lang = AppLocalizationScope.of(context).language;
+    final localeCode = lang == 'hi' ? 'hi' : 'en';
+    final formattedDate = DateFormat(
+      'EEE, d MMM yyyy',
+      localeCode,
+    ).format(date);
+    final now = DateTime.now();
+    final titleLabel = DateUtils.isSameDay(date, now)
+        ? '${context.tr('stats.calendar.today')} • $formattedDate'
+        : formattedDate;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_month, color: theme.colorScheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titleLabel, style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(
+                  context.tr(
+                    'stats.calendar.summary',
+                    args: {'malas': '${entry.malas}', 'japs': '${entry.japs}'},
+                  ),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
-class _CalendarHeader extends StatelessWidget {
-  const _CalendarHeader();
 
-  static const _months = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December'
-  ];
+class _DailyHistoryEntry {
+  final int japs;
+  final int malas;
 
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final label = '${_months[now.month - 1]} ${now.year}';
-    return Text(label, style: Theme.of(context).textTheme.titleSmall);
-  }
+  const _DailyHistoryEntry({required this.japs, required this.malas});
 }
 
-class _WeekdayRow extends StatelessWidget {
-  const _WeekdayRow();
+class _LegendSwatch extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendSwatch({required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    const days = ['S','M','T','W','T','F','S'];
-    final style = Theme.of(context).textTheme.labelMedium;
+    final theme = Theme.of(context);
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: days.map((d) => Expanded(
-        child: Center(child: Text(d, style: style)),
-      )).toList(),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: theme.dividerColor),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: theme.textTheme.labelSmall),
+      ],
     );
   }
 }
-class _ContentPage extends StatelessWidget {
-  const _ContentPage();
+
+class _GitaTab extends StatelessWidget {
+  const _GitaTab();
 
   @override
   Widget build(BuildContext context) {
-    return const ContentPage(); // uses the new tabs screen
+    return const GitaPage();
   }
 }
 
-
-
-
-class _SettingsPage extends StatelessWidget {
-  const _SettingsPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: const Center(child: Text('Settings UI stub')),
-      bottomNavigationBar: const _BannerReserve(),
-    );
-  }
-}
-class _NotificationsToggle extends StatefulWidget {
-  const _NotificationsToggle();
-
-  @override
-  State<_NotificationsToggle> createState() => _NotificationsToggleState();
-}
-
-class _NotificationsToggleState extends State<_NotificationsToggle> {
-  bool _enabled = true;
-  static const _key = 'notificationsEnabled';
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() => _enabled = prefs.getBool(_key) ?? true);
-  }
-
-  Future<void> _toggle(bool value) async {
-    setState(() => _enabled = value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_key, value);
-
-    final ns = NotificationService();
-    if (value) {
-      await ns.init();
-      final allowed = await ns.requestPermission();
-      if (allowed) await ns.scheduleDefaults();
-    } else {
-      // Cancel all scheduled notifications
-      final plugin = FlutterLocalNotificationsPlugin();
-      await plugin.cancelAll();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      title: const Text('Daily Reminders'),
-      subtitle: const Text('7 AM, 12 PM, and 6 PM devotional alerts'),
-      value: _enabled,
-      onChanged: _toggle,
-    );
-  }
-}
-class _AboutFooter extends StatelessWidget {
-  const _AboutFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall;
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snap) {
-        final ver = snap.data?.version ?? '';
-        final build = snap.data?.buildNumber ?? '';
-        final versionLabel = ver.isEmpty ? '' : ' • v$ver+$build';
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Column(
-            children: [
-              Text('Radha Jap Counter$versionLabel', style: style),
-              const SizedBox(height: 4),
-              Text('Made with devotion in India', style: style),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-class SettingsPage extends StatelessWidget {
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
-
-  const SettingsPage({
-    super.key,
-    required this.themeMode,
-    required this.onThemeModeChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = themeMode == ThemeMode.dark;
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Appearance section
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text('Appearance', style: Theme.of(context).textTheme.labelLarge),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.dark_mode),
-            title: const Text('Dark Mode'),
-            subtitle: const Text('Use plum & gold theme'),
-            value: isDark,
-            onChanged: (v) {
-              onThemeModeChanged(v ? ThemeMode.dark : ThemeMode.light);
-            },
-          ),
-          const SizedBox(height: 8),
-          const Divider(height: 1),
-
-          const SizedBox(height: 16),
-
-          // Reminders section
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text('Reminders', style: Theme.of(context).textTheme.labelLarge),
-          ),
-          _NotificationsToggle(), // toggle already handles scheduling/cancel
-          const SizedBox(height: 8),
-          const Divider(height: 1),
-
-          const SizedBox(height: 16),
-
-          // About section
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text('About', style: Theme.of(context).textTheme.labelLarge),
-          ),
-          ListTile(
-            leading: const Icon(Icons.privacy_tip),
-            title: const Text('Privacy Policy'),
-            subtitle: const Text('Read our privacy policy'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.gavel),
-            title: const Text('Terms & Conditions'),
-            subtitle: const Text('View app terms'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const TermsConditionsPage()),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.star_rate),
-            title: const Text('Rate on Play Store'),
-            subtitle: const Text('“Your one rating will take you towards sadhna”'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              const pkg = 'com.example.jap_counter'; // current applicationId
-              final marketUri = Uri.parse('market://details?id=$pkg');
-              final webUri = Uri.parse('https://play.google.com/store/apps/details?id=$pkg');
-
-              if (await canLaunchUrl(marketUri)) {
-                await launchUrl(marketUri);
-              } else {
-                await launchUrl(webUri, mode: LaunchMode.externalApplication);
-              }
-            },
-          ),
-          const SizedBox(height: 24),
-          const _AboutFooter(),
-
-          ListTile(
-            leading: const Icon(Icons.share),
-            title: const Text('Share App'),
-            subtitle: const Text('“साधना में साथ—दोस्तों को भेजें”'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () async {
-              const pkg = 'com.example.jap_counter';
-              final link = 'https://play.google.com/store/apps/details?id=$pkg';
-              await Share.share('मैं Radha Jap Counter ऐप इस्तेमाल कर रहा/रही हूँ — $link');
-            },
-          ),
-        ],
-      ),     bottomNavigationBar: const _BannerReserve(),
-    );
-  }
-}
+// Legacy settings classes removed. Latest settings UI lives in lib/settings/settings_page.dart
+// Legacy settings classes removed. Latest settings UI lives in lib/settings/settings_page.dart

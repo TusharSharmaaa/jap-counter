@@ -1,37 +1,72 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
-import '../ads/rewarded_share.dart';
-import '../widgets/ad_loading_overlay.dart';
 
-/// Shows the rewarded ad for the "Share My Streak" flow.
-/// Returns true if the user earned the reward; false otherwise.
-/// On failure to load/show, it shows a gentle SnackBar asking the user to try again.
-Future<bool> gateShareMyStreak(BuildContext context, {required Future<void> Function() onEarned}) async {
-  showAdLoadingOverlay(context);
+import '../core/ad_manager.dart';
+import 'streak_share_preview.dart';
 
-  await MobileAds.instance.initialize();
-  final earned = await RewardedShareAd().showIfAvailable(onEarned: onEarned);
+Future<void> openShareMyStreak(
+  BuildContext context, {
+  required int todayJaps,
+  required int lifetimeMalas,
+  required int streakDays,
+}) async {
+  if (!context.mounted) return;
 
-  hideAdLoadingOverlay(context);
+  final adShown = await _showShareRewardedWithRetry('stats.share_rewarded');
 
-  if (!earned && context.mounted) {
-    final rs = RewardedShareAd();
-    if (rs.isCoolingDown) {
-      final rem = rs.cooldownRemaining ?? const Duration(seconds: 0);
-      final m = rem.inMinutes;
-      final s = rem.inSeconds % 60;
-      final msg = m > 0
-          ? 'Please wait ${m}m ${s}s before sharing again.'
-          : 'Please wait ${s}s before sharing again.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
+  if (!context.mounted) return;
+
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => StreakSharePreviewPage(
+        todayJaps: todayJaps,
+        lifetimeMalas: lifetimeMalas,
+        streakDays: streakDays,
+      ),
+    ),
+  );
+
+  if (!adShown) {
+    unawaited(
+      AdManager.instance.preloadPlacement('stats.share_rewarded', force: true),
+    );
+  }
+}
+
+Future<bool> _showShareRewardedWithRetry(String placementId) async {
+  bool adShown = false;
+
+  try {
+    adShown = await AdManager.instance.maybeShowRewarded(
+      placementId,
+      timeout: const Duration(seconds: 8),
+    );
+
+    if (!adShown) {
+      if (kDebugMode) {
+        debugPrint('[ShareGate] $placementId not ready, forcing preload');
+      }
+      await AdManager.instance.preloadPlacement(placementId, force: true);
+      adShown = await AdManager.instance.maybeShowRewarded(
+        placementId,
+        timeout: const Duration(seconds: 10),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preparing video… please try again in a moment.')),
-      );
+    }
+  } catch (error, stackTrace) {
+    if (kDebugMode) {
+      debugPrint('[ShareGate] rewarded attempt failed: $error\n$stackTrace');
     }
   }
 
-  return earned;
+  unawaited(
+    AdManager.instance.recordEvent(
+      placementId,
+      'attempt',
+      data: {'ad_shown': adShown},
+    ),
+  );
+
+  return adShown;
 }
