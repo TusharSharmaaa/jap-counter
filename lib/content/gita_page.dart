@@ -156,18 +156,10 @@ class _GitaPageState extends State<GitaPage> {
     setState(() => _sharing = true);
 
     try {
-      final adShown = await AdManager.instance.maybeShowRewarded(
-        'gita.share_rewarded',
-        timeout: const Duration(seconds: 8),
-      );
-      AdManager.instance.recordEvent(
-        'gita.share_rewarded',
-        'attempt',
-        data: {'ad_shown': adShown},
-      );
-    } catch (e) {
+      await _showShareRewardedWithRetry();
+    } catch (e, st) {
       if (kDebugMode) {
-        debugPrint('[GitaPage] Rewarded attempt failed: $e');
+        debugPrint('[GitaPage] Rewarded attempt failed: $e\n$st');
       }
     }
 
@@ -232,6 +224,41 @@ class _GitaPageState extends State<GitaPage> {
     }
   }
 
+  Future<void> _showShareRewardedWithRetry() async {
+    bool adShown = false;
+    try {
+      adShown = await AdManager.instance.maybeShowRewarded(
+        'gita.share_rewarded',
+        timeout: const Duration(seconds: 8),
+      );
+      if (!adShown) {
+        if (kDebugMode) {
+          debugPrint('[GitaPage] share ad not ready, forcing preload');
+        }
+        await AdManager.instance.preloadPlacement(
+          'gita.share_rewarded',
+          force: true,
+        );
+        adShown = await AdManager.instance.maybeShowRewarded(
+          'gita.share_rewarded',
+          timeout: const Duration(seconds: 10),
+        );
+      }
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[GitaPage] rewarded retry failed: $error\n$stackTrace');
+      }
+    } finally {
+      unawaited(
+        AdManager.instance.recordEvent(
+          'gita.share_rewarded',
+          'attempt',
+          data: {'ad_shown': adShown},
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -241,109 +268,111 @@ class _GitaPageState extends State<GitaPage> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Gita'), centerTitle: true),
         body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 24,
-                  ),
-                  child: FutureBuilder<GitaShloka?>(
-                    future: _currentFuture,
-                    builder: (context, snapshot) {
-                      if (_initializing) {
-                        return _LoadingBody(theme: theme);
-                      }
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 24,
+                    ),
+                    child: FutureBuilder<GitaShloka?>(
+                      future: _currentFuture,
+                      builder: (context, snapshot) {
+                        if (_initializing) {
+                          return _LoadingBody(theme: theme);
+                        }
 
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return _LoadingBody(theme: theme);
-                      }
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return _LoadingBody(theme: theme);
+                        }
 
-                      if (snapshot.hasError ||
-                          !snapshot.hasData ||
-                          snapshot.data == null) {
-                        return _ErrorBody(
-                          onRetry: () {
-                            setState(() {
-                              _loadShloka();
-                            });
-                          },
+                        if (snapshot.hasError ||
+                            !snapshot.hasData ||
+                            snapshot.data == null) {
+                          return _ErrorBody(
+                            onRetry: () {
+                              setState(() {
+                                _loadShloka();
+                              });
+                            },
+                          );
+                        }
+
+                        final shloka = snapshot.data!;
+                        if (_lastRecordedRef != shloka.ref) {
+                          _lastRecordedRef = shloka.ref;
+                          AdManager.instance.recordEvent(
+                            'gita.session',
+                            'shloka_read',
+                          );
+                        }
+                        WidgetsBinding.instance.addPostFrameCallback(
+                          (_) => _prefetchNext(),
                         );
-                      }
 
-                      final shloka = snapshot.data!;
-                      if (_lastRecordedRef != shloka.ref) {
-                        _lastRecordedRef = shloka.ref;
-                        AdManager.instance.recordEvent(
-                          'gita.session',
-                          'shloka_read',
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _ShlokaCard(
+                              shloka: shloka,
+                              onCopy: () => _copyShloka(shloka),
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: _verse > 1
+                                        ? () => _prevVerse()
+                                        : null,
+                                    child: const Text('Prev'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    onPressed: _sharing
+                                        ? null
+                                        : () => _shareOnWhatsApp(shloka),
+                                    icon: _sharing
+                                        ? SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color:
+                                                  theme.colorScheme.onPrimary,
+                                            ),
+                                          )
+                                        : const Icon(Icons.share),
+                                    label: const Text('Share'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => _nextVerse(),
+                                    child: const Text('Next'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                          ],
                         );
-                      }
-                      WidgetsBinding.instance.addPostFrameCallback(
-                        (_) => _prefetchNext(),
-                      );
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _ShlokaCard(
-                            shloka: shloka,
-                            onCopy: () => _copyShloka(shloka),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: _verse > 1
-                                      ? () => _prevVerse()
-                                      : null,
-                                  child: const Text('Prev'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FilledButton.icon(
-                                  onPressed: _sharing
-                                      ? null
-                                      : () => _shareOnWhatsApp(shloka),
-                                  icon: _sharing
-                                      ? SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: theme.colorScheme.onPrimary,
-                                          ),
-                                        )
-                                      : const Icon(Icons.share),
-                                  label: const Text('Share'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => _nextVerse(),
-                                  child: const Text('Next'),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-                      );
-                    },
+                      },
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
-      ),
       ),
     );
   }
