@@ -38,6 +38,8 @@ class _GitaPageState extends State<GitaPage> {
       'https://play.google.com/store/apps/details?id=com.example.jap_counter';
 
   final QuoteTheme _shareTheme = QuoteTheme.presets().first;
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
 
   int _chapter = 1;
   int _verse = 1;
@@ -67,7 +69,7 @@ class _GitaPageState extends State<GitaPage> {
       if (shouldAnnounce) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
+          _messengerKey.currentState?.showSnackBar(
             SnackBar(
               content: Text('Resumed from Chapter $chapter • Shlok $shlok'),
             ),
@@ -88,6 +90,7 @@ class _GitaPageState extends State<GitaPage> {
   @override
   void dispose() {
     AdManager.instance.recordEvent('gita.session', 'end');
+    _messengerKey.currentState?.clearSnackBars();
     super.dispose();
   }
 
@@ -143,9 +146,9 @@ class _GitaPageState extends State<GitaPage> {
 
     await Clipboard.setData(ClipboardData(text: buffer.toString()));
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Shloka copied to clipboard')));
+    _messengerKey.currentState?.showSnackBar(
+      const SnackBar(content: Text('Shloka copied to clipboard')),
+    );
   }
 
   Future<void> _shareOnWhatsApp(GitaShloka shloka) async {
@@ -216,7 +219,7 @@ class _GitaPageState extends State<GitaPage> {
         debugPrint('[GitaPage] Share failed: $e\n$st');
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _messengerKey.currentState?.showSnackBar(
         const SnackBar(
           content: Text('Unable to share right now. Please try again.'),
         ),
@@ -233,9 +236,11 @@ class _GitaPageState extends State<GitaPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Gita'), centerTitle: true),
-      body: SafeArea(
+    return ScaffoldMessenger(
+      key: _messengerKey,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Gita'), centerTitle: true),
+        body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
@@ -338,6 +343,7 @@ class _GitaPageState extends State<GitaPage> {
             );
           },
         ),
+      ),
       ),
     );
   }
