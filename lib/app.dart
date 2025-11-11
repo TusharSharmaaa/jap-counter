@@ -5,6 +5,7 @@ import 'package:confetti/confetti.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:provider/provider.dart';
 import 'stats/streak_share_preview.dart';
 import 'stats/streak_badge.dart';
 import 'core/ad_manager.dart';
@@ -28,6 +29,9 @@ import 'l10n/app_localizations.dart';
 import 'sync/sync_service.dart';
 import 'utils/weekly_chart_data.dart';
 import 'counter/counter_page.dart';
+import 'timer/timer_service.dart';
+import 'core/sound_manager.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class App extends StatefulWidget {
   const App({super.key});
@@ -36,11 +40,15 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> with WidgetsBindingObserver {
+  late final TimerService _timerService;
+
   @override
   void initState() {
     super.initState();
     // Observe app lifecycle to keep the ad warmed up on resume
     WidgetsBinding.instance.addObserver(this);
+    _timerService = TimerService();
+    unawaited(_timerService.load());
 
     _loadThemeMode();
     _loadLanguage();
@@ -79,6 +87,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       unawaited(SyncService.syncToday());
+    } else if (state == AppLifecycleState.resumed) {
+      unawaited(_timerService.load());
     }
   }
 
@@ -153,99 +163,103 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Radha Jap Counter',
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      themeMode: _themeMode,
-      builder: (context, child) => AppLocalizationScope(
-        language: _language,
-        child: child ?? const SizedBox.shrink(),
-      ),
-      home: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).colorScheme.surface.withOpacity(0.95),
-              Theme.of(context).colorScheme.primary.withOpacity(0.05),
-            ],
-          ),
+    return ChangeNotifierProvider<TimerService>.value(
+      value: _timerService,
+      child: MaterialApp(
+        title: 'Radha Jap Counter',
+        theme: buildTheme(Brightness.light),
+        darkTheme: buildTheme(Brightness.dark),
+        themeMode: _themeMode,
+        builder: (context, child) => AppLocalizationScope(
+          language: _language,
+          child: child ?? const SizedBox.shrink(),
         ),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 280),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              final offset = Tween<Offset>(
-                begin: const Offset(0.03, 0.02),
-                end: Offset.zero,
-              ).animate(animation);
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(position: offset, child: child),
-              );
-            },
-            child: (_index == 4)
-                ? SettingsPage(
-                    key: const ValueKey('settings'),
-                    themeMode: _themeMode,
-                    language: _language,
-                    onThemeModeChanged: (mode) {
-                      setState(() => _themeMode = mode);
-                      _saveThemeMode(mode);
-                    },
-                    onLanguageChanged: _setLanguage,
-                  )
-                : KeyedSubtree(
-                    key: ValueKey('tab-$_index'),
-                    child: _pages[_index],
-                  ),
+        home: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Theme.of(context).colorScheme.surface.withOpacity(0.95),
+                Theme.of(context).colorScheme.primary.withOpacity(0.05),
+              ],
+            ),
           ),
-          bottomNavigationBar: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    offset: const Offset(2, 2),
-                    blurRadius: 6,
-                  ),
-                  BoxShadow(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    offset: const Offset(-2, -2),
-                    blurRadius: 6,
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _navIcon(Icons.touch_app, 0, 'nav.counter'),
-                  _navIcon(Icons.bar_chart, 1, 'nav.stats'),
-                  _navIcon(Icons.menu_book, 2, 'nav.gita'),
-                  _navIcon(Icons.timer, 3, 'nav.timer'),
-                  _navIcon(Icons.settings, 4, 'nav.settings'),
-                ],
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final offset = Tween<Offset>(
+                  begin: const Offset(0.03, 0.02),
+                  end: Offset.zero,
+                ).animate(animation);
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(position: offset, child: child),
+                );
+              },
+              child: (_index == 4)
+                  ? SettingsPage(
+                      key: const ValueKey('settings'),
+                      themeMode: _themeMode,
+                      language: _language,
+                      onThemeModeChanged: (mode) {
+                        setState(() => _themeMode = mode);
+                        _saveThemeMode(mode);
+                      },
+                      onLanguageChanged: _setLanguage,
+                    )
+                  : KeyedSubtree(
+                      key: ValueKey('tab-$_index'),
+                      child: _pages[_index],
+                    ),
+            ),
+            bottomNavigationBar: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      offset: const Offset(2, 2),
+                      blurRadius: 6,
+                    ),
+                    BoxShadow(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      offset: const Offset(-2, -2),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _navIcon(Icons.touch_app, 0, 'nav.counter'),
+                    _navIcon(Icons.bar_chart, 1, 'nav.stats'),
+                    _navIcon(Icons.menu_book, 2, 'nav.gita'),
+                    _navIcon(Icons.timer, 3, 'nav.timer'),
+                    _navIcon(Icons.settings, 4, 'nav.settings'),
+                  ],
+                ),
               ),
             ),
           ),
         ),
+        debugShowCheckedModeBanner: false,
       ),
-      debugShowCheckedModeBanner: false,
     );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _timerService.dispose();
     super.dispose();
   }
 
@@ -296,6 +310,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   void _handleNavTap(int index) {
     if (_index == index) return;
+    final leavingTimer = _index == 3 && index != 3;
+    if (leavingTimer) {
+      unawaited(_pauseTimerForNav());
+    }
     if (index == 1) {
       _statsKey.currentState?.onBecameVisible();
     } else if (_index == 1) {
@@ -313,6 +331,25 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       AdManager.instance.recordEvent('gita.session', 'end');
     }
     setState(() => _index = index);
+  }
+
+  Future<void> _pauseTimerForNav() async {
+    if (!_timerService.running) return;
+    try {
+      await _timerService.pause();
+    } catch (_) {
+      // ignore pause errors
+    }
+    try {
+      await SoundManager.instance.pauseAmbience();
+    } catch (_) {
+      // ignore audio errors
+    }
+    try {
+      await WakelockPlus.disable();
+    } catch (_) {
+      // ignore wakelock errors
+    }
   }
 }
 

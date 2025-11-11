@@ -30,7 +30,7 @@ class _TimerPageState extends State<TimerPage>
   // ---- minimal stable state ----
   final List<int> _presets = const [2, 5, 10, 15, 20, 30, 45, 60, 90];
   int _selectedMinutes = TimerService.defaultTarget.inMinutes;
-  late final TimerService _timerService;
+  TimerService? _timerServiceInstance;
   String? _activeRunId;
   bool _wasRunning = false;
 
@@ -46,35 +46,56 @@ class _TimerPageState extends State<TimerPage>
   bool get wantKeepAlive => true;
 
   // ---- lifecycle ----
+  TimerService get _timerService {
+    final svc = _timerServiceInstance;
+    assert(svc != null, 'TimerService accessed before initialization');
+    return svc!;
+  }
+
+  bool _timerServiceAttached = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _timerService = TimerService();
-    _timerService.addListener(_handleServiceUpdate);
-    Future.microtask(_bootstrap);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final svc = Provider.of<TimerService>(context, listen: false);
+    if (!identical(_timerServiceInstance, svc)) {
+      _timerServiceInstance?.removeListener(_handleServiceUpdate);
+      _timerServiceInstance = svc;
+      _timerServiceInstance?.addListener(_handleServiceUpdate);
+      if (!_timerServiceAttached) {
+        _timerServiceAttached = true;
+        Future.microtask(_bootstrap);
+      } else {
+        _handleServiceUpdate();
+      }
+    }
   }
 
   Future<void> _bootstrap() async {
-    final timerFuture = _timerService.load();
-    final soundInit = _soundManager.init();
-
-    await timerFuture;
-
-    if (!mounted) return;
-
-    _ambienceId = _timerService.sound;
-    _selectedMinutes = _timerService.target.inMinutes;
-    _wasRunning = _timerService.running;
-    _activeRunId = _timerService.runId.isEmpty ? null : _timerService.runId;
+    _applyServiceSnapshot();
     _revealContent();
-
     if (mounted) setState(() {});
+
+    final soundInit = _soundManager.init();
 
     unawaited(_ensureWakelockActive(_timerService.running));
     unawaited(_syncAmbience(soundInit));
     unawaited(_loadMeditationStats());
     unawaited(AdManager.instance.preloadPlacement('timer.share_rewarded'));
+  }
+
+  void _applyServiceSnapshot() {
+    final svc = _timerService;
+    _ambienceId = svc.sound;
+    _selectedMinutes = svc.target.inMinutes;
+    _wasRunning = svc.running;
+    _activeRunId = svc.runId.isEmpty ? null : svc.runId;
   }
 
   Future<void> _syncAmbience(Future<void> soundInit) async {
@@ -111,6 +132,16 @@ class _TimerPageState extends State<TimerPage>
     }
   }
 
+  Future<void> _safeSoundCall(Future<void> Function() operation) async {
+    try {
+      await operation();
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[TimerPage] Sound operation failed: $e\n$st');
+      }
+    }
+  }
+
   void _revealContent() {
     if (_visible) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -133,7 +164,7 @@ class _TimerPageState extends State<TimerPage>
     final wasRunning = _timerService.running;
     if (wasRunning) {
       await _timerService.pause();
-      await _soundManager.pauseAmbience();
+      await _safeSoundCall(() => _soundManager.pauseAmbience());
       _wasRunning = false;
       await _ensureWakelockActive(false);
     }
@@ -144,8 +175,9 @@ class _TimerPageState extends State<TimerPage>
   }
 
   Future<void> _commitProgress({bool forceFull = false}) async {
-    final minutes =
-        await _timerService.captureUncreditedMinutes(forceFull: forceFull);
+    final minutes = await _timerService.captureUncreditedMinutes(
+      forceFull: forceFull,
+    );
     if (minutes <= 0) return;
     final store = await MeditationStore.create();
     await store.addMinutes(minutes);
@@ -164,11 +196,11 @@ class _TimerPageState extends State<TimerPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _timerService.removeListener(_handleServiceUpdate);
-    unawaited(_finalizeSessionOnExit());
-    _timerService.dispose();
-    unawaited(_soundManager.stopAmbience());
-    unawaited(_ensureWakelockActive(false));
+    _timerServiceInstance?.removeListener(_handleServiceUpdate);
+    if (!(_timerServiceInstance?.running ?? false)) {
+      unawaited(_safeSoundCall(() => _soundManager.stopAmbience()));
+      unawaited(_ensureWakelockActive(false));
+    }
     super.dispose();
   }
 
@@ -180,8 +212,14 @@ class _TimerPageState extends State<TimerPage>
     } else if (state == AppLifecycleState.detached) {
       unawaited(_finalizeSessionOnExit());
     } else if (state == AppLifecycleState.resumed) {
+      _applyServiceSnapshot();
+      if (mounted) setState(() {});
       if (_timerService.running && _ambienceId != 'mute') {
-        unawaited(_soundManager.playAmbience(forceId: _ambienceId));
+        unawaited(
+          _safeSoundCall(
+            () => _soundManager.playAmbience(forceId: _ambienceId),
+          ),
+        );
       }
       _timerService.refresh();
       unawaited(_ensureWakelockActive(_timerService.running));
@@ -200,7 +238,10 @@ class _TimerPageState extends State<TimerPage>
       !_timerService.running && _remaining == Duration.zero;
 
   bool get _isPaused =>
-      !_timerService.running && !_isIdle && !_isCompleted && !_timerService.isPristine;
+      !_timerService.running &&
+      !_isIdle &&
+      !_isCompleted &&
+      !_timerService.isPristine;
 
   bool get _isPristine => _timerService.isPristine;
 
@@ -209,6 +250,7 @@ class _TimerPageState extends State<TimerPage>
     final nowRunning = svc.running;
     final newMinutes = svc.target.inMinutes;
     final newSound = svc.sound;
+    final currentRunId = svc.runId;
 
     if (_activeRunId != null && svc.consumeCompletion(_activeRunId!)) {
       _activeRunId = null;
@@ -217,22 +259,31 @@ class _TimerPageState extends State<TimerPage>
 
     if (_ambienceId != newSound) {
       if (newSound == 'mute') {
-        unawaited(_soundManager.stopAmbience());
+        unawaited(_safeSoundCall(() => _soundManager.stopAmbience()));
       } else if (nowRunning) {
-        unawaited(_soundManager.playAmbience(forceId: newSound));
+        unawaited(
+          _safeSoundCall(() => _soundManager.playAmbience(forceId: newSound)),
+        );
       } else {
-        unawaited(_soundManager.setAmbience(newSound, preload: true));
+        unawaited(
+          _safeSoundCall(
+            () => _soundManager.setAmbience(newSound, preload: true),
+          ),
+        );
       }
     } else if (!_wasRunning && nowRunning && newSound != 'mute') {
-      unawaited(_soundManager.playAmbience(forceId: newSound));
+      unawaited(
+        _safeSoundCall(() => _soundManager.playAmbience(forceId: newSound)),
+      );
     } else if (_wasRunning && !nowRunning && newSound != 'mute') {
-      unawaited(_soundManager.pauseAmbience());
+      unawaited(_safeSoundCall(() => _soundManager.pauseAmbience()));
     }
 
     if (mounted) {
       setState(() {
         _selectedMinutes = newMinutes;
         _ambienceId = newSound;
+        _activeRunId = currentRunId.isEmpty ? null : currentRunId;
       });
     }
 
@@ -269,13 +320,17 @@ class _TimerPageState extends State<TimerPage>
     await _timerService.selectSound(safeId);
     if (_timerService.running) {
       if (safeId == 'mute') {
-        await _soundManager.stopAmbience();
+        await _safeSoundCall(() => _soundManager.stopAmbience());
       } else {
-        await _soundManager.setAmbience(safeId, preload: true);
-        await _soundManager.playAmbience(forceId: safeId);
+        await _safeSoundCall(
+          () => _soundManager.setAmbience(safeId, preload: true),
+        );
+        await _safeSoundCall(() => _soundManager.playAmbience(forceId: safeId));
       }
     } else {
-      await _soundManager.setAmbience(safeId, preload: true);
+      await _safeSoundCall(
+        () => _soundManager.setAmbience(safeId, preload: true),
+      );
     }
     unawaited(_ensureWakelockActive(_timerService.running));
   }
@@ -283,16 +338,19 @@ class _TimerPageState extends State<TimerPage>
   Future<void> _start() async {
     if (_timerService.running) return;
     HapticFeedback.lightImpact();
-    final isFreshRun = _timerService.remaining == _timerService.target ||
+    final isFreshRun =
+        _timerService.remaining == _timerService.target ||
         _activeRunId == null ||
         _timerService.remaining == Duration.zero;
     if (isFreshRun || (_activeRunId ?? '').isEmpty) {
       _activeRunId = DateTime.now().microsecondsSinceEpoch.toString();
     }
     if (_ambienceId != 'mute') {
-      await _soundManager.setAmbience(_ambienceId, preload: true);
+      await _safeSoundCall(
+        () => _soundManager.setAmbience(_ambienceId, preload: true),
+      );
     } else {
-      await _soundManager.stopAmbience();
+      await _safeSoundCall(() => _soundManager.stopAmbience());
     }
     await _timerService.start(runId: _activeRunId);
     await _ensureWakelockActive(true);
@@ -306,7 +364,7 @@ class _TimerPageState extends State<TimerPage>
     if (!_timerService.running) return;
     HapticFeedback.selectionClick();
     await _timerService.pause();
-    await _soundManager.pauseAmbience();
+    await _safeSoundCall(() => _soundManager.pauseAmbience());
     await _ensureWakelockActive(false);
     await _commitProgress();
     if (mounted) setState(() {});
@@ -316,30 +374,49 @@ class _TimerPageState extends State<TimerPage>
     if (_timerService.running || _timerService.remaining == Duration.zero) {
       return;
     }
-    return _start();
+    final existingRunId = _timerService.runId;
+    if ((_activeRunId ?? '').isEmpty) {
+      _activeRunId = existingRunId.isNotEmpty
+          ? existingRunId
+          : DateTime.now().microsecondsSinceEpoch.toString();
+    }
+    if (_ambienceId != 'mute') {
+      await _safeSoundCall(
+        () => _soundManager.setAmbience(_ambienceId, preload: true),
+      );
+    } else {
+      await _safeSoundCall(() => _soundManager.stopAmbience());
+    }
+    await _timerService.resume(runId: _activeRunId);
+    await _ensureWakelockActive(true);
+    unawaited(
+      AdManager.instance.preloadPlacement('timer.post_session_interstitial'),
+    );
+    if (mounted) setState(() {});
   }
 
   Future<void> _reset() async {
     HapticFeedback.selectionClick();
     if (_timerService.running) {
       await _timerService.pause();
-      await _soundManager.pauseAmbience();
+      await _safeSoundCall(() => _soundManager.pauseAmbience());
     }
     await _ensureWakelockActive(false);
     await _commitProgress();
     _activeRunId = null;
     await _timerService.reset();
-    await _soundManager.stopAmbience();
+    await _safeSoundCall(() => _soundManager.stopAmbience());
     if (mounted) setState(() {});
   }
 
   Future<void> _onComplete() async {
     HapticFeedback.mediumImpact();
-    await _soundManager.stopAmbience();
-    await _soundManager.playBell();
+    await _safeSoundCall(() => _soundManager.stopAmbience());
+    await _safeSoundCall(() => _soundManager.playBell());
     await _ensureWakelockActive(false);
-    final addedMinutes =
-        await _timerService.captureUncreditedMinutes(forceFull: true);
+    final addedMinutes = await _timerService.captureUncreditedMinutes(
+      forceFull: true,
+    );
     final targetMinutes = _timerService.target.inMinutes;
     if (addedMinutes > 0) {
       final medStore = await MeditationStore.create();
@@ -436,6 +513,9 @@ class _TimerPageState extends State<TimerPage>
         'timer.share_rewarded',
         timeout: const Duration(seconds: 8),
       );
+      if (kDebugMode) {
+        debugPrint('[TimerShare] maybeShowRewarded -> shown=$adShown');
+      }
       unawaited(
         AdManager.instance.recordEvent(
           'timer.share_rewarded',
@@ -464,6 +544,9 @@ class _TimerPageState extends State<TimerPage>
         caption: caption,
       ),
     );
+    if (kDebugMode) {
+      debugPrint('[TimerShare] share sheet closed -> result=$result');
+    }
 
     if (result == true && mounted) {
       messenger.showSnackBar(
@@ -485,130 +568,126 @@ class _TimerPageState extends State<TimerPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return ChangeNotifierProvider<TimerService>.value(
-      value: _timerService,
-      child: Consumer<TimerService>(
-        builder: (context, svc, _) {
-          final isRunning = svc.running;
-          final remaining = svc.remaining;
-          final target = svc.target;
-          final isIdle = !isRunning && remaining == target;
-          final isCompleted = !isRunning && remaining == Duration.zero;
-          final isPaused =
-              !isRunning && !isIdle && !isCompleted && !svc.isPristine;
+    return Consumer<TimerService>(
+      builder: (context, svc, _) {
+        final isRunning = svc.running;
+        final remaining = svc.remaining;
+        final target = svc.target;
+        final isIdle = !isRunning && remaining == target;
+        final isCompleted = !isRunning && remaining == Duration.zero;
+        final isPaused =
+            !isRunning && !isIdle && !isCompleted && !svc.isPristine;
 
-          VoidCallback? primaryAction;
-          if (isRunning) {
-            primaryAction = () => unawaited(_pause());
-          } else if (isPaused) {
-            primaryAction = () => unawaited(_resume());
-          } else {
-            primaryAction = () => unawaited(_start());
-          }
+        VoidCallback? primaryAction;
+        if (isRunning) {
+          primaryAction = () => unawaited(_pause());
+        } else if (isPaused) {
+          primaryAction = () => unawaited(_resume());
+        } else {
+          primaryAction = () => unawaited(_start());
+        }
 
-          final primaryLabel =
-              isRunning ? 'Pause' : (isPaused ? 'Resume' : 'Start');
-          final resetAction =
-              (isIdle && svc.isPristine) ? null : () => unawaited(_reset());
+        final primaryLabel = isRunning
+            ? 'Pause'
+            : (isPaused ? 'Resume' : 'Start');
+        final resetAction = (isIdle && svc.isPristine)
+            ? null
+            : () => unawaited(_reset());
 
-          return Scaffold(
-            appBar: AppBar(title: const Text('Timer'), centerTitle: true),
-            body: SafeArea(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: _HeaderCard(soundLabel: _ambienceLabel(context)),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: AnimatedOpacity(
-                        opacity: _visible ? 1 : 0,
-                        duration: const Duration(milliseconds: 700),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            LayoutBuilder(
-                              builder: (context, _) {
-                                final duration = _DurationSection(
-                                  presets: _presets,
-                                  selected: _selectedMinutes,
-                                  onSelect: _selectPreset,
-                                  enabled: !isRunning,
-                                );
-                                final sound = _AmbienceSection(
-                                  selected: _ambienceId,
-                                  onSelect: _selectAmbience,
-                                  enabled: true,
-                                );
-                                return Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(child: duration),
-                                    const SizedBox(width: 12),
-                                    Expanded(child: sound),
-                                  ],
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                            _PrimaryTimerCard(
-                              readout: _readout,
-                              progress: _progress,
-                              statusText: _statusText,
-                            ),
-                            const SizedBox(height: 24),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: FilledButton(
-                                    onPressed: primaryAction,
-                                    child: Text(primaryLabel),
-                                  ),
+        return Scaffold(
+          appBar: AppBar(title: const Text('Timer'), centerTitle: true),
+          body: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: _HeaderCard(soundLabel: _ambienceLabel(context)),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: AnimatedOpacity(
+                      opacity: _visible ? 1 : 0,
+                      duration: const Duration(milliseconds: 700),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          LayoutBuilder(
+                            builder: (context, _) {
+                              final duration = _DurationSection(
+                                presets: _presets,
+                                selected: _selectedMinutes,
+                                onSelect: _selectPreset,
+                                enabled: !isRunning,
+                              );
+                              final sound = _AmbienceSection(
+                                selected: _ambienceId,
+                                onSelect: _selectAmbience,
+                                enabled: !isRunning,
+                              );
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: duration),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: sound),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                          _PrimaryTimerCard(
+                            readout: _readout,
+                            progress: _progress,
+                            statusText: _statusText,
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed: primaryAction,
+                                  child: Text(primaryLabel),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: resetAction,
-                                    child: const Text('Reset'),
-                                  ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: resetAction,
+                                  child: const Text('Reset'),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 32),
-                            FilledButton.icon(
-                              onPressed: _shareBusy ? null : _shareMeditation,
-                              icon: _shareBusy
-                                  ? SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                          Theme.of(context)
-                                              .colorScheme
-                                              .onPrimary,
-                                        ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 32),
+                          FilledButton.icon(
+                            onPressed: _shareBusy ? null : _shareMeditation,
+                            icon: _shareBusy
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Theme.of(context).colorScheme.onPrimary,
                                       ),
-                                    )
-                                  : const Icon(Icons.ios_share),
-                              label: Text(context.tr('timer.share.cta')),
-                            ),
-                            const SizedBox(height: 48),
-                          ],
-                        ),
+                                    ),
+                                  )
+                                : const Icon(Icons.ios_share),
+                            label: Text(context.tr('timer.share.cta')),
+                          ),
+                          const SizedBox(height: 48),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -989,15 +1068,38 @@ class _TimerShareSheetState extends State<_TimerShareSheet> {
         throw Exception('Share boundary not ready');
       }
       final boundary = render;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
+      if (kDebugMode) {
+        debugPrint(
+          '[ShareFlow] boundary ready -> hasSize=${boundary.size}, pixelRatio=3.0',
+        );
+      }
+
+      Future<Uint8List> capture() async {
+        final image = await boundary.toImage(pixelRatio: 3.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData == null) {
+          throw Exception('Unable to encode boundary to PNG byteData');
+        }
+        return byteData.buffer.asUint8List();
+      }
+
+      Uint8List pngBytes = await capture();
+      if (pngBytes.isEmpty) {
+        if (kDebugMode) {
+          debugPrint('[ShareFlow] capture produced 0 bytes, retrying once');
+        }
+        await Future.delayed(const Duration(milliseconds: 16));
+        pngBytes = await capture();
+      }
 
       final dir = await getTemporaryDirectory();
       final file = File(
         '${dir.path}/timer_share_${DateTime.now().millisecondsSinceEpoch}.png',
       );
       await file.writeAsBytes(pngBytes);
+      if (kDebugMode) {
+        debugPrint('[ShareFlow] capture success -> bytes=${pngBytes.length}');
+      }
       AdManager.instance.recordEvent(
         'timer.share_rewarded',
         'share_card_generated',
@@ -1011,6 +1113,9 @@ class _TimerShareSheetState extends State<_TimerShareSheet> {
         'share_intent_launched',
       );
       unawaited(AdManager.instance.preloadPlacement('timer.share_rewarded'));
+      if (kDebugMode) {
+        debugPrint('[ShareFlow] share intent launched');
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e, st) {
       if (kDebugMode) {

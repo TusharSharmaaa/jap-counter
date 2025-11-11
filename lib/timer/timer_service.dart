@@ -79,8 +79,10 @@ class TimerService extends ChangeNotifier {
     final lastActiveMillis = prefs.getInt(_kLastActiveMillis);
     final now = DateTime.now();
     if (lastActiveMillis != null) {
-      final lastActive =
-          DateTime.fromMillisecondsSinceEpoch(lastActiveMillis, isUtc: false);
+      final lastActive = DateTime.fromMillisecondsSinceEpoch(
+        lastActiveMillis,
+        isUtc: false,
+      );
       if (!_isSameDay(lastActive, now)) {
         _resetForNewDay();
         needsPersist = true;
@@ -116,6 +118,12 @@ class TimerService extends ChangeNotifier {
       await _persist();
     }
 
+    if (kDebugMode) {
+      debugPrint(
+        '[TimerService] load -> running=$_running startedAt=$_startedAt accumulated=$_accumulated target=$_target',
+      );
+    }
+
     notifyListeners();
   }
 
@@ -133,10 +141,7 @@ class TimerService extends ChangeNotifier {
     await prefs.setInt(_kTargetSecs, _target.inSeconds);
     await prefs.setInt(_kAccumulatedSecs, _accumulated.inSeconds);
     if (_startedAt != null) {
-      await prefs.setInt(
-        _kStartedAtMillis,
-        _startedAt!.millisecondsSinceEpoch,
-      );
+      await prefs.setInt(_kStartedAtMillis, _startedAt!.millisecondsSinceEpoch);
     } else {
       await prefs.remove(_kStartedAtMillis);
     }
@@ -161,6 +166,9 @@ class TimerService extends ChangeNotifier {
       }
       notifyListeners();
     });
+    if (kDebugMode) {
+      debugPrint('[TimerService] _startTicker -> tickerCreated');
+    }
     notifyListeners();
   }
 
@@ -171,12 +179,14 @@ class TimerService extends ChangeNotifier {
 
   Future<void> start({String? runId}) async {
     if (_running) return;
-    final newRunId = runId ??
+    final newRunId =
+        runId ??
         (_runId.isEmpty
             ? DateTime.now().microsecondsSinceEpoch.toString()
             : _runId);
     final wasCompleted = remaining == Duration.zero && !_running;
-    final isNewRun = wasCompleted || _runId.isEmpty || _accumulated == Duration.zero;
+    final isNewRun =
+        wasCompleted || _runId.isEmpty || _accumulated == Duration.zero;
     if (isNewRun) {
       _accumulated = Duration.zero;
       _recordedSeconds = 0;
@@ -187,6 +197,31 @@ class TimerService extends ChangeNotifier {
     _running = true;
     _startTicker();
     await _persist();
+    if (kDebugMode) {
+      debugPrint(
+        '[TimerService] start -> runId=$_runId accumulated=$_accumulated startedAt=$_startedAt',
+      );
+    }
+  }
+
+  Future<void> resume({String? runId}) async {
+    if (_running || remaining == Duration.zero) return;
+    final resumeId =
+        runId ??
+        (_runId.isEmpty
+            ? DateTime.now().microsecondsSinceEpoch.toString()
+            : _runId);
+    _runId = resumeId;
+    _completedThisRun = false;
+    _startedAt = DateTime.now();
+    _running = true;
+    _startTicker();
+    await _persist();
+    if (kDebugMode) {
+      debugPrint(
+        '[TimerService] resume -> runId=$_runId accumulated=$_accumulated startedAt=$_startedAt',
+      );
+    }
   }
 
   Future<void> pause() async {
@@ -197,6 +232,11 @@ class TimerService extends ChangeNotifier {
     _stopTicker();
     await _persist();
     notifyListeners();
+    if (kDebugMode) {
+      debugPrint(
+        '[TimerService] pause -> accumulated=$_accumulated recorded=$_recordedSeconds',
+      );
+    }
   }
 
   Future<void> reset() async {
@@ -241,10 +281,16 @@ class TimerService extends ChangeNotifier {
     _stopTicker();
     await _persist();
     notifyListeners();
+    if (kDebugMode) {
+      debugPrint(
+        '[TimerService] complete -> runId=$_runId recorded=$_recordedSeconds',
+      );
+    }
   }
 
   bool consumeCompletion(String runId) {
-    final shouldShow = _completedThisRun && _runId.isNotEmpty && _runId == runId;
+    final shouldShow =
+        _completedThisRun && _runId.isNotEmpty && _runId == runId;
     if (shouldShow) {
       _completedThisRun = false;
       _runId = '';
@@ -306,4 +352,3 @@ class TimerService extends ChangeNotifier {
     super.dispose();
   }
 }
-
