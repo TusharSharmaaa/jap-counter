@@ -274,28 +274,61 @@ class _CounterPageState extends State<CounterPage> {
   }
 
   Future<void> _editGoal() async {
-    final controller = TextEditingController(text: '$_dailyGoal');
     final result = await showDialog<int>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Set your daily jap goal (malas)'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Goal (malas)'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+      builder: (ctx) {
+        int sliderValue = _dailyGoal.clamp(0, 50);
+        return StatefulBuilder(
+          builder: (context, setLocalState) => AlertDialog(
+            title: const Text('Set your daily jap goal (malas)'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  sliderValue == 0
+                      ? 'No daily goal'
+                      : '$sliderValue mala${sliderValue == 1 ? '' : 's'} per day',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                Slider(
+                  value: sliderValue.toDouble(),
+                  min: 0,
+                  max: 50,
+                  divisions: 50,
+                  label: sliderValue.toString(),
+                  onChanged: (value) {
+                    setLocalState(() => sliderValue = value.round());
+                  },
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Use the slider to adjust your daily mala goal.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).hintColor),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, sliderValue),
+                child: const Text('Save'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(ctx, int.tryParse(controller.text) ?? _dailyGoal),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+        );
+      },
     );
     if (result != null) {
       final sanitized = result.clamp(0, 50);
