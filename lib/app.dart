@@ -51,7 +51,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     _timerService = TimerService();
     unawaited(_timerService.load());
 
-    _loadThemeMode();
     _loadLanguage();
     _initNotifications(); // fire-and-forget
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -95,7 +94,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   int _index = 0;
   final GlobalKey<_StatsPageState> _statsKey = GlobalKey<_StatsPageState>();
-  ThemeMode _themeMode = ThemeMode.system;
   String _language = 'en';
 
   late final List<Widget> _pages = [
@@ -104,20 +102,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     const _GitaTab(),
     TimerPage(),
   ];
-
-  Future<void> _loadThemeMode() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getInt('themeMode') ?? ThemeMode.system.index;
-    final values = ThemeMode.values;
-    final mode = (stored >= 0 && stored < values.length)
-        ? values[stored]
-        : ThemeMode.system;
-    if (mounted) {
-      setState(() => _themeMode = mode);
-    } else {
-      _themeMode = mode;
-    }
-  }
 
   Future<void> _loadLanguage() async {
     final lang = await LanguageStore.current();
@@ -146,11 +130,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     return value;
   }
 
-  Future<void> _saveThemeMode(ThemeMode mode) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('themeMode', mode.index);
-  }
-
   Future<void> _initNotifications() async {
     final ns = NotificationService();
     await ns.init();
@@ -169,8 +148,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       child: MaterialApp(
         title: 'Radha Jap Counter',
         theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
-        themeMode: _themeMode,
+        themeMode: ThemeMode.light,
         builder: (context, child) => AppLocalizationScope(
           language: _language,
           child: child ?? const SizedBox.shrink(),
@@ -205,12 +183,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               child: (_index == 4)
                   ? SettingsPage(
                       key: const ValueKey('settings'),
-                      themeMode: _themeMode,
                       language: _language,
-                      onThemeModeChanged: (mode) {
-                        setState(() => _themeMode = mode);
-                        _saveThemeMode(mode);
-                      },
                       onLanguageChanged: _setLanguage,
                     )
                   : KeyedSubtree(

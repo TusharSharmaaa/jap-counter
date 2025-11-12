@@ -24,6 +24,12 @@ class CounterStore {
   int get todayJaps => _prefs.getInt(_kTodayJaps) ?? 0;
   int get lifetimeJaps => _prefs.getInt(_kLifetimeJaps) ?? 0;
 
+  /// Get today's japs including pending increments (for immediate UI updates).
+  int get todayJapsWithPending => todayJaps + _pendingIncrements;
+  
+  /// Get lifetime japs including pending increments (for immediate UI updates).
+  int get lifetimeJapsWithPending => lifetimeJaps + _pendingIncrements;
+
   int get todayMalas => todayJaps ~/ 108;
   int get lifetimeMalas => lifetimeJaps ~/ 108;
 

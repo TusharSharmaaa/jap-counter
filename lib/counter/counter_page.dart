@@ -89,7 +89,9 @@ class _CounterPageState extends State<CounterPage> {
     });
     await _incrementJap();
 
-    if (_today > 0 && _today % 108 == 0) {
+    // Check if we just completed a mala using the updated store value
+    final currentCount = _store?.todayJapsWithPending ?? _today;
+    if (currentCount > 0 && currentCount % 108 == 0) {
       if (_soundEnabled) {
         try {
           _bellPlayer ??= AudioPlayer();
@@ -99,7 +101,7 @@ class _CounterPageState extends State<CounterPage> {
         }
       }
       _triggerConfetti();
-      await ActivityStore.recordDailySummary(_today, _today ~/ 108);
+      await ActivityStore.recordDailySummary(currentCount, currentCount ~/ 108);
     }
   }
 
@@ -193,13 +195,14 @@ class _CounterPageState extends State<CounterPage> {
 
     if (!mounted) return;
 
-    final updatedToday = store.todayJaps;
+    // Use values that include pending increments for immediate UI feedback
+    final updatedToday = store.todayJapsWithPending;
     final remainder = updatedToday % 108;
     final malaCompleted = remainder == 0 && updatedToday > 0;
 
     setState(() {
       _today = updatedToday;
-      _lifetime = store.lifetimeJaps;
+      _lifetime = store.lifetimeJapsWithPending;
       _currentMalaCountDisplay = malaCompleted ? 108 : remainder;
     });
 

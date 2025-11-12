@@ -27,8 +27,7 @@ class SplashApp extends StatelessWidget {
       title: 'Radha Jap Counter',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.light,
       home: const SplashScaffold(),
     );
   }

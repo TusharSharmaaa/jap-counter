@@ -16,15 +16,11 @@ import '../l10n/app_localizations.dart';
 import '../theme/responsive_tokens.dart';
 
 class SettingsPage extends StatefulWidget {
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
   final String language;
   final ValueChanged<String> onLanguageChanged;
 
   const SettingsPage({
     super.key,
-    required this.themeMode,
-    required this.onThemeModeChanged,
     required this.language,
     required this.onLanguageChanged,
   });
@@ -230,7 +226,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = widget.themeMode == ThemeMode.dark;
     final language = widget.language;
     final goalLabel = _formatGoalLabel(context, _goalMalas);
 
@@ -264,7 +259,7 @@ class _SettingsPageState extends State<SettingsPage> {
             // Single column for phones
             return ListView(
               padding: padding,
-              children: _buildSettingsListChildren(context, isDark, goalLabel),
+              children: _buildSettingsListChildren(context, goalLabel),
             );
           },
         ),
@@ -274,41 +269,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   List<Widget> _buildSettingsListChildren(
     BuildContext context,
-    bool isDark,
     String goalLabel,
   ) {
     return [
-      _SettingsSection(
-        icon: Icons.dark_mode,
-        title: context.tr('settings.theme'),
-        children: [
-          Center(
-            child: SegmentedButton<bool>(
-              segments: [
-                ButtonSegment(
-                  value: false,
-                  label: Text(context.tr('common.light')),
-                  icon: const Icon(Icons.wb_sunny),
-                ),
-                ButtonSegment(
-                  value: true,
-                  label: Text(context.tr('common.dark')),
-                  icon: const Icon(Icons.dark_mode),
-                ),
-              ],
-              selected: {isDark},
-              onSelectionChanged: (selection) {
-                final dark = selection.first;
-                HapticFeedback.selectionClick();
-                widget.onThemeModeChanged(
-                  dark ? ThemeMode.dark : ThemeMode.light,
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-      SizedBox(height: ResponsiveTokens.spacingMD),
       _SettingsSection(
         icon: Icons.language,
         title: context.tr('settings.language'),
@@ -456,11 +419,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildSettingsList(BuildContext context) {
-    final isDark = widget.themeMode == ThemeMode.dark;
     final goalLabel = _formatGoalLabel(context, _goalMalas);
     return ListView(
       shrinkWrap: true,
-      children: _buildSettingsListChildren(context, isDark, goalLabel),
+      children: _buildSettingsListChildren(context, goalLabel),
     );
   }
 
