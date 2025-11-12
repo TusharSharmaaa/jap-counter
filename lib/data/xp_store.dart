@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/prefs_manager.dart';
+
 class XPStore {
   static const _kXP = 'xp.total';
 
@@ -8,7 +10,7 @@ class XPStore {
   XPStore._(this._prefs);
 
   static Future<XPStore> create() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     return XPStore._(prefs);
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
@@ -104,8 +106,14 @@ class NotificationService {
   }
 
   Future<void> scheduleDefaults({String language = 'hi'}) async {
+    // Cancel first (fast operation)
     await cancelAll();
+    
+    // Defer heavy operations to background
+    unawaited(_scheduleDefaultsAsync(language));
+  }
 
+  Future<void> _scheduleDefaultsAsync(String language) async {
     final dstore = await DedicationStore.create();
     final note = dstore.note.isEmpty ? 'Radha Jap Counter' : dstore.note;
     final streakDays = await ActivityStore.currentStreak();

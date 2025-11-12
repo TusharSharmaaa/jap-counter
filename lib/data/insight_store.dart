@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/prefs_manager.dart';
+
 class InsightStore {
   final SharedPreferences _prefs;
 
@@ -10,7 +12,7 @@ class InsightStore {
   InsightStore._(this._prefs);
 
   static Future<InsightStore> create() async =>
-      InsightStore._(await SharedPreferences.getInstance());
+      InsightStore._(await PrefsManager.instance);
 
   Future<void> recordJap({required int count, required int malas}) async {
     final today = DateTime.now().toIso8601String().substring(0, 10);
@@ -49,7 +51,7 @@ class InsightStore {
 
   /// Clean up old insight data (older than N days)
   static Future<void> cleanupOldData({int daysToKeep = 90}) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final cutoffDate = DateTime.now().subtract(Duration(days: daysToKeep));
     final cutoffKey = cutoffDate.toIso8601String().substring(0, 10);
     

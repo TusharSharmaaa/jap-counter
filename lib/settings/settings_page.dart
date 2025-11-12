@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../core/prefs_manager.dart';
 import '../notifications/notification_service.dart';
 import '../data/goal_store.dart';
 import '../data/language_store.dart';
@@ -48,7 +48,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final gs = await GoalStore.create();
     final ns = NotificationService();
     await ns.init();
@@ -78,7 +78,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     HapticFeedback.lightImpact();
     setState(() => _reminders = value);
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.setBool(_keyReminders, value);
 
     final ns = NotificationService();
@@ -104,7 +104,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _toggleBell(bool value) async {
     HapticFeedback.lightImpact();
     setState(() => _soundEnabled = value);
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.setBool('settings.soundEnabled', value);
   }
 
@@ -242,7 +242,12 @@ class _SettingsPageState extends State<SettingsPage> {
       appBar: AppBar(title: Text(context.tr('settings.title'))),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            MediaQuery.of(context).padding.bottom + 32,
+          ),
           children: [
             _SettingsSection(
               icon: Icons.dark_mode,

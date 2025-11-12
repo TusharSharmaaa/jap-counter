@@ -95,35 +95,42 @@ class _GitaPageState extends State<GitaPage> {
   }
 
   void _loadShloka({int retryCount = 0}) {
-    _currentFuture = GitaService.fetchVerse(_chapter, _verse).then((verse) {
-      if (verse == null) {
-        // Retry up to 2 times if fetch fails
+    // Show loading state immediately
+    setState(() {
+      _currentFuture = GitaService.fetchVerse(_chapter, _verse).then((verse) {
+        if (verse == null) {
+          // Retry up to 2 times if fetch fails
+          if (retryCount < 2 && mounted) {
+            Future.delayed(Duration(milliseconds: 500 * (retryCount + 1)), () {
+              if (mounted) _loadShloka(retryCount: retryCount + 1);
+            });
+          }
+          return null;
+        }
+        // Prefetch immediately after loading (not in PostFrameCallback)
+        unawaited(_prefetchNext());
+        return GitaShloka(
+          ref: 'Chapter ${verse.chapter} · Verse ${verse.verse}',
+          sanskrit: verse.sanskrit.trim(),
+          translation: verse.hindi.trim(),
+          transliteration: null,
+        );
+      }).catchError((error) {
+        // Handle network errors with retry
         if (retryCount < 2 && mounted) {
           Future.delayed(Duration(milliseconds: 500 * (retryCount + 1)), () {
             if (mounted) _loadShloka(retryCount: retryCount + 1);
           });
         }
         return null;
-      }
-      return GitaShloka(
-        ref: 'Chapter ${verse.chapter} · Verse ${verse.verse}',
-        sanskrit: verse.sanskrit.trim(),
-        translation: verse.hindi.trim(),
-        transliteration: null,
-      );
-    }).catchError((error) {
-      // Handle network errors with retry
-      if (retryCount < 2 && mounted) {
-        Future.delayed(Duration(milliseconds: 500 * (retryCount + 1)), () {
-          if (mounted) _loadShloka(retryCount: retryCount + 1);
-        });
-      }
-      return null;
+      });
     });
   }
 
-  void _prefetchNext() {
-    GitaService.prefetch(_chapter, _verse + 1, count: 3);
+  Future<void> _prefetchNext() async {
+    // Aggressive prefetching for better performance
+    GitaService.prefetch(_chapter, _verse + 1, count: 5);
+    GitaService.prefetch(_chapter, _verse + 2, count: 3);
   }
 
   Future<void> _prevVerse() async {
@@ -378,7 +385,7 @@ class _GitaPageState extends State<GitaPage> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: MediaQuery.of(context).padding.bottom + 24),
                           ],
                         );
                       },

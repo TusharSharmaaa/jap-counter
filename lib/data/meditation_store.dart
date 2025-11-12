@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/prefs_manager.dart';
 import 'xp_store.dart';
 
 /// Tracks meditation minutes: today + lifetime, with daily reset.
@@ -13,7 +14,7 @@ class MeditationStore {
   MeditationStore._(this._prefs);
 
   static Future<MeditationStore> create() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final store = MeditationStore._(prefs);
     await store._ensureToday();
     return store;

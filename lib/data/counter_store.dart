@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited, Timer, Completer;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/prefs_manager.dart';
 import 'xp_store.dart';
 
 /// Offline-only store for Counter page with daily reset.
@@ -26,7 +27,7 @@ class CounterStore {
 
   /// Factory that also enforces daily reset.
   static Future<CounterStore> create() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final store = CounterStore._(prefs);
     await store._resetIfNewDay();
     // Load cache from disk

@@ -5,8 +5,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import '../core/prefs_manager.dart';
 import '../data/activity_store.dart';
 import '../data/counter_store.dart';
 import '../data/dedication_store.dart';
@@ -17,6 +16,7 @@ import '../gamify/gamify_store.dart';
 import '../l10n/app_localizations.dart';
 import '../notifications/notification_service.dart';
 import '../theme/glow_theme.dart';
+import '../utils/weekly_chart_data.dart';
 
 class CounterPage extends StatefulWidget {
   const CounterPage({super.key});
@@ -48,13 +48,15 @@ class _CounterPageState extends State<CounterPage> {
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 3),
     );
+    // Create AudioPlayer once for reuse
+    _bellPlayer = AudioPlayer();
     _init();
   }
 
   Future<void> _init() async {
     final store = await CounterStore.create();
     final goalStore = await GoalStore.create();
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
 
     final congratulatedToday =
         goalStore.lastCongratsDate == GoalStore.todayKey();
@@ -91,7 +93,6 @@ class _CounterPageState extends State<CounterPage> {
     if (_today > 0 && _today % 108 == 0) {
       if (_soundEnabled) {
         try {
-          _bellPlayer ??= AudioPlayer();
           await _bellPlayer!.play(AssetSource('audio/bell_end.mp3'));
         } catch (e) {
           debugPrint('[Counter] Bell play failed: $e');
@@ -99,6 +100,8 @@ class _CounterPageState extends State<CounterPage> {
       }
       _triggerConfetti();
       await ActivityStore.recordDailySummary(_today, _today ~/ 108);
+      // Invalidate chart cache when counter increments
+      unawaited(_invalidateChartCache());
     }
   }
 
@@ -119,6 +122,9 @@ class _CounterPageState extends State<CounterPage> {
     
     // Critical: Update counter immediately
     await store.increment();
+
+    // Invalidate chart cache when counter increments
+    unawaited(_invalidateChartCache());
 
     // Update UI immediately for responsiveness
     final updatedToday = store.todayJaps;
@@ -167,6 +173,11 @@ class _CounterPageState extends State<CounterPage> {
 
     // Schedule notification reminder (non-blocking)
     unawaited(_scheduleNotification());
+  }
+  
+  Future<void> _invalidateChartCache() async {
+    // Invalidate chart cache when counter increments
+    WeeklyChartData.invalidateCache();
   }
 
   Future<void> _recordInsight(int willBe) async {
@@ -292,7 +303,7 @@ class _CounterPageState extends State<CounterPage> {
             HapticFeedback.mediumImpact();
           } catch (_) {}
           try {
-            _bellPlayer ??= AudioPlayer();
+            // _bellPlayer is already initialized in initState
             await _bellPlayer!.play(AssetSource('audio/bell_end.mp3'));
           } catch (_) {}
           if (mounted) {
@@ -500,107 +511,133 @@ class _CounterPageState extends State<CounterPage> {
               behavior: HitTestBehavior.opaque,
               onTap: _handleJapTap,
               child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _StatTile(
-                              title: "Today's Japs",
-                              value: _today.toString(),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _StatTile(
-                              title: "Malas",
-                              value: _malas.toString(),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _StatTile(
-                              title: "Lifetime Malas",
-                              value: _lifetimeMalas.toString(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _GoalSummary(
-                      dailyGoal: _dailyGoal,
-                      goalProgress: _goalProgress,
-                      goalCompletedShown: _goalCompletedShown,
-                      malas: _malas,
-                      onEditGoal: _editGoal,
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Tap to Count',
-                              style: theme.textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 16),
-                            AnimatedScale(
-                              scale: _pulse ? 1.08 : 1.0,
-                              duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeOut,
-                              child: Container(
-                                height: 240,
-                                width: 240,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: RadialGradient(
-                                    colors: [
-                                      theme.colorScheme.primary.withOpacity(
-                                        0.25,
-                                      ),
-                                      theme.colorScheme.surface,
-                                    ],
-                                    radius: 0.85,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: theme.colorScheme.primary
-                                          .withOpacity(0.3),
-                                      blurRadius: 30,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '$_today',
-                                    style: theme.textTheme.displayLarge
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          foreground: Paint()
-                                            ..shader = GlowTheme.linearGradient(
-                                              context,
-                                            ),
-                                        ),
-                                  ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final screenHeight = constraints.maxHeight;
+                    final isSmallScreen = screenHeight < 600;
+                    
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _StatTile(
+                                  title: "Today's Japs",
+                                  value: _today.toString(),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 20),
-                            _MalaProgressDisplay(
-                              currentMalaCount: _currentMalaCountDisplay,
-                              malasCompleted: _malas,
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _StatTile(
+                                  title: "Malas",
+                                  value: _malas.toString(),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _StatTile(
+                                  title: "Lifetime Malas",
+                                  value: _lifetimeMalas.toString(),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                        SizedBox(height: isSmallScreen ? 12 : 24),
+                        _GoalSummary(
+                          dailyGoal: _dailyGoal,
+                          goalProgress: _goalProgress,
+                          goalCompletedShown: _goalCompletedShown,
+                          malas: _malas,
+                          onEditGoal: _editGoal,
+                        ),
+                        Expanded(
+                          child: Center(
+                            child: SingleChildScrollView(
+                              physics: const NeverScrollableScrollPhysics(),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Tap to Count',
+                                    style: theme.textTheme.titleLarge,
+                                  ),
+                                  SizedBox(height: isSmallScreen ? 12 : 16),
+                                  AnimatedScale(
+                                    scale: _pulse ? 1.08 : 1.0,
+                                    duration: const Duration(milliseconds: 220),
+                                    curve: Curves.easeOut,
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final maxSize = constraints.maxWidth < constraints.maxHeight
+                                            ? constraints.maxWidth * 0.6
+                                            : constraints.maxHeight * 0.4;
+                                        final circleSize = (maxSize.clamp(180.0, 240.0));
+                                        
+                                        return Container(
+                                          height: circleSize,
+                                          width: circleSize,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: RadialGradient(
+                                              colors: [
+                                                theme.colorScheme.primary.withOpacity(
+                                                  0.25,
+                                                ),
+                                                theme.colorScheme.surface,
+                                              ],
+                                              radius: 0.85,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: theme.colorScheme.primary
+                                                    .withOpacity(0.3),
+                                                blurRadius: 30,
+                                                spreadRadius: 2,
+                                              ),
+                                            ],
+                                          ),
+                                          child: Center(
+                                            child: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(16.0),
+                                                child: Text(
+                                                  '$_today',
+                                                  style: theme.textTheme.displayLarge
+                                                      ?.copyWith(
+                                                        fontWeight: FontWeight.bold,
+                                                        foreground: Paint()
+                                                          ..shader = GlowTheme.linearGradient(
+                                                            context,
+                                                          ),
+                                                      ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  SizedBox(height: isSmallScreen ? 12 : 20),
+                                  _MalaProgressDisplay(
+                                    currentMalaCount: _currentMalaCountDisplay,
+                                    malasCompleted: _malas,
+                                  ),
+                                  SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -627,18 +664,37 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 68,
+      constraints: const BoxConstraints(minHeight: 60, maxHeight: 68),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Theme.of(context).dividerColor),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: Theme.of(context).textTheme.labelMedium),
+          Flexible(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontSize: 10,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           const Spacer(),
-          Text(value, style: Theme.of(context).textTheme.titleLarge),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -736,11 +792,11 @@ class _GoalSummary extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           onTap: onEditGoal,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primary.withOpacity(0.12),
                     shape: BoxShape.circle,
@@ -748,28 +804,40 @@ class _GoalSummary extends StatelessWidget {
                   child: Icon(
                     Icons.flag_rounded,
                     color: theme.colorScheme.primary,
-                    size: 22,
+                    size: 20,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        goalLabel,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                      Flexible(
+                        child: Text(
+                          goalLabel,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(statusText, style: theme.textTheme.bodySmall),
-                      const SizedBox(height: 8),
+                      Flexible(
+                        child: Text(
+                          statusText,
+                          style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(999),
                         child: LinearProgressIndicator(
                           value: goalProgress,
-                          minHeight: 6,
+                          minHeight: 5,
                           backgroundColor: theme.colorScheme.primary
                               .withOpacity(0.08),
                         ),
@@ -777,11 +845,11 @@ class _GoalSummary extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Icon(
                   Icons.edit_outlined,
                   color: theme.colorScheme.primary,
-                  size: 20,
+                  size: 18,
                 ),
               ],
             ),

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'bootstrap/app_bootstrapper.dart';
+import 'core/prefs_manager.dart';
 import 'data/language_store.dart';
 import 'data/streak_store.dart';
 import 'firebase_options.dart';
@@ -16,11 +17,24 @@ const _bootLog = '[BOOT]';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SplashApp());
+  // Initialize SharedPreferences singleton early for better performance
+  await PrefsManager.ensureInitialized();
+  
+  // Load theme mode synchronously before showing app
+  final prefs = await PrefsManager.instance;
+  final stored = prefs.getInt('themeMode') ?? ThemeMode.system.index;
+  final values = ThemeMode.values;
+  final initialThemeMode = (stored >= 0 && stored < values.length)
+      ? values[stored]
+      : ThemeMode.system;
+  
+  runApp(SplashApp(initialThemeMode: initialThemeMode));
 }
 
 class SplashApp extends StatelessWidget {
-  const SplashApp({super.key});
+  final ThemeMode initialThemeMode;
+  
+  const SplashApp({super.key, required this.initialThemeMode});
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +43,7 @@ class SplashApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: initialThemeMode,
       home: const SplashScaffold(),
     );
   }

@@ -16,8 +16,8 @@ import 'data/dedication_store.dart';
 import 'stats/share_gate.dart';
 import 'stats/stats_ambience.dart';
 import 'settings/settings_page.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/notification_service.dart';
+import 'core/prefs_manager.dart';
 import 'data/activity_store.dart';
 import 'data/counter_store.dart';
 import 'data/goal_store.dart';
@@ -81,7 +81,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   ];
 
   Future<void> _loadThemeMode() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final stored = prefs.getInt('themeMode') ?? ThemeMode.system.index;
     final values = ThemeMode.values;
     final mode = (stored >= 0 && stored < values.length)
@@ -122,7 +122,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   }
 
   Future<void> _saveThemeMode(ThemeMode mode) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.setInt('themeMode', mode.index);
   }
 
@@ -139,7 +139,21 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   }
 
   Future<void> _showWelcomeSnackbar() async {
-    // Small delay to let UI render first
+    // Show loading state immediately
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_translate('home.snackbar.loading')),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+    // Load data in background
+    unawaited(_loadWelcomeData());
+  }
+
+  Future<void> _loadWelcomeData() async {
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
     final counter = await CounterStore.create();
@@ -187,65 +201,56 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           ),
           child: Scaffold(
             backgroundColor: Colors.transparent,
-            body: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                final offset = Tween<Offset>(
-                  begin: const Offset(0.03, 0.02),
-                  end: Offset.zero,
-                ).animate(animation);
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(position: offset, child: child),
-                );
-              },
-              child: (_index == 4)
-                  ? SettingsPage(
-                      key: const ValueKey('settings'),
-                      themeMode: _themeMode,
-                      language: _language,
-                      onThemeModeChanged: (mode) {
-                        setState(() => _themeMode = mode);
-                        _saveThemeMode(mode);
-                      },
-                      onLanguageChanged: _setLanguage,
-                    )
-                  : KeyedSubtree(
-                      key: ValueKey('tab-$_index'),
-                      child: _pages[_index],
-                    ),
-            ),
-            bottomNavigationBar: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      offset: const Offset(2, 2),
-                      blurRadius: 6,
-                    ),
-                    BoxShadow(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      offset: const Offset(-2, -2),
-                      blurRadius: 6,
-                    ),
-                  ],
+            body: IndexedStack(
+              index: _index,
+              children: [
+                _pages[0], // CounterPage
+                _pages[1], // StatsPage
+                _pages[2], // GitaTab
+                _pages[3], // TimerPage
+                SettingsPage(
+                  key: const ValueKey('settings'),
+                  themeMode: _themeMode,
+                  language: _language,
+                  onThemeModeChanged: (mode) {
+                    setState(() => _themeMode = mode);
+                    _saveThemeMode(mode);
+                  },
+                  onLanguageChanged: _setLanguage,
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _navIcon(Icons.touch_app, 0, 'nav.counter'),
-                    _navIcon(Icons.bar_chart, 1, 'nav.stats'),
-                    _navIcon(Icons.menu_book, 2, 'nav.gita'),
-                    _navIcon(Icons.timer, 3, 'nav.timer'),
-                    _navIcon(Icons.settings, 4, 'nav.settings'),
-                  ],
+              ],
+            ),
+            bottomNavigationBar: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        offset: const Offset(2, 2),
+                        blurRadius: 6,
+                      ),
+                      BoxShadow(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        offset: const Offset(-2, -2),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _navIcon(Icons.touch_app, 0, 'nav.counter'),
+                      _navIcon(Icons.bar_chart, 1, 'nav.stats'),
+                      _navIcon(Icons.menu_book, 2, 'nav.gita'),
+                      _navIcon(Icons.timer, 3, 'nav.timer'),
+                      _navIcon(Icons.settings, 4, 'nav.settings'),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -276,7 +281,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         onTap: () => _handleNavTap(idx),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
           decoration: BoxDecoration(
             color: active
                 ? theme.colorScheme.primary.withValues(alpha: 0.15)
@@ -293,14 +298,21 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color),
-              const SizedBox(height: 4),
-              Text(
-                _translate(labelKey),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: active ? FontWeight.w600 : null,
+              Icon(icon, color: color, size: 22),
+              const SizedBox(height: 2),
+              Flexible(
+                child: Text(
+                  _translate(labelKey),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: color,
+                    fontWeight: active ? FontWeight.w600 : null,
+                    fontSize: 10,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -362,7 +374,7 @@ class _StatsPage extends StatefulWidget {
   State<_StatsPage> createState() => _StatsPageState();
 }
 
-class _StatsPageState extends State<_StatsPage> {
+class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMixin {
   bool _shareBusy = false;
   late ConfettiController _confetti;
 
@@ -387,6 +399,9 @@ class _StatsPageState extends State<_StatsPage> {
   int? _cachedStreak;
 
   @override
+  bool get wantKeepAlive => true; // Preserve state when hidden
+
+  @override
   void initState() {
     super.initState();
     _confetti = ConfettiController(duration: const Duration(seconds: 3));
@@ -402,9 +417,22 @@ class _StatsPageState extends State<_StatsPage> {
     });
     _badgesFuture = GamifyStore.badges();
     _goalFuture = GoalStore.create().then((gs) => gs.dailyMalasGoal);
-    _chartFuture = WeeklyChartData.build();
+    // Chart future will be built in build() method where context is available for locale
+    _chartFuture = WeeklyChartData.build(locale: 'en'); // Default, will be updated in build
     _dedicationFuture = DedicationStore.create().then((s) => s.note);
     _activeDaysFuture = ActivityStore.totalActiveDays();
+  }
+  
+  Future<List<Map<String, dynamic>>> _buildChartFuture(BuildContext context) {
+    // Get language from context for chart data formatting
+    try {
+      final language = AppLocalizationScope.of(context).language;
+      final locale = language == 'hi' ? 'hi' : 'en';
+      return WeeklyChartData.build(locale: locale);
+    } catch (_) {
+      // Fallback to English if context not available
+      return WeeklyChartData.build(locale: 'en');
+    }
   }
 
   @override
@@ -415,13 +443,13 @@ class _StatsPageState extends State<_StatsPage> {
   }
 
   Future<void> _loadAmbiencePref() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await PrefsManager.instance;
     if (!mounted) return;
     setState(() => _ambienceEnabled = p.getBool(_ambienceKey) ?? false);
   }
 
   Future<void> _saveAmbiencePref(bool v) async {
-    final p = await SharedPreferences.getInstance();
+    final p = await PrefsManager.instance;
     await p.setBool(_ambienceKey, v);
   }
 
@@ -443,14 +471,21 @@ class _StatsPageState extends State<_StatsPage> {
 
     if (!mounted) return;
     
-    // Refresh cached futures
+    // Invalidate chart cache before refreshing
+    WeeklyChartData.invalidateCache();
+    
+    // Refresh cached futures on manual refresh
     _streakFuture = ActivityStore.currentStreak().then((streak) {
       _cachedStreak = streak;
       return streak;
     });
     _badgesFuture = GamifyStore.badges();
     _goalFuture = GoalStore.create().then((gs) => gs.dailyMalasGoal);
-    _chartFuture = WeeklyChartData.build();
+    // Invalidate and rebuild chart with correct locale
+    WeeklyChartData.invalidateCache();
+    final language = AppLocalizationScope.of(context).language;
+    final locale = language == 'hi' ? 'hi' : 'en';
+    _chartFuture = WeeklyChartData.build(locale: locale);
     _dedicationFuture = DedicationStore.create().then((s) => s.note);
     _activeDaysFuture = ActivityStore.totalActiveDays();
     
@@ -500,6 +535,7 @@ class _StatsPageState extends State<_StatsPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(context.tr('stats.title'))),
@@ -578,470 +614,499 @@ class _StatsPageState extends State<_StatsPage> {
     int todayMalas,
     int lifetimeMalas,
   ) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Theme.of(context).dividerColor),
-          ),
-          child: FutureBuilder<int>(
-            future: _streakFuture,
-            builder: (context, snap) {
-              final streak = snap.data ?? 0;
-              final theme = Theme.of(context);
-              if (streak == 7 || streak == 21 || streak == 40) {
-                if (_confetti.state != ConfettiControllerState.playing) {
-                  _confetti.play();
-                }
-              }
-              String streakMessage;
-              if (streak == 0) {
-                streakMessage = context.tr('stats.noActiveStreak');
-              } else if (streak == 7) {
-                streakMessage = context.tr('stats.streakMessage.7');
-              } else if (streak == 21) {
-                streakMessage = context.tr('stats.streakMessage.21');
-              } else if (streak == 40) {
-                streakMessage = context.tr('stats.streakMessage.40');
-              } else {
-                streakMessage = context.tr(
-                  'stats.streakMessage.generic',
-                  args: {'days': '$streak'},
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        context.tr('stats.currentStreak'),
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.15,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '🔥 $streak',
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (streak > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: StreakBadge(streakDays: streak),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      streakMessage,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-        FutureBuilder<Set<String>>(
-          future: _badgesFuture,
-          builder: (context, snapshot) {
-            final badges = snapshot.data ?? <String>{};
-            if (badges.isEmpty) return const SizedBox.shrink();
-
-            return Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: badges.map((badge) {
-                  final label = switch (badge) {
-                    'streak_7' => context.tr('stats.badge.streak7'),
-                    'streak_21' => context.tr('stats.badge.streak21'),
-                    'streak_40' => context.tr('stats.badge.streak40'),
-                    _ => badge,
-                  };
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: Neo.pill(context),
-                    child: Text(
-                      label,
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                  );
-                }).toList(),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _NeoTile(
-                title: context.tr('stats.metric.todayJaps'),
-                value: _today.toString(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _NeoTile(
-                title: context.tr('stats.metric.todayMalas'),
-                value: todayMalas.toString(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _NeoTile(
-                title: context.tr('stats.metric.lifetimeMalas'),
-                value: lifetimeMalas.toString(),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _NeoTile(
-                title: context.tr('stats.metric.todayMeditation'),
-                value: _todayMin.toString(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _NeoTile(
-                title: context.tr('stats.metric.lifetimeMeditation'),
-                value: _lifetimeMin.toString(),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        FutureBuilder<int>(
-          future: _goalFuture,
-          builder: (context, snap) {
-            final goal = snap.data ?? 1;
-            final reached = todayMalas >= goal;
-            return Container(
-              margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).dividerColor),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    reached ? Icons.check_circle : Icons.flag,
-                    color: reached
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.outline,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      context.tr(
-                        reached
-                            ? 'stats.dailyGoal.met'
-                            : 'stats.dailyGoal.pending',
-                        args: {'todayMalas': '$todayMalas', 'goal': '$goal'},
-                      ),
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: _chartFuture,
-          builder: (context, snap) {
-            final data = snap.data ?? [];
-            if (data.isEmpty) return const SizedBox.shrink();
-            final theme = Theme.of(context);
-            final maxMalas = data.fold<int>(0, (prev, element) {
-              final val = element['value'] as int? ?? 0;
-              return val > prev ? val : prev;
-            });
-            final safeMax = maxMalas == 0 ? 1 : maxMalas;
-
-            return Container(
-              margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: theme.dividerColor),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr('stats.progressTitle'),
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 164,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: data.map((e) {
-                        final val = e['value'] as int? ?? 0;
-                        final dayLabel = e['day'] as String? ?? '';
-                        final dateLabel = e['dateLabel'] as String? ?? '';
-                        final normalized = val == 0 ? 0.0 : val / safeMax;
-                        final barHeight = val == 0
-                            ? 6.0
-                            : (normalized * 96).clamp(14.0, 96.0);
-
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.surfaceVariant
-                                        .withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '$val',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeOutCubic,
-                                  height: barHeight,
-                                  width: 14,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.bottomCenter,
-                                      end: Alignment.topCenter,
-                                      colors: [
-                                        theme.colorScheme.primary,
-                                        theme.colorScheme.primaryContainer,
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: theme.colorScheme.primary
-                                            .withOpacity(0.2),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  alignment: Alignment.topCenter,
-                                  child: val > 0
-                                      ? Icon(
-                                          Icons.energy_savings_leaf,
-                                          size: 12,
-                                          color: theme.colorScheme.onPrimary,
-                                        )
-                                      : null,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  dayLabel,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  dateLabel,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
+    // Use CustomScrollView for better performance
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                ),
+                child: FutureBuilder<int>(
+                  future: _streakFuture,
+                  builder: (context, snap) {
+                    final streak = snap.data ?? 0;
+                    final theme = Theme.of(context);
+                    if (streak == 7 || streak == 21 || streak == 40) {
+                      if (_confetti.state != ConfettiControllerState.playing) {
+                        _confetti.play();
+                      }
+                    }
+                    String streakMessage;
+                    if (streak == 0) {
+                      streakMessage = context.tr('stats.noActiveStreak');
+                    } else if (streak == 7) {
+                      streakMessage = context.tr('stats.streakMessage.7');
+                    } else if (streak == 21) {
+                      streakMessage = context.tr('stats.streakMessage.21');
+                    } else if (streak == 40) {
+                      streakMessage = context.tr('stats.streakMessage.40');
+                    } else {
+                      streakMessage = context.tr(
+                        'stats.streakMessage.generic',
+                        args: {'days': '$streak'},
+                      );
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              context.tr('stats.currentStreak'),
+                              style: theme.textTheme.titleMedium,
                             ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.15,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '🔥 $streak',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (streak > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: StreakBadge(streakDays: streak),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            streakMessage,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              FutureBuilder<Set<String>>(
+                future: _badgesFuture,
+                builder: (context, snapshot) {
+                  final badges = snapshot.data ?? <String>{};
+                  if (badges.isEmpty) return const SizedBox.shrink();
+
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: badges.map((badge) {
+                        final label = switch (badge) {
+                          'streak_7' => context.tr('stats.badge.streak7'),
+                          'streak_21' => context.tr('stats.badge.streak21'),
+                          'streak_40' => context.tr('stats.badge.streak40'),
+                          _ => badge,
+                        };
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: Neo.pill(context),
+                          child: Text(
+                            label,
+                            style: Theme.of(context).textTheme.labelLarge,
                           ),
                         );
                       }).toList(),
                     ),
-                  ),
-                ],
+                  );
+                },
               ),
-            );
-          },
-        ),
-        FutureBuilder<String>(
-          future: _dedicationFuture,
-          builder: (context, snap) {
-            final note = snap.data ?? '';
-            final dedicationText = note.isEmpty
-                ? context.tr('stats.dedication.empty')
-                : context.tr('stats.dedication.title', args: {'note': note});
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).dividerColor),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 16),
+              Row(
                 children: [
-                  const Icon(Icons.favorite, size: 20),
-                  const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      dedicationText,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    child: _NeoTile(
+                      title: context.tr('stats.metric.todayJaps'),
+                      value: _today.toString(),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: () async {
-                      final controller = TextEditingController(text: note);
-                      final updated = await showDialog<String>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: Text(context.tr('stats.dedication.editTitle')),
-                          content: TextField(
-                            controller: controller,
-                            maxLines: 3,
-                            textInputAction: TextInputAction.done,
-                            decoration: InputDecoration(
-                              hintText: context.tr('stats.dedication.hint'),
-                              border: const OutlineInputBorder(),
-                            ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, null),
-                              child: Text(context.tr('common.cancel')),
-                            ),
-                            FilledButton(
-                              onPressed: () =>
-                                  Navigator.pop(ctx, controller.text.trim()),
-                              child: Text(context.tr('common.save')),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (updated != null) {
-                        final ds = await DedicationStore.create();
-                        await ds.setNote(updated);
-                        if (context.mounted) setState(() {});
-                      }
-                    },
-                    icon: const Icon(Icons.edit, size: 18),
-                    label: Text(context.tr('common.edit')),
+                  Expanded(
+                    child: _NeoTile(
+                      title: context.tr('stats.metric.todayMalas'),
+                      value: todayMalas.toString(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _NeoTile(
+                      title: context.tr('stats.metric.lifetimeMalas'),
+                      value: lifetimeMalas.toString(),
+                    ),
                   ),
                 ],
               ),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 48,
-          child: FilledButton.icon(
-            onPressed: _shareBusy
-                ? null
-                : () async {
-                    setState(() => _shareBusy = true);
-                    try {
-                      final counter = await CounterStore.create();
-                      final int todayJaps = counter.todayJaps;
-                      final int lifetimeMalasLocal = counter.lifetimeMalas;
-                      final int streakDays = _cachedStreak ?? 
-                          await ActivityStore.currentStreak();
-                      debugPrint(
-                        '[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
-                      );
-                      await openShareMyStreak(
-                        context,
-                        todayJaps: todayJaps,
-                        lifetimeMalas: lifetimeMalasLocal,
-                        streakDays: streakDays,
-                      );
-                    } finally {
-                      if (context.mounted) setState(() => _shareBusy = false);
-                    }
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _NeoTile(
+                      title: context.tr('stats.metric.todayMeditation'),
+                      value: _todayMin.toString(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _NeoTile(
+                      title: context.tr('stats.metric.lifetimeMeditation'),
+                      value: _lifetimeMin.toString(),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              FutureBuilder<int>(
+                future: _goalFuture,
+                builder: (context, snap) {
+                  final goal = snap.data ?? 1;
+                  final reached = todayMalas >= goal;
+                  return Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Theme.of(context).dividerColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          reached ? Icons.check_circle : Icons.flag,
+                          color: reached
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.outline,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            context.tr(
+                              reached
+                                  ? 'stats.dailyGoal.met'
+                                  : 'stats.dailyGoal.pending',
+                              args: {'todayMalas': '$todayMalas', 'goal': '$goal'},
+                            ),
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _buildChartFuture(context),
+                builder: (context, snap) {
+                  final data = snap.data ?? [];
+                  if (data.isEmpty) return const SizedBox.shrink();
+                  final theme = Theme.of(context);
+                  final maxMalas = data.fold<int>(0, (prev, element) {
+                    final val = element['value'] as int? ?? 0;
+                    return val > prev ? val : prev;
+                  });
+                  final safeMax = maxMalas == 0 ? 1 : maxMalas;
+
+                  return Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('stats.progressTitle'),
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        RepaintBoundary(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final availableWidth = constraints.maxWidth;
+                              final barCount = data.length;
+                              final barWidth = availableWidth / barCount;
+                              
+                              return SizedBox(
+                                height: 164,
+                                width: double.infinity,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  mainAxisSize: MainAxisSize.max,
+                                  children: data.asMap().entries.map((entry) {
+                                    final index = entry.key;
+                                    final e = entry.value;
+                                    final val = e['value'] as int? ?? 0;
+                                    final dayLabel = e['day'] as String? ?? '';
+                                    final dateLabel = e['dateLabel'] as String? ?? '';
+                                    final normalized = val == 0 ? 0.0 : val / safeMax;
+                                    final barHeight = val == 0
+                                        ? 6.0
+                                        : (normalized * 96).clamp(14.0, 96.0);
+
+                                    return RepaintBoundary(
+                                      key: ValueKey('chart-bar-$index'),
+                                      child: SizedBox(
+                                        width: barWidth,
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          mainAxisSize: MainAxisSize.max,
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: theme.colorScheme.surfaceVariant
+                                                .withOpacity(0.7),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            '$val',
+                                            style: theme.textTheme.labelSmall?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 11,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        AnimatedContainer(
+                                          duration: const Duration(milliseconds: 220),
+                                          curve: Curves.easeOutCubic,
+                                          height: barHeight,
+                                          width: 14,
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.bottomCenter,
+                                              end: Alignment.topCenter,
+                                              colors: [
+                                                theme.colorScheme.primary,
+                                                theme.colorScheme.primaryContainer,
+                                              ],
+                                            ),
+                                            borderRadius: BorderRadius.circular(6),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: theme.colorScheme.primary
+                                                    .withOpacity(0.2),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
+                                          ),
+                                          alignment: Alignment.topCenter,
+                                          child: val > 0
+                                              ? Icon(
+                                                  Icons.energy_savings_leaf,
+                                                  size: 12,
+                                                  color: theme.colorScheme.onPrimary,
+                                                )
+                                              : null,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          dayLabel,
+                                          style: theme.textTheme.labelSmall?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 11,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        Text(
+                                          dateLabel,
+                                          style: theme.textTheme.labelSmall?.copyWith(
+                                            fontSize: 10,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              FutureBuilder<String>(
+                future: _dedicationFuture,
+                builder: (context, snap) {
+                  final note = snap.data ?? '';
+                  final dedicationText = note.isEmpty
+                      ? context.tr('stats.dedication.empty')
+                      : context.tr('stats.dedication.title', args: {'note': note});
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Theme.of(context).dividerColor),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.favorite, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            dedicationText,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: () async {
+                            final controller = TextEditingController(text: note);
+                            final updated = await showDialog<String>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: Text(context.tr('stats.dedication.editTitle')),
+                                content: TextField(
+                                  controller: controller,
+                                  maxLines: 3,
+                                  textInputAction: TextInputAction.done,
+                                  decoration: InputDecoration(
+                                    hintText: context.tr('stats.dedication.hint'),
+                                    border: const OutlineInputBorder(),
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, null),
+                                    child: Text(context.tr('common.cancel')),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(ctx, controller.text.trim()),
+                                    child: Text(context.tr('common.save')),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (updated != null) {
+                              final ds = await DedicationStore.create();
+                              await ds.setNote(updated);
+                              if (context.mounted) setState(() {});
+                            }
+                          },
+                          icon: const Icon(Icons.edit, size: 18),
+                          label: Text(context.tr('common.edit')),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: _shareBusy
+                      ? null
+                      : () async {
+                          setState(() => _shareBusy = true);
+                          try {
+                            final counter = await CounterStore.create();
+                            final int todayJaps = counter.todayJaps;
+                            final int lifetimeMalasLocal = counter.lifetimeMalas;
+                            final int streakDays = _cachedStreak ?? 
+                                await ActivityStore.currentStreak();
+                            debugPrint(
+                              '[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
+                            );
+                            await openShareMyStreak(
+                              context,
+                              todayJaps: todayJaps,
+                              lifetimeMalas: lifetimeMalasLocal,
+                              streakDays: streakDays,
+                            );
+                          } finally {
+                            if (context.mounted) setState(() => _shareBusy = false);
+                          }
+                        },
+                  onLongPress: () async {
+                    final counter = await CounterStore.create();
+                    final int todayJaps = counter.todayJaps;
+                    final int lifetimeMalasLocal = counter.lifetimeMalas;
+                    final int streakDays = _cachedStreak ?? 
+                        await ActivityStore.currentStreak();
+                    debugPrint(
+                      '[Stats][DEV] Long-press bypass → opening preview directly',
+                    );
+                    if (!context.mounted) return;
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StreakSharePreviewPage(
+                          todayJaps: todayJaps,
+                          lifetimeMalas: lifetimeMalasLocal,
+                          streakDays: streakDays,
+                        ),
+                      ),
+                    );
                   },
-            onLongPress: () async {
-              final counter = await CounterStore.create();
-              final int todayJaps = counter.todayJaps;
-              final int lifetimeMalasLocal = counter.lifetimeMalas;
-              final int streakDays = _cachedStreak ?? 
-                  await ActivityStore.currentStreak();
-              debugPrint(
-                '[Stats][DEV] Long-press bypass → opening preview directly',
-              );
-              if (!context.mounted) return;
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => StreakSharePreviewPage(
-                    todayJaps: todayJaps,
-                    lifetimeMalas: lifetimeMalasLocal,
-                    streakDays: streakDays,
+                  icon: const Icon(Icons.ios_share),
+                  label: Text(
+                    _shareBusy
+                        ? context.tr('stats.sharePreparing')
+                        : context.tr('stats.shareButton'),
                   ),
                 ),
-              );
-            },
-            icon: const Icon(Icons.ios_share),
-            label: Text(
-              _shareBusy
-                  ? context.tr('stats.sharePreparing')
-                  : context.tr('stats.shareButton'),
-            ),
+              ),
+              const SizedBox(height: 24),
+              FutureBuilder<int>(
+                future: _activeDaysFuture,
+                builder: (context, snap) {
+                  final count = snap.data ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      context.tr('stats.daysActive', args: {'count': '$count'}),
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  );
+                },
+              ),
+              Text(
+                context.tr('stats.calendar'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              _ActivityCalendar(todayJaps: _today, todayMalas: todayMalas),
+            ]),
           ),
         ),
-        const SizedBox(height: 24),
-        FutureBuilder<int>(
-          future: _activeDaysFuture,
-          builder: (context, snap) {
-            final count = snap.data ?? 0;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                context.tr('stats.daysActive', args: {'count': '$count'}),
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-            );
-          },
-        ),
-        Text(
-          context.tr('stats.calendar'),
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 6),
-        _ActivityCalendar(todayJaps: _today, todayMalas: todayMalas),
       ],
     );
   }
@@ -1126,11 +1191,47 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
   Map<String, _DailyHistoryEntry>? _history;
   DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
   DateTime? _selectedDate = DateTime.now();
+  bool _dateFormattingInitialized = false;
 
   @override
   void initState() {
     super.initState();
+    // Initialize with default locale immediately to avoid errors
+    _initializeDateFormatting(preferredLocale: 'en');
     _loadHistory();
+  }
+
+  Future<void> _initializeDateFormatting({BuildContext? ctx, String? preferredLocale, bool force = false}) async {
+    if (_dateFormattingInitialized && !force) return;
+    
+    try {
+      String localeCode = preferredLocale ?? 'en';
+      if (ctx != null && preferredLocale == null) {
+        try {
+          final lang = AppLocalizationScope.of(ctx).language;
+          localeCode = lang == 'hi' ? 'hi' : 'en';
+        } catch (_) {
+          // Context not available, use default
+        }
+      }
+      await initializeDateFormatting(localeCode);
+      if (mounted) {
+        setState(() => _dateFormattingInitialized = true);
+      }
+    } catch (e) {
+      // Fallback to English if initialization fails
+      try {
+        await initializeDateFormatting('en');
+        if (mounted) {
+          setState(() => _dateFormattingInitialized = true);
+        }
+      } catch (_) {
+        // If even English fails, mark as initialized anyway to avoid infinite loading
+        if (mounted) {
+          setState(() => _dateFormattingInitialized = true);
+        }
+      }
+    }
   }
 
   @override
@@ -1173,7 +1274,25 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
   @override
   Widget build(BuildContext context) {
     final history = _history;
-    if (history == null) {
+    
+    // Initialize or re-initialize with correct locale from context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final lang = AppLocalizationScope.of(context).language;
+        final localeCode = lang == 'hi' ? 'hi' : 'en';
+        // Re-initialize if locale is different from default (force re-initialization)
+        if (!_dateFormattingInitialized || localeCode != 'en') {
+          _initializeDateFormatting(ctx: context, preferredLocale: localeCode, force: true);
+        }
+      } catch (_) {
+        // If context not available, ensure at least English is initialized
+        if (!_dateFormattingInitialized) {
+          _initializeDateFormatting(preferredLocale: 'en');
+        }
+      }
+    });
+    
+    if (history == null || !_dateFormattingInitialized) {
       return const SizedBox(
         height: 180,
         child: Center(child: CircularProgressIndicator()),
@@ -1198,6 +1317,10 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
         ? const _DailyHistoryEntry(japs: 0, malas: 0)
         : _entryFor(selected);
 
+    // Get language for date formatting
+    final lang = AppLocalizationScope.of(context).language;
+    final localeCode = lang == 'hi' ? 'hi' : 'en';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1210,7 +1333,7 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
             Expanded(
               child: Center(
                 child: Text(
-                  DateFormat('MMMM yyyy').format(_visibleMonth),
+                  DateFormat('MMMM yyyy', localeCode).format(_visibleMonth),
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1255,50 +1378,23 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
             itemBuilder: (context, index) {
               final date = dates[index];
               final entry = _entryFor(date);
-              final malas = entry.malas;
-              final isCurrentMonth =
-                  date.month == _visibleMonth.month &&
-                  date.year == _visibleMonth.year;
-              final isFuture = date.isAfter(
+              final isFutureDate = date.isAfter(
                 DateTime(now.year, now.month, now.day),
               );
-              final isSelected =
-                  selected != null && DateUtils.isSameDay(selected, date);
-              final isToday = DateUtils.isSameDay(date, now);
-
-              final fill = _colorForMalas(malas, theme, isCurrentMonth);
-              final borderColor = isSelected
-                  ? theme.colorScheme.primary
-                  : theme.dividerColor.withOpacity(isCurrentMonth ? 1 : 0.4);
-              final textColor = isCurrentMonth
-                  ? theme.colorScheme.onSurface
-                  : theme.colorScheme.onSurface.withOpacity(0.4);
-
-              return GestureDetector(
-                onTap: isFuture
-                    ? null
-                    : () {
-                        setState(() => _selectedDate = date);
-                      },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                  decoration: BoxDecoration(
-                    color: fill,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: borderColor,
-                      width: isSelected ? 2 : 1,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${date.day}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
-                      color: textColor,
-                    ),
-                  ),
+              return RepaintBoundary(
+                key: ValueKey('calendar-cell-${date.year}-${date.month}-${date.day}'),
+                child: _CalendarCell(
+                  date: date,
+                  entry: entry,
+                  now: now,
+                  visibleMonth: _visibleMonth,
+                  selected: selected,
+                  theme: theme,
+                  onTap: isFutureDate
+                      ? null
+                      : () {
+                          setState(() => _selectedDate = date);
+                        },
                 ),
               );
             },
@@ -1327,9 +1423,15 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
         const _DailyHistoryEntry(japs: 0, malas: 0);
   }
 
-  String _dateKey(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
+  String _dateKey(DateTime date) {
+    // Use manual formatting for ISO date keys to avoid locale initialization requirement
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
 
-  Color _colorForMalas(int malas, ThemeData theme, bool isCurrentMonth) {
+  static Color _colorForMalas(int malas, ThemeData theme, bool isCurrentMonth) {
     Color base;
     if (malas >= 15) {
       base = Colors.deepOrange.shade200;
@@ -1413,6 +1515,70 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Separate widget for calendar cell to optimize rebuilds
+class _CalendarCell extends StatelessWidget {
+  final DateTime date;
+  final _DailyHistoryEntry entry;
+  final DateTime now;
+  final DateTime visibleMonth;
+  final DateTime? selected;
+  final ThemeData theme;
+  final VoidCallback? onTap;
+
+  const _CalendarCell({
+    required this.date,
+    required this.entry,
+    required this.now,
+    required this.visibleMonth,
+    required this.selected,
+    required this.theme,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final malas = entry.malas;
+    final isCurrentMonth =
+        date.month == visibleMonth.month &&
+        date.year == visibleMonth.year;
+    final isSelected =
+        selected != null && DateUtils.isSameDay(selected!, date);
+    final isToday = DateUtils.isSameDay(date, now);
+
+    final fill = _ActivityCalendarState._colorForMalas(malas, theme, isCurrentMonth);
+    final borderColor = isSelected
+        ? theme.colorScheme.primary
+        : theme.dividerColor.withOpacity(isCurrentMonth ? 1 : 0.4);
+    final textColor = isCurrentMonth
+        ? theme.colorScheme.onSurface
+        : theme.colorScheme.onSurface.withOpacity(0.4);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: borderColor,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '${date.day}',
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+            color: textColor,
+          ),
+        ),
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/prefs_manager.dart';
+
 /// Stores a short user dedication/note shown on the Stats page.
 /// Offline-only (SharedPreferences). Keep it tiny: <= 200 chars recommended.
 class DedicationStore {
@@ -10,7 +12,7 @@ class DedicationStore {
   final SharedPreferences _prefs;
 
   static Future<DedicationStore> create() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     return DedicationStore._(prefs);
   }
 

@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'prefs_manager.dart';
 
 /// Centralised audio helper used by the Timer experience.
 ///
@@ -44,7 +45,7 @@ class SoundManager {
 
     // Load persisted volume settings
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await PrefsManager.instance;
       _ambienceVolume = prefs.getDouble(_kAmbienceVolume) ?? 0.85;
       _bellVolume = prefs.getDouble(_kBellVolume) ?? 1.0;
     } catch (_) {
@@ -194,7 +195,7 @@ class SoundManager {
     await _ambiencePlayer.setVolume(_ambienceVolume);
     // Persist volume setting
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await PrefsManager.instance;
       await prefs.setDouble(_kAmbienceVolume, _ambienceVolume);
     } catch (_) {
       // Ignore persistence errors
@@ -206,7 +207,7 @@ class SoundManager {
     await _sfxPlayer.setVolume(_bellVolume);
     // Persist volume setting
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await PrefsManager.instance;
       await prefs.setDouble(_kBellVolume, _bellVolume);
     } catch (_) {
       // Ignore persistence errors

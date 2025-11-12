@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import '../core/prefs_manager.dart';
 import 'streak_store.dart';
 
 /// Local date helper (YYYY-MM-DD) used by ActivityStore.
@@ -19,7 +19,7 @@ class ActivityStore {
 
   /// Marks today as active (idempotent).
   static Future<void> markTodayActive() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final today = _isoDate(DateTime.now());
     final list = prefs.getStringList(_key) ?? <String>[];
     if (!list.contains(today)) {
@@ -32,7 +32,7 @@ class ActivityStore {
 
   /// Returns a Set of all active date strings.
   static Future<Set<String>> getAll() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final list = prefs.getStringList(_key) ?? <String>[];
     return list.toSet();
   }
@@ -76,7 +76,7 @@ class ActivityStore {
     }
     
     // Try to load from SharedPreferences cache
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final cachedStreak = prefs.getInt(_streakCacheKey);
     final cachedDateStr = prefs.getString(_streakCacheDateKey);
     
@@ -124,14 +124,14 @@ class ActivityStore {
   static Future<void> _clearStreakCache() async {
     _cachedStreak = null;
     _cachedStreakDate = null;
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.remove(_streakCacheKey);
     await prefs.remove(_streakCacheDateKey);
   }
   static String _isoDate(DateTime d) => _yyyymmdd(d);
 
   static Future<void> resetAll() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.remove(_key);
     await StreakStore.saveStreak(0, 0);
   }
@@ -143,7 +143,7 @@ class ActivityStore {
     final validJaps = japs < 0 ? 0 : japs;
     final validMalas = malas < 0 ? 0 : malas;
     
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final raw = prefs.getString(_kDailyHistory);
     Map<String, dynamic> history;
     try {
@@ -160,16 +160,40 @@ class ActivityStore {
       'malas': validMalas,
     };
     await prefs.setString(_kDailyHistory, jsonEncode(history));
+    // Invalidate history cache
+    _cachedHistory = null;
+    _cachedHistoryDate = null;
   }
 
+  // Cache for daily history to improve performance
+  static Map<String, dynamic>? _cachedHistory;
+  static DateTime? _cachedHistoryDate;
+
   static Future<Map<String, dynamic>> getDailyHistory() async {
-    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now();
+    
+    // Return cached if same day
+    if (_cachedHistory != null && 
+        _cachedHistoryDate != null &&
+        _isSameDay(_cachedHistoryDate!, today)) {
+      return _cachedHistory!;
+    }
+    
+    final prefs = await PrefsManager.instance;
     final raw = prefs.getString(_kDailyHistory);
-    if (raw == null) return {};
+    if (raw == null) {
+      _cachedHistory = {};
+      _cachedHistoryDate = today;
+      return {};
+    }
     try {
-      return Map<String, dynamic>.from(jsonDecode(raw));
+      _cachedHistory = Map<String, dynamic>.from(jsonDecode(raw));
+      _cachedHistoryDate = today;
+      return _cachedHistory!;
     } catch (e) {
       // Handle corrupted JSON data - return empty map
+      _cachedHistory = {};
+      _cachedHistoryDate = today;
       return {};
     }
   }

@@ -9,6 +9,8 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jap_counter/debug/ad_health.dart';
 
+import 'prefs_manager.dart';
+
 const _logTag = '[AD]';
 const _fallbackPolicyVersion = 'fallback-2025-11-09';
 
@@ -1047,7 +1049,7 @@ class AdManager {
   }
 
   Future<void> _ensurePrefs() async {
-    _prefs ??= await SharedPreferences.getInstance();
+    _prefs ??= await PrefsManager.instance;
   }
 
   Future<void> _waitUntilReady() async {
@@ -1233,7 +1235,7 @@ class AdManager {
     _placements
       ..clear()
       ..addAll(_flattenPlacements(placements));
-    _prefs = await SharedPreferences.getInstance();
+    _prefs = await PrefsManager.instance;
     _policyLoaded = true;
     _updateActiveAdUnitIds();
   }

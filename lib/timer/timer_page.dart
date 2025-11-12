@@ -460,7 +460,9 @@ class _TimerPageState extends State<TimerPage>
   // ---- derived ----
   double get _progress => _timerService.progress;
 
+  // Use displayNotifier from TimerService for efficient updates
   String get _readout {
+    // Fallback to calculating if displayNotifier not available
     final s = _remaining.inSeconds.clamp(0, 24 * 60 * 60);
     final m = (s ~/ 60).toString().padLeft(2, '0');
     final ss = (s % 60).toString().padLeft(2, '0');
@@ -565,6 +567,7 @@ class _TimerPageState extends State<TimerPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    // Use Consumer but optimize with ValueListenableBuilder for display
     return Consumer<TimerService>(
       builder: (context, svc, _) {
         final isRunning = svc.running;
@@ -646,10 +649,28 @@ class _TimerPageState extends State<TimerPage>
                             },
                           ),
                           const SizedBox(height: 24),
-                          _PrimaryTimerCard(
-                            readout: _readout,
-                            progress: _progress,
-                            statusText: _statusText,
+                          // Use ValueListenableBuilder for timer display (only rebuilds display text)
+                          ValueListenableBuilder<String>(
+                            valueListenable: svc.displayNotifier,
+                            builder: (context, display, _) {
+                              // Calculate status text based on current state
+                              String statusText;
+                              if (isRunning) {
+                                statusText = '🕉️ साधना जारी है...';
+                              } else if (isCompleted) {
+                                statusText = '🌸 Meditation complete';
+                              } else if (isPaused) {
+                                statusText = '⏸️ ध्यान विराम';
+                              } else {
+                                statusText = '🙏 मन को शांत करें';
+                              }
+                              
+                              return _PrimaryTimerCard(
+                                readout: display,
+                                progress: svc.progress,
+                                statusText: statusText,
+                              );
+                            },
                           ),
                           const SizedBox(height: 24),
                           Row(
@@ -686,7 +707,7 @@ class _TimerPageState extends State<TimerPage>
                                 : const Icon(Icons.ios_share),
                             label: Text(context.tr('timer.share.cta')),
                           ),
-                          const SizedBox(height: 48),
+                          SizedBox(height: MediaQuery.of(context).padding.bottom + 24),
                         ],
                       ),
                     ),

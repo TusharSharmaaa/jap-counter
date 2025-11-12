@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/prefs_manager.dart';
 
 class TimerService extends ChangeNotifier {
   // Pref keys
@@ -30,6 +31,8 @@ class TimerService extends ChangeNotifier {
   Timer? _ticker;
   int _recordedSeconds = 0;
   int? _lastDisplayedSeconds;
+  DateTime? _cachedNow; // Cache DateTime.now() to reduce system calls
+  final ValueNotifier<String> displayNotifier = ValueNotifier<String>('');
 
   Duration get target => _target;
   bool get running => _running;
@@ -41,7 +44,8 @@ class TimerService extends ChangeNotifier {
     if (!_running || _startedAt == null) {
       return _accumulated;
     }
-    return _accumulated + DateTime.now().difference(_startedAt!);
+    final now = _cachedNow ?? DateTime.now();
+    return _accumulated + now.difference(_startedAt!);
   }
 
   Duration get remaining {
@@ -64,7 +68,7 @@ class TimerService extends ChangeNotifier {
   bool get _hasInFlightTicker => _ticker != null;
 
   Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final targetSecs = prefs.getInt(_kTargetSecs);
     final accumSecs = prefs.getInt(_kAccumulatedSecs);
     final startedMillis = prefs.getInt(_kStartedAtMillis);
@@ -182,7 +186,7 @@ class TimerService extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.setInt(_kTargetSecs, _target.inSeconds);
     await prefs.setInt(_kAccumulatedSecs, _accumulated.inSeconds);
     if (_startedAt != null) {
@@ -204,6 +208,9 @@ class TimerService extends ChangeNotifier {
   void _startTicker() {
     _stopTicker();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      // Cache DateTime.now() once per tick to reduce system calls
+      _cachedNow = DateTime.now();
+      
       if (!_running) return;
       if (remaining == Duration.zero) {
         unawaited(_complete());
@@ -213,6 +220,11 @@ class TimerService extends ChangeNotifier {
       final currentSeconds = remaining.inSeconds;
       if (_lastDisplayedSeconds != currentSeconds) {
         _lastDisplayedSeconds = currentSeconds;
+        // Update display notifier for selective listening
+        final minutes = currentSeconds ~/ 60;
+        final seconds = currentSeconds % 60;
+        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+        // Only notify listeners for other state changes (not display)
         notifyListeners();
       }
     });
@@ -220,6 +232,11 @@ class TimerService extends ChangeNotifier {
       debugPrint('[TimerService] _startTicker -> tickerCreated');
     }
     _lastDisplayedSeconds = remaining.inSeconds;
+    // Initialize display notifier
+    final initialSeconds = remaining.inSeconds;
+    final minutes = initialSeconds ~/ 60;
+    final seconds = initialSeconds % 60;
+    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     notifyListeners();
   }
 
@@ -231,7 +248,7 @@ class TimerService extends ChangeNotifier {
   Future<void> start({String? runId}) async {
     if (_running) return;
     // Clear pause timestamp when starting
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.remove(_kPausedAtMillis);
     final newRunId =
         runId ??
@@ -261,7 +278,7 @@ class TimerService extends ChangeNotifier {
   Future<void> resume({String? runId}) async {
     if (_running || remaining == Duration.zero) return;
     // Clear pause timestamp when resuming
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.remove(_kPausedAtMillis);
     final resumeId =
         runId ??
@@ -288,7 +305,7 @@ class TimerService extends ChangeNotifier {
     _running = false;
     _stopTicker();
     // Save pause timestamp to detect if app was closed
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.setInt(
       _kPausedAtMillis,
       DateTime.now().millisecondsSinceEpoch,
@@ -311,7 +328,7 @@ class TimerService extends ChangeNotifier {
     _runId = '';
     _recordedSeconds = 0;
     // Clear pause timestamp when resetting
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.remove(_kPausedAtMillis);
     await _persist();
     notifyListeners();
@@ -410,7 +427,7 @@ class TimerService extends ChangeNotifier {
   }
 
   Future<void> markAppClosed() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.setBool(_kAppWasClosed, true);
     if (kDebugMode) {
       debugPrint('[TimerService] App closed flag set');
@@ -423,6 +440,7 @@ class TimerService extends ChangeNotifier {
   @override
   void dispose() {
     _stopTicker();
+    displayNotifier.dispose();
     super.dispose();
   }
 }

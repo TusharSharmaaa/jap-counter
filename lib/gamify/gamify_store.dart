@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import '../core/prefs_manager.dart';
 
 class GamifyStore {
   static const _kXp = 'gamify.xp';
@@ -6,12 +6,12 @@ class GamifyStore {
   static const _kBadges = 'gamify.badges';
 
   static Future<int> xp() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     return prefs.getInt(_kXp) ?? 0;
   }
 
   static Future<int> level() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     return prefs.getInt(_kLevel) ?? 1;
   }
 
@@ -22,7 +22,7 @@ class GamifyStore {
   static int _xpForNext(int level) => 100 + (level - 1) * 50;
 
   static Future<Map<String, dynamic>> addXp(int delta) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     var currentXp = prefs.getInt(_kXp) ?? 0;
     var level = prefs.getInt(_kLevel) ?? 1;
     final previousLevel = level;
@@ -62,7 +62,7 @@ class GamifyStore {
   }
 
   static Future<void> awardBadge(String id) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final csv = prefs.getString(_kBadges) ?? '';
     final set = <String>{...csv.split(',').where((e) => e.isNotEmpty)};
 
@@ -72,7 +72,7 @@ class GamifyStore {
   }
 
   static Future<Set<String>> badges() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final csv = prefs.getString(_kBadges) ?? '';
     return <String>{...csv.split(',').where((e) => e.isNotEmpty)};
   }

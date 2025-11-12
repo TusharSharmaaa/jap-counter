@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -31,20 +32,18 @@ class GitaService {
   static const String _base = 'https://vedicscriptures.github.io';
   static const int _maxCacheSize = 100;
 
-  /// LRU in-memory cache: { "<ch>-<vs>": GitaVerse }
-  static final Map<String, GitaVerse> _cache = {};
-  static final List<String> _cacheOrder = [];
+  /// LRU in-memory cache using LinkedHashMap for O(1) operations
+  static final LinkedHashMap<String, GitaVerse> _cache = LinkedHashMap();
 
   static String _key(int ch, int vs) => '$ch-$vs';
 
   static Future<GitaVerse?> fetchVerse(int chapter, int verse) async {
     final k = _key(chapter, verse);
 
-    // 1) Serve from memory cache if available (LRU: move to end)
-    final cached = _cache[k];
+    // 1) Serve from memory cache if available (LRU: move to end - O(1) operation)
+    final cached = _cache.remove(k); // O(1) remove from middle
     if (cached != null) {
-      _cacheOrder.remove(k);
-      _cacheOrder.add(k);
+      _cache[k] = cached; // O(1) add to end (moves to end for LRU)
       return cached;
     }
 
@@ -56,13 +55,11 @@ class GitaService {
         final data = json.decode(res.body) as Map<String, dynamic>;
         final v = GitaVerse.fromJson(data);
         
-        // 3) Add to cache with size limit (LRU eviction)
+        // 3) Add to cache with size limit (LRU eviction - O(1) operation)
         if (_cache.length >= _maxCacheSize) {
-          final oldest = _cacheOrder.removeAt(0);
-          _cache.remove(oldest);
+          _cache.remove(_cache.keys.first); // O(1) remove oldest
         }
-        _cache[k] = v;
-        _cacheOrder.add(k);
+        _cache[k] = v; // O(1) add to end
         return v;
       }
     } catch (_) {}
@@ -81,6 +78,7 @@ class GitaService {
         // Fire and forget - don't await to avoid blocking
         fetchVerse(chapter, nextVerse).catchError((_) {
           // Silently ignore prefetch errors
+          return null;
         });
       }
     }
