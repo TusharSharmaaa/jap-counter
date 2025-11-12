@@ -20,16 +20,20 @@ class GoalStore {
 
   String? get lastCongratsDate => _prefs.getString(_kLastCongrats);
 
+  /// Shared helper method for date formatting (YYYY-MM-DD)
+  static String _formatDate(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
   Future<void> setLastCongratsToday() async {
-    final now = DateTime.now();
-    final d =
-        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final d = _formatDate(DateTime.now());
     await _prefs.setString(_kLastCongrats, d);
   }
 
   static String todayKey() {
-    final now = DateTime.now();
-    return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    return _formatDate(DateTime.now());
   }
 }
 

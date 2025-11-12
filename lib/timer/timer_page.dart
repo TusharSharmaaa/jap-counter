@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'dart:html' as io;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -1136,7 +1136,7 @@ class _TimerShareSheetState extends State<_TimerShareSheet> {
       }
 
       final dir = await getTemporaryDirectory();
-      final file = File(
+      final file = io.File(
         '${dir.path}/timer_share_${DateTime.now().millisecondsSinceEpoch}.png',
       );
       await file.writeAsBytes(pngBytes);

@@ -1284,6 +1284,29 @@ class AdManager {
   void debugSetLastInterstitialShown(DateTime? when) {
     _lastInterstitialShownTime = when;
   }
+
+  /// Dispose method to clean up resources and prevent memory leaks
+  void dispose() {
+    // Cancel all retry timers
+    for (final timer in _rewardedRetryTimers.values) {
+      timer.cancel();
+    }
+    for (final timer in _interstitialRetryTimers.values) {
+      timer.cancel();
+    }
+    _rewardedRetryTimers.clear();
+    _interstitialRetryTimers.clear();
+    
+    // Dispose all cached ads
+    for (final ad in _rewardedCache.values) {
+      ad.dispose();
+    }
+    for (final ad in _interstitialCache.values) {
+      ad.dispose();
+    }
+    _rewardedCache.clear();
+    _interstitialCache.clear();
+  }
 }
 
 class _AdAttemptLog {

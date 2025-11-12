@@ -17,8 +17,11 @@ class DedicationStore {
   String get note => _prefs.getString(_kKey) ?? '';
 
   Future<void> setNote(String value) async {
-    final trimmed = value.trim();
-    final capped = trimmed.length > 200 ? trimmed.substring(0, 200) : trimmed;
+    // Sanitize input: remove control characters and limit length
+    final sanitized = value
+        .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '') // Remove control chars
+        .trim();
+    final capped = sanitized.length > 200 ? sanitized.substring(0, 200) : sanitized;
     await _prefs.setString(_kKey, capped);
   }
 

@@ -142,9 +142,9 @@ class _CounterPageState extends State<CounterPage> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('🎯 Mala completed! साधना जारी रखें।'),
-            duration: Duration(seconds: 3),
+          SnackBar(
+            content: Text(context.tr('counter.malaCompleted')),
+            duration: const Duration(seconds: 3),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -196,17 +196,24 @@ class _CounterPageState extends State<CounterPage> {
 
   Future<void> _showGoalCompleteDialog() async {
     if (!mounted) return;
+    final language = AppLocalizationScope.of(context).language;
+    final suffix = language == 'hi'
+        ? (_dailyGoal == 1 ? '' : 'एँ')
+        : (_dailyGoal == 1 ? '' : 's');
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('🌼 लक्ष्य पूर्ण'),
+        title: Text(context.tr('counter.goal.complete.title')),
         content: Text(
-          'आपने आज $_dailyGoal माला${_dailyGoal == 1 ? '' : 'एँ'} पूरी कर ली हैं। साधना जारी रखें!',
+          context.tr(
+            'counter.goal.complete.message',
+            args: {'count': '$_dailyGoal', 'suffix': suffix},
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('राधे राधे'),
+            child: Text(context.tr('counter.goal.complete.button')),
           ),
         ],
       ),

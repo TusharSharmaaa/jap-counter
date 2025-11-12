@@ -27,6 +27,14 @@ class SessionStore {
     required String type, // "jap" or "meditation"
     required int count, // japs or minutes
   }) async {
+    // Validate input bounds
+    if (count < 0 || count > 1000000) {
+      return; // Ignore invalid counts
+    }
+    if (type != 'jap' && type != 'meditation') {
+      return; // Ignore invalid types
+    }
+    
     final list = await getSessions();
     final entry = {
       'type': type,

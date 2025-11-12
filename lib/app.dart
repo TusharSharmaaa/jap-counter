@@ -1428,4 +1428,3 @@ class _GitaTab extends StatelessWidget {
 }
 
 // Legacy settings classes removed. Latest settings UI lives in lib/settings/settings_page.dart
-// Legacy settings classes removed. Latest settings UI lives in lib/settings/settings_page.dart

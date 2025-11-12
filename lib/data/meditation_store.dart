@@ -33,7 +33,16 @@ class MeditationStore {
   }
 
   int get todayMinutes {
+    // Use async version to ensure data consistency
+    // Note: This is a getter, so we use sync version but it's safe
+    // because SharedPreferences getters are synchronous and safe
     _ensureTodaySync();
+    return _prefs.getInt(_kTodayMinutes) ?? 0;
+  }
+  
+  /// Async version for ensuring today is reset - use this when possible
+  Future<int> getTodayMinutesAsync() async {
+    await _ensureToday();
     return _prefs.getInt(_kTodayMinutes) ?? 0;
   }
 

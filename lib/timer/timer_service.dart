@@ -117,7 +117,13 @@ class TimerService extends ChangeNotifier {
       );
       
       // Check if timer was started on a different day
-      if (_startedAt != null && !_isSameDay(_startedAt!, now)) {
+      // Use timezone-aware comparison to handle day boundaries correctly
+      final startDate = _startedAt!;
+      final startDay = DateTime(startDate.year, startDate.month, startDate.day);
+      final nowDay = DateTime(now.year, now.month, now.day);
+      
+      if (startDay.isBefore(nowDay)) {
+        // Timer was started on a previous day - reset it
         _resetForNewDay();
         needsPersist = true;
       } else if (_startedAt != null) {

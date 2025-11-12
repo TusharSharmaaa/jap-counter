@@ -25,6 +25,8 @@ class ActivityStore {
     if (!list.contains(today)) {
       list.add(today);
       await prefs.setStringList(_key, list);
+      // Clear streak cache when marking new day active
+      await _clearStreakCache();
     }
   }
 
@@ -54,16 +56,47 @@ class ActivityStore {
     final active = await getAll();
     return active.length;
   }
+  // Cache for streak calculation to improve performance
+  static int? _cachedStreak;
+  static DateTime? _cachedStreakDate;
+  static const _streakCacheKey = 'activity.cachedStreak';
+  static const _streakCacheDateKey = 'activity.cachedStreakDate';
+
   /// Returns the length of the current consecutive-day streak (ending today).
+  /// Uses caching to improve performance.
   static Future<int> currentStreak() async {
+    final today = DateTime.now();
+    final todayKey = _isoDate(today);
+    
+    // Check cache first
+    if (_cachedStreak != null && 
+        _cachedStreakDate != null && 
+        _isSameDay(_cachedStreakDate!, today)) {
+      return _cachedStreak!;
+    }
+    
+    // Try to load from SharedPreferences cache
+    final prefs = await SharedPreferences.getInstance();
+    final cachedStreak = prefs.getInt(_streakCacheKey);
+    final cachedDateStr = prefs.getString(_streakCacheDateKey);
+    
+    if (cachedStreak != null && cachedDateStr == todayKey) {
+      _cachedStreak = cachedStreak;
+      _cachedStreakDate = today;
+      return cachedStreak;
+    }
+
     final active = await getAll();
     if (active.isEmpty) {
       await StreakStore.saveStreak(0, 0);
+      _cachedStreak = 0;
+      _cachedStreakDate = today;
+      await prefs.setInt(_streakCacheKey, 0);
+      await prefs.setString(_streakCacheDateKey, todayKey);
       return 0;
     }
 
     int streak = 0;
-    final today = DateTime.now();
     for (int i = 0; i < 365; i++) {
       final d = DateTime(today.year, today.month, today.day).subtract(Duration(days: i));
       final key = _isoDate(d);
@@ -73,8 +106,27 @@ class ActivityStore {
         break; // streak ended
       }
     }
+    
+    // Cache the result
+    _cachedStreak = streak;
+    _cachedStreakDate = today;
+    await prefs.setInt(_streakCacheKey, streak);
+    await prefs.setString(_streakCacheDateKey, todayKey);
+    
     await StreakStore.saveStreak(streak, active.length);
     return streak;
+  }
+  
+  static bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+  
+  /// Clear streak cache (call when marking new day active)
+  static Future<void> _clearStreakCache() async {
+    _cachedStreak = null;
+    _cachedStreakDate = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_streakCacheKey);
+    await prefs.remove(_streakCacheDateKey);
   }
   static String _isoDate(DateTime d) => _yyyymmdd(d);
 
@@ -87,6 +139,10 @@ class ActivityStore {
   static Future<int> currentStreakDays() => currentStreak();
 
   static Future<void> recordDailySummary(int japs, int malas) async {
+    // Validate inputs to prevent negative values
+    final validJaps = japs < 0 ? 0 : japs;
+    final validMalas = malas < 0 ? 0 : malas;
+    
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_kDailyHistory);
     Map<String, dynamic> history;
@@ -100,8 +156,8 @@ class ActivityStore {
     }
     final key = _yyyymmdd(DateTime.now());
     history[key] = {
-      'japs': japs,
-      'malas': malas,
+      'japs': validJaps,
+      'malas': validMalas,
     };
     await prefs.setString(_kDailyHistory, jsonEncode(history));
   }

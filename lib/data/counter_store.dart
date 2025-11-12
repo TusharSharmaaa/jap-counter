@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'xp_store.dart';
@@ -7,6 +8,9 @@ class CounterStore {
   CounterStore._(this._prefs);
 
   final SharedPreferences _prefs;
+  
+  // Lock to prevent race conditions in increment operations
+  static Future<void>? _currentIncrement;
 
   // Keys
   static const _kTodayJaps = 'counter.todayJaps';
@@ -28,20 +32,35 @@ class CounterStore {
   int get lifetimeMalas => lifetimeJaps ~/ 108;
 
   /// Increment today + lifetime by 1 jap.
-  /// Uses atomic read-modify-write to prevent race conditions.
+  /// Uses locking mechanism to prevent race conditions.
   Future<void> increment() async {
     await _resetIfNewDay();
-    // Atomic read-modify-write: read current values and write new ones in sequence
-    // This prevents lost increments from concurrent calls
-    final currentToday = _prefs.getInt(_kTodayJaps) ?? 0;
-    final currentLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
     
-    // Write both values atomically
-    await _prefs.setInt(_kTodayJaps, currentToday + 1);
-    await _prefs.setInt(_kLifetimeJaps, currentLifetime + 1);
+    // Wait for any ongoing increment to complete
+    if (_currentIncrement != null) {
+      await _currentIncrement;
+    }
     
-    final xp = await XPStore.create();
-    await xp.addXP(1);
+    // Create a new increment operation
+    final completer = Completer<void>();
+    _currentIncrement = completer.future;
+    
+    try {
+      // Read current values
+      final currentToday = _prefs.getInt(_kTodayJaps) ?? 0;
+      final currentLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+      
+      // Write both values atomically
+      await _prefs.setInt(_kTodayJaps, currentToday + 1);
+      await _prefs.setInt(_kLifetimeJaps, currentLifetime + 1);
+      
+      final xp = await XPStore.create();
+      await xp.addXP(1);
+    } finally {
+      // Clear the lock
+      _currentIncrement = null;
+      completer.complete();
+    }
   }
 
   /// Clears only today's japs (used on new day).

@@ -56,12 +56,20 @@ class GitaService {
     return null;
   }
 
-  /// Optional: prefetch next verse (non-blocking, ignore errors)
-  static Future<void> prefetch(int chapter, int verse) async {
-    try {
-      await fetchVerse(chapter, verse);
-    } catch (_) {
-      // Silently ignore prefetch errors
+  /// Prefetch next N verses in background for better performance.
+  /// Non-blocking, ignores errors.
+  static Future<void> prefetch(int chapter, int verse, {int count = 3}) async {
+    // Prefetch next N verses in background
+    for (int i = 1; i <= count; i++) {
+      final nextVerse = verse + i;
+      // Only prefetch if not already cached
+      final key = _key(chapter, nextVerse);
+      if (!_cache.containsKey(key)) {
+        // Fire and forget - don't await to avoid blocking
+        fetchVerse(chapter, nextVerse).catchError((_) {
+          // Silently ignore prefetch errors
+        });
+      }
     }
   }
 }

@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async' show unawaited, TimeoutException;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';

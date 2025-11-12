@@ -5,7 +5,18 @@ import '../data/insight_store.dart';
 
 class SyncService {
   static Future<void> syncToday() async {
-    await Firebase.initializeApp();
+    // Check if Firebase is already initialized
+    try {
+      Firebase.app(); // This will throw if not initialized
+    } catch (_) {
+      // Firebase not initialized, initialize it
+      try {
+        await Firebase.initializeApp();
+      } catch (e) {
+        // If initialization fails, return early
+        return;
+      }
+    }
     final db = FirebaseFirestore.instance;
     final insights = await InsightStore.create();
     final today = DateTime.now().toIso8601String().substring(0, 10);

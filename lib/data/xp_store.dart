@@ -20,5 +20,12 @@ class XPStore {
     await _prefs.setInt(_kXP, newXP);
   }
 
-  int get level => (totalXP / 100).floor() + 1;
+  int get level {
+    // Add bounds checking to prevent overflow
+    const maxXP = 1000000; // Cap at 1 million XP
+    final cappedXP = totalXP.clamp(0, maxXP);
+    final calculatedLevel = (cappedXP / 100).floor() + 1;
+    const maxLevel = 10000; // Cap level at 10,000
+    return calculatedLevel.clamp(1, maxLevel);
+  }
 }
