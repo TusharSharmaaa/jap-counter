@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async' show unawaited, Timer;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:confetti/confetti.dart';
@@ -116,63 +116,76 @@ class _CounterPageState extends State<CounterPage> {
     _cancelMalaResetTimer();
     final wasZero = _today == 0;
     final willBe = _today + 1;
+    
+    // Critical: Update counter immediately
     await store.increment();
 
-    try {
-      final insights = await InsightStore.create();
-      await insights.recordJap(count: 1, malas: willBe % 108 == 0 ? 1 : 0);
-    } catch (e) {
-      debugPrint('[Insights] Record failed: $e');
-    }
-
-    if (wasZero) {
-      await ActivityStore.markTodayActive();
-      // Check for milestone streaks when starting from zero
-      await _handleStreakMilestones(context, showSnackBar: true);
-    }
-
-    if (willBe % 108 == 0) {
-      // Check for streak milestones when completing a mala
-      await _handleStreakMilestones(context, showSnackBar: false);
-      try {
-        HapticFeedback.mediumImpact();
-      } catch (_) {}
-      _triggerPulse();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(context.tr('counter.malaCompleted')),
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      try {
-        final sessions = await SessionStore.create();
-        await sessions.addSession(type: 'jap', count: willBe);
-      } catch (_) {}
-    }
-
-    if (!mounted) return;
-
+    // Update UI immediately for responsiveness
     final updatedToday = store.todayJaps;
     final remainder = updatedToday % 108;
     final malaCompleted = remainder == 0 && updatedToday > 0;
 
+    if (!mounted) return;
     setState(() {
       _today = updatedToday;
       _lifetime = store.lifetimeJaps;
       _currentMalaCountDisplay = malaCompleted ? 108 : remainder;
     });
 
-    if (malaCompleted) {
-      _scheduleMalaReset();
+    // Non-critical operations: Fire and forget
+    unawaited(_recordInsight(willBe));
+    
+    if (wasZero) {
+      unawaited(ActivityStore.markTodayActive());
+      unawaited(_handleStreakMilestones(context, showSnackBar: true));
     }
 
-    await _checkGoalCompletion();
+    if (malaCompleted) {
+      _scheduleMalaReset();
+      // Check for streak milestones when completing a mala
+      unawaited(_handleStreakMilestones(context, showSnackBar: false));
+      try {
+        HapticFeedback.mediumImpact();
+      } catch (_) {}
+      _triggerPulse();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(context.tr('counter.malaCompleted')),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+      }
+      unawaited(_recordSession(willBe));
+    }
 
-    // Schedule notification reminder (non-blocking, errors handled internally)
+    // Check goal completion (can be async but should complete)
+    unawaited(_checkGoalCompletion());
+
+    // Schedule notification reminder (non-blocking)
+    unawaited(_scheduleNotification());
+  }
+
+  Future<void> _recordInsight(int willBe) async {
+    try {
+      final insights = await InsightStore.create();
+      await insights.recordJap(count: 1, malas: willBe % 108 == 0 ? 1 : 0);
+    } catch (e) {
+      debugPrint('[Insights] Record failed: $e');
+    }
+  }
+
+  Future<void> _recordSession(int count) async {
+    try {
+      final sessions = await SessionStore.create();
+      await sessions.addSession(type: 'jap', count: count);
+    } catch (_) {}
+  }
+
+  Future<void> _scheduleNotification() async {
     try {
       final ns = NotificationService();
       final language = AppLocalizationScope.of(context).language;
@@ -181,7 +194,6 @@ class _CounterPageState extends State<CounterPage> {
       if (kDebugMode) {
         debugPrint('[Counter] Notification scheduling failed: $e');
       }
-      // Continue execution even if notification fails
     }
   }
 
@@ -280,8 +292,8 @@ class _CounterPageState extends State<CounterPage> {
             HapticFeedback.mediumImpact();
           } catch (_) {}
           try {
-            final bell = AudioPlayer();
-            await bell.play(AssetSource('audio/bell_end.mp3'));
+            _bellPlayer ??= AudioPlayer();
+            await _bellPlayer!.play(AssetSource('audio/bell_end.mp3'));
           } catch (_) {}
           if (mounted) {
             ScaffoldMessenger.of(context)

@@ -29,6 +29,7 @@ class TimerService extends ChangeNotifier {
   bool _completedThisRun = false;
   Timer? _ticker;
   int _recordedSeconds = 0;
+  int? _lastDisplayedSeconds;
 
   Duration get target => _target;
   bool get running => _running;
@@ -208,11 +209,17 @@ class TimerService extends ChangeNotifier {
         unawaited(_complete());
         return;
       }
-      notifyListeners();
+      // Only notify if displayed seconds changed to reduce rebuilds
+      final currentSeconds = remaining.inSeconds;
+      if (_lastDisplayedSeconds != currentSeconds) {
+        _lastDisplayedSeconds = currentSeconds;
+        notifyListeners();
+      }
     });
     if (kDebugMode) {
       debugPrint('[TimerService] _startTicker -> tickerCreated');
     }
+    _lastDisplayedSeconds = remaining.inSeconds;
     notifyListeners();
   }
 

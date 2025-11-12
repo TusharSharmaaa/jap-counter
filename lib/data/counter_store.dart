@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async' show unawaited, Timer, Completer;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'xp_store.dart';
@@ -11,6 +11,13 @@ class CounterStore {
   
   // Lock to prevent race conditions in increment operations
   static Future<void>? _currentIncrement;
+  
+  // In-memory cache for performance (batched writes)
+  int? _cachedToday;
+  int? _cachedLifetime;
+  bool _cacheDirty = false;
+  static Timer? _syncTimer;
+  static CounterStore? _syncInstance;
 
   // Keys
   static const _kTodayJaps = 'counter.todayJaps';
@@ -22,11 +29,15 @@ class CounterStore {
     final prefs = await SharedPreferences.getInstance();
     final store = CounterStore._(prefs);
     await store._resetIfNewDay();
+    // Load cache from disk
+    store._cachedToday = prefs.getInt(_kTodayJaps) ?? 0;
+    store._cachedLifetime = prefs.getInt(_kLifetimeJaps) ?? 0;
+    _syncInstance = store;
     return store;
   }
 
-  int get todayJaps => _prefs.getInt(_kTodayJaps) ?? 0;
-  int get lifetimeJaps => _prefs.getInt(_kLifetimeJaps) ?? 0;
+  int get todayJaps => _cachedToday ?? _prefs.getInt(_kTodayJaps) ?? 0;
+  int get lifetimeJaps => _cachedLifetime ?? _prefs.getInt(_kLifetimeJaps) ?? 0;
 
   int get todayMalas => todayJaps ~/ 108;
   int get lifetimeMalas => lifetimeJaps ~/ 108;
@@ -48,26 +59,59 @@ class CounterStore {
     _currentIncrement = completer.future;
     
     try {
-      // Read current values
-      final currentToday = _prefs.getInt(_kTodayJaps) ?? 0;
-      final currentLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+      // Update in-memory cache immediately for responsiveness
+      _cachedToday = (_cachedToday ?? _prefs.getInt(_kTodayJaps) ?? 0) + 1;
+      _cachedLifetime = (_cachedLifetime ?? _prefs.getInt(_kLifetimeJaps) ?? 0) + 1;
+      _cacheDirty = true;
       
-      // Write both values atomically
-      await _prefs.setInt(_kTodayJaps, currentToday + 1);
-      await _prefs.setInt(_kLifetimeJaps, currentLifetime + 1);
+      // Schedule debounced sync to disk
+      _scheduleSync();
       
-      final xp = await XPStore.create();
-      await xp.addXP(1);
+      // Update XP asynchronously (non-blocking)
+      unawaited(_updateXP());
     } finally {
       // Clear the lock
       _currentIncrement = null;
       completer.complete();
     }
   }
+  
+  void _scheduleSync() {
+    _syncTimer?.cancel();
+    _syncInstance = this;
+    _syncTimer = Timer(const Duration(milliseconds: 500), () async {
+      if (_syncInstance?._cacheDirty == true) {
+        await _syncInstance!._syncToDisk();
+      }
+    });
+  }
+  
+  Future<void> _syncToDisk() async {
+    if (!_cacheDirty) return;
+    try {
+      await _prefs.setInt(_kTodayJaps, _cachedToday ?? 0);
+      await _prefs.setInt(_kLifetimeJaps, _cachedLifetime ?? 0);
+      _cacheDirty = false;
+    } catch (e) {
+      // If sync fails, mark dirty again for retry
+      _cacheDirty = true;
+    }
+  }
+  
+  Future<void> _updateXP() async {
+    try {
+      final xp = await XPStore.create();
+      await xp.addXP(1);
+    } catch (_) {
+      // Ignore XP update errors
+    }
+  }
 
   /// Clears only today's japs (used on new day).
   Future<void> _resetToday() async {
-    await _prefs.setInt(_kTodayJaps, 0);
+    _cachedToday = 0;
+    _cacheDirty = true;
+    await _syncToDisk();
   }
 
   /// Resets today when the calendar day changes.

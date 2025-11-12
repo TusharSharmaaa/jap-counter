@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
@@ -53,26 +53,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     _loadThemeMode();
     _loadLanguage();
     _initNotifications(); // fire-and-forget
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final counter = await CounterStore.create();
-      final today = counter.todayJaps ~/ 108;
-      await initializeDateFormatting(_language == 'hi' ? 'hi' : 'en');
-      final msg = today > 0
-          ? _translate('home.snackbar.progress', args: {'count': '$today'})
-          : _translate('home.snackbar.start');
-      if (mounted) {
-        final messenger = ScaffoldMessenger.maybeOf(context);
-        messenger
-          ?..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(msg),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-      }
-    });
+    unawaited(_showWelcomeSnackbar());
   }
 
   @override
@@ -155,6 +136,29 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     } else {
       // Optional: You can show a SnackBar later if you add a UI toggle.
     }
+  }
+
+  Future<void> _showWelcomeSnackbar() async {
+    // Small delay to let UI render first
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
+    final counter = await CounterStore.create();
+    final today = counter.todayJaps ~/ 108;
+    await initializeDateFormatting(_language == 'hi' ? 'hi' : 'en');
+    if (!mounted) return;
+    final msg = today > 0
+        ? _translate('home.snackbar.progress', args: {'count': '$today'})
+        : _translate('home.snackbar.start');
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
   }
 
   @override
@@ -368,10 +372,19 @@ class _StatsPageState extends State<_StatsPage> {
   int _lifetime = 0;
   int _todayMin = 0;
   int _lifetimeMin = 0;
-  // NEW: user’s dedication text (persisted via DedicationStore)
+  // NEW: user's dedication text (persisted via DedicationStore)
   String _dedication = '';
   static const _ambienceKey = 'stats.ambience.enabled';
   bool _ambienceEnabled = false;
+
+  // Cache Futures to prevent unnecessary rebuilds
+  Future<int>? _streakFuture;
+  Future<Set<String>>? _badgesFuture;
+  Future<int>? _goalFuture;
+  Future<List<Map<String, dynamic>>>? _chartFuture;
+  Future<String>? _dedicationFuture;
+  Future<int>? _activeDaysFuture;
+  int? _cachedStreak;
 
   @override
   void initState() {
@@ -381,6 +394,17 @@ class _StatsPageState extends State<_StatsPage> {
     unawaited(AdManager.instance.preloadPlacement('stats.share_rewarded'));
 
     _loadAmbiencePref();
+    
+    // Initialize cached futures
+    _streakFuture = ActivityStore.currentStreak().then((streak) {
+      _cachedStreak = streak;
+      return streak;
+    });
+    _badgesFuture = GamifyStore.badges();
+    _goalFuture = GoalStore.create().then((gs) => gs.dailyMalasGoal);
+    _chartFuture = WeeklyChartData.build();
+    _dedicationFuture = DedicationStore.create().then((s) => s.note);
+    _activeDaysFuture = ActivityStore.totalActiveDays();
   }
 
   @override
@@ -418,6 +442,18 @@ class _StatsPageState extends State<_StatsPage> {
     await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
 
     if (!mounted) return;
+    
+    // Refresh cached futures
+    _streakFuture = ActivityStore.currentStreak().then((streak) {
+      _cachedStreak = streak;
+      return streak;
+    });
+    _badgesFuture = GamifyStore.badges();
+    _goalFuture = GoalStore.create().then((gs) => gs.dailyMalasGoal);
+    _chartFuture = WeeklyChartData.build();
+    _dedicationFuture = DedicationStore.create().then((s) => s.note);
+    _activeDaysFuture = ActivityStore.totalActiveDays();
+    
     setState(() {
       _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
@@ -431,8 +467,8 @@ class _StatsPageState extends State<_StatsPage> {
       await ActivityStore.markTodayActive();
     }
 
-    final streak = await ActivityStore.currentStreak();
-    if ([7, 21, 40].contains(streak)) {
+    final streak = await _streakFuture;
+    if (streak != null && [7, 21, 40].contains(streak)) {
       _confetti.play();
     }
   }
@@ -555,7 +591,7 @@ class _StatsPageState extends State<_StatsPage> {
             border: Border.all(color: Theme.of(context).dividerColor),
           ),
           child: FutureBuilder<int>(
-            future: ActivityStore.currentStreak(),
+            future: _streakFuture,
             builder: (context, snap) {
               final streak = snap.data ?? 0;
               final theme = Theme.of(context);
@@ -627,7 +663,7 @@ class _StatsPageState extends State<_StatsPage> {
           ),
         ),
         FutureBuilder<Set<String>>(
-          future: GamifyStore.badges(),
+          future: _badgesFuture,
           builder: (context, snapshot) {
             final badges = snapshot.data ?? <String>{};
             if (badges.isEmpty) return const SizedBox.shrink();
@@ -705,10 +741,7 @@ class _StatsPageState extends State<_StatsPage> {
         ),
         const SizedBox(height: 16),
         FutureBuilder<int>(
-          future: (() async {
-            final gs = await GoalStore.create();
-            return gs.dailyMalasGoal;
-          })(),
+          future: _goalFuture,
           builder: (context, snap) {
             final goal = snap.data ?? 1;
             final reached = todayMalas >= goal;
@@ -745,7 +778,7 @@ class _StatsPageState extends State<_StatsPage> {
           },
         ),
         FutureBuilder<List<Map<String, dynamic>>>(
-          future: WeeklyChartData.build(),
+          future: _chartFuture,
           builder: (context, snap) {
             final data = snap.data ?? [];
             if (data.isEmpty) return const SizedBox.shrink();
@@ -867,7 +900,7 @@ class _StatsPageState extends State<_StatsPage> {
           },
         ),
         FutureBuilder<String>(
-          future: DedicationStore.create().then((s) => s.note),
+          future: _dedicationFuture,
           builder: (context, snap) {
             final note = snap.data ?? '';
             final dedicationText = note.isEmpty
@@ -946,7 +979,7 @@ class _StatsPageState extends State<_StatsPage> {
                       final counter = await CounterStore.create();
                       final int todayJaps = counter.todayJaps;
                       final int lifetimeMalasLocal = counter.lifetimeMalas;
-                      final int streakDays =
+                      final int streakDays = _cachedStreak ?? 
                           await ActivityStore.currentStreak();
                       debugPrint(
                         '[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
@@ -965,7 +998,8 @@ class _StatsPageState extends State<_StatsPage> {
               final counter = await CounterStore.create();
               final int todayJaps = counter.todayJaps;
               final int lifetimeMalasLocal = counter.lifetimeMalas;
-              final int streakDays = await ActivityStore.currentStreak();
+              final int streakDays = _cachedStreak ?? 
+                  await ActivityStore.currentStreak();
               debugPrint(
                 '[Stats][DEV] Long-press bypass → opening preview directly',
               );
@@ -990,7 +1024,7 @@ class _StatsPageState extends State<_StatsPage> {
         ),
         const SizedBox(height: 24),
         FutureBuilder<int>(
-          future: ActivityStore.totalActiveDays(),
+          future: _activeDaysFuture,
           builder: (context, snap) {
             final count = snap.data ?? 0;
             return Padding(

@@ -79,15 +79,19 @@ class _TimerPageState extends State<TimerPage>
 
   Future<void> _bootstrap() async {
     _applyServiceSnapshot();
-    _revealContent();
-    if (mounted) setState(() {});
-
     final soundInit = _soundManager.init();
 
     unawaited(_ensureWakelockActive(_timerService.running));
     unawaited(_syncAmbience(soundInit));
     unawaited(_loadMeditationStats());
     unawaited(AdManager.instance.preloadPlacement('timer.share_rewarded'));
+    
+    // Batch state updates
+    if (mounted) {
+      setState(() {
+        _visible = true;
+      });
+    }
   }
 
   void _applyServiceSnapshot() {
@@ -143,12 +147,7 @@ class _TimerPageState extends State<TimerPage>
   }
 
   void _revealContent() {
-    if (_visible) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_visible) {
-        setState(() => _visible = true);
-      }
-    });
+    // Removed - now handled in _bootstrap
   }
 
   Future<void> _loadMeditationStats() async {
@@ -169,9 +168,7 @@ class _TimerPageState extends State<TimerPage>
       await _ensureWakelockActive(false);
     }
     await _commitProgress();
-    if (wasRunning && mounted) {
-      setState(() {});
-    }
+    // setState removed - _commitProgress already updates state
   }
 
   Future<void> _commitProgress({bool forceFull = false}) async {

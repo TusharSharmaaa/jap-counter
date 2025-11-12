@@ -29,18 +29,24 @@ class GitaVerse {
 
 class GitaService {
   static const String _base = 'https://vedicscriptures.github.io';
+  static const int _maxCacheSize = 100;
 
-  /// Simple in-memory cache: { "<ch>-<vs>": GitaVerse }
+  /// LRU in-memory cache: { "<ch>-<vs>": GitaVerse }
   static final Map<String, GitaVerse> _cache = {};
+  static final List<String> _cacheOrder = [];
 
   static String _key(int ch, int vs) => '$ch-$vs';
 
   static Future<GitaVerse?> fetchVerse(int chapter, int verse) async {
     final k = _key(chapter, verse);
 
-    // 1) Serve from memory cache if available
+    // 1) Serve from memory cache if available (LRU: move to end)
     final cached = _cache[k];
-    if (cached != null) return cached;
+    if (cached != null) {
+      _cacheOrder.remove(k);
+      _cacheOrder.add(k);
+      return cached;
+    }
 
     // 2) Fetch from API
     try {
@@ -49,7 +55,14 @@ class GitaService {
       if (res.statusCode == 200) {
         final data = json.decode(res.body) as Map<String, dynamic>;
         final v = GitaVerse.fromJson(data);
-        _cache[k] = v; // 3) Save to cache
+        
+        // 3) Add to cache with size limit (LRU eviction)
+        if (_cache.length >= _maxCacheSize) {
+          final oldest = _cacheOrder.removeAt(0);
+          _cache.remove(oldest);
+        }
+        _cache[k] = v;
+        _cacheOrder.add(k);
         return v;
       }
     } catch (_) {}
