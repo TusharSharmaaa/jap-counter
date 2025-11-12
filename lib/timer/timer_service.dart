@@ -14,6 +14,8 @@ class TimerService extends ChangeNotifier {
   static const _kCompletedFlag = 'timer_completed_flag';
   static const _kRecordedSecs = 'timer_recorded_secs';
   static const _kLastActiveMillis = 'timer_last_active_millis';
+  static const _kAppWasClosed = 'timer_app_was_closed';
+  static const _kPausedAtMillis = 'timer_paused_at_millis';
 
   // Defaults
   static const Duration defaultTarget = Duration(minutes: 2);
@@ -85,6 +87,25 @@ class TimerService extends ChangeNotifier {
       );
       if (!_isSameDay(lastActive, now)) {
         _resetForNewDay();
+        needsPersist = true;
+      }
+    }
+
+    // SIMPLE RULE: When app loads, if timer is NOT running, reset it to starting time
+    // This ensures that when app is closed and reopened, timer always starts fresh
+    if (running != true) {
+      // Timer is paused or idle - reset it to starting time
+      if (_accumulated > Duration.zero || startedMillis != null) {
+        if (kDebugMode) {
+          debugPrint(
+            '[TimerService] App loaded with paused/idle timer -> resetting to starting time',
+          );
+        }
+        _accumulated = Duration.zero;
+        _startedAt = null;
+        _runId = '';
+        _recordedSeconds = 0;
+        _completedThisRun = false;
         needsPersist = true;
       }
     }
@@ -179,6 +200,9 @@ class TimerService extends ChangeNotifier {
 
   Future<void> start({String? runId}) async {
     if (_running) return;
+    // Clear pause timestamp when starting
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kPausedAtMillis);
     final newRunId =
         runId ??
         (_runId.isEmpty
@@ -206,6 +230,9 @@ class TimerService extends ChangeNotifier {
 
   Future<void> resume({String? runId}) async {
     if (_running || remaining == Duration.zero) return;
+    // Clear pause timestamp when resuming
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kPausedAtMillis);
     final resumeId =
         runId ??
         (_runId.isEmpty
@@ -230,6 +257,12 @@ class TimerService extends ChangeNotifier {
     _startedAt = null;
     _running = false;
     _stopTicker();
+    // Save pause timestamp to detect if app was closed
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      _kPausedAtMillis,
+      DateTime.now().millisecondsSinceEpoch,
+    );
     await _persist();
     notifyListeners();
     if (kDebugMode) {
@@ -247,6 +280,9 @@ class TimerService extends ChangeNotifier {
     _completedThisRun = false;
     _runId = '';
     _recordedSeconds = 0;
+    // Clear pause timestamp when resetting
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kPausedAtMillis);
     await _persist();
     notifyListeners();
   }
@@ -341,6 +377,14 @@ class TimerService extends ChangeNotifier {
     _runId = '';
     _recordedSeconds = 0;
     _stopTicker();
+  }
+
+  Future<void> markAppClosed() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAppWasClosed, true);
+    if (kDebugMode) {
+      debugPrint('[TimerService] App closed flag set');
+    }
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>

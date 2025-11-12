@@ -614,7 +614,7 @@ class _TimerPageState extends State<TimerPage>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           LayoutBuilder(
-                            builder: (context, _) {
+                            builder: (context, constraints) {
                               final duration = _DurationSection(
                                 presets: _presets,
                                 selected: _selectedMinutes,
@@ -626,12 +626,24 @@ class _TimerPageState extends State<TimerPage>
                                 onSelect: _selectAmbience,
                                 enabled: !isRunning,
                               );
+                              // Use responsive layout: side by side on larger screens, stacked on small
+                              final isSmallScreen = constraints.maxWidth < 400;
+                              if (isSmallScreen) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    duration,
+                                    const SizedBox(height: 12),
+                                    sound,
+                                  ],
+                                );
+                              }
                               return Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(child: duration),
+                                  Flexible(child: duration),
                                   const SizedBox(width: 12),
-                                  Expanded(child: sound),
+                                  Flexible(child: sound),
                                 ],
                               );
                             },
@@ -746,6 +758,8 @@ class _PrimaryTimerCard extends StatelessWidget {
                 color: theme.colorScheme.primary,
                 letterSpacing: .5,
               ),
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ),
         ],
@@ -783,22 +797,38 @@ class _HeaderCard extends StatelessWidget {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Meditation Timer', style: theme.textTheme.titleMedium),
+                Text(
+                  'Meditation Timer',
+                  style: theme.textTheme.titleMedium,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 Text(
                   'भक्ति में ध्यान, ध्यान में शांति।',
                   style: theme.textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ],
             ),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.graphic_eq, size: 18),
-              const SizedBox(width: 4),
-              Text(soundLabel, style: theme.textTheme.labelLarge),
-            ],
+          const SizedBox(width: 8),
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.graphic_eq, size: 18),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    soundLabel,
+                    style: theme.textTheme.labelLarge,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -831,6 +861,7 @@ class _DurationSection extends StatelessWidget {
       child: DropdownButtonFormField<int>(
         value: selected,
         icon: const Icon(Icons.expand_more),
+        isExpanded: true,
         decoration: InputDecoration(
           labelText: 'Select time',
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -842,9 +873,16 @@ class _DurationSection extends StatelessWidget {
             horizontal: 12,
             vertical: 14,
           ),
+          isDense: true,
         ),
         items: presets
-            .map((m) => DropdownMenuItem(value: m, child: Text('$m minutes')))
+            .map((m) => DropdownMenuItem(
+                  value: m,
+                  child: Text(
+                    '$m minutes',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ))
             .toList(),
         onChanged: !enabled
             ? null
@@ -881,6 +919,7 @@ class _AmbienceSection extends StatelessWidget {
       child: DropdownButtonFormField<String>(
         value: selected,
         icon: const Icon(Icons.expand_more),
+        isExpanded: true,
         decoration: InputDecoration(
           labelText: context.tr('timer.ambience.label'),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -892,12 +931,16 @@ class _AmbienceSection extends StatelessWidget {
             horizontal: 12,
             vertical: 14,
           ),
+          isDense: true,
         ),
         items: _options
             .map(
               (id) => DropdownMenuItem(
                 value: id,
-                child: Text(context.tr('timer.ambience.$id')),
+                child: Text(
+                  context.tr('timer.ambience.$id'),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             )
             .toList(),
