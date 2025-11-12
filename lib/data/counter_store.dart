@@ -32,7 +32,9 @@ class CounterStore {
   int get lifetimeMalas => lifetimeJaps ~/ 108;
 
   /// Increment today + lifetime by 1 jap.
-  /// Uses locking mechanism to prevent race conditions.
+  /// Uses a locking mechanism to prevent race conditions in single-threaded Dart code.
+  /// Note: This works for single-threaded execution, but SharedPreferences operations
+  /// are not thread-safe for concurrent writes across isolates.
   Future<void> increment() async {
     await _resetIfNewDay();
     

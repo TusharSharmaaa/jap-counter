@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'bootstrap/app_bootstrapper.dart';
+import 'data/language_store.dart';
 import 'data/streak_store.dart';
 import 'firebase_options.dart';
 import 'notifications/notification_service.dart';
@@ -108,8 +109,9 @@ class _SplashScaffoldState extends State<SplashScaffold> {
     try {
       await NotificationService.initialize()
           .timeout(const Duration(seconds: 2));
+      final language = await LanguageStore.current();
       await NotificationService()
-          .scheduleDailyMotivation()
+          .scheduleDailyMotivation(language: language)
           .timeout(const Duration(seconds: 2));
       debugPrint('$_bootLog notifications primed');
     } on TimeoutException {

@@ -150,7 +150,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     await ns.init();
     final allowed = await ns.requestPermission();
     if (allowed) {
-      await ns.scheduleDefaults();
+      final language = await LanguageStore.current();
+      await ns.scheduleDefaults(language: language);
     } else {
       // Optional: You can show a SnackBar later if you add a UI toggle.
     }

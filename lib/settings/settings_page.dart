@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../notifications/notification_service.dart';
 import '../data/goal_store.dart';
+import '../data/language_store.dart';
 import '../legal/privacy_policy.dart';
 import '../legal/terms_conditions.dart';
 import 'about_page.dart';
@@ -55,7 +56,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final storedReminders = prefs.getBool(_keyReminders) ?? true;
     final shouldEnable = allowed || storedReminders;
     if (allowed && shouldEnable) {
-      await ns.scheduleDefaults();
+      final language = await LanguageStore.current();
+      await ns.scheduleDefaults(language: language);
     }
     if (!mounted) return;
     setState(() {
@@ -83,7 +85,10 @@ class _SettingsPageState extends State<SettingsPage> {
     if (value) {
       await ns.init();
       final allowed = await ns.requestPermission();
-      if (allowed) await ns.scheduleDefaults();
+      if (allowed) {
+        final language = await LanguageStore.current();
+        await ns.scheduleDefaults(language: language);
+      }
       if (!allowed) {
         setState(() => _reminders = false);
         ScaffoldMessenger.of(context).showSnackBar(

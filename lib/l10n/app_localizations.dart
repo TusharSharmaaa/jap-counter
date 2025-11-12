@@ -146,6 +146,13 @@ class AppStrings {
       'counter.goal.status.progress': 'Progress: {malas} / {goal} mala{suffix}',
       'counter.mala.new': 'Start a new mala',
       'counter.mala.remaining': '{count} more japs will complete this mala',
+      'counter.malaCompleted': '🎯 Mala completed! Keep your practice going.',
+      'counter.streak.milestone': '✨ {days}-day streak! Keep going.',
+      'counter.streak.dedication': '🔥 {days}-Day Streak — Keep your practice going!',
+      'counter.goal.dialog.title': 'Set your daily jap goal (malas)',
+      'counter.goal.dialog.noGoal': 'No daily goal',
+      'counter.goal.dialog.goalText': '{count} mala{suffix} per day',
+      'counter.goal.dialog.hint': 'Use the slider to adjust your daily mala goal.',
 
       // Timer
       'timer.complete.title': 'Meditation Completed',
@@ -185,6 +192,22 @@ class AppStrings {
           '🌸 Download Radha Jap Counter today: https://play.google.com/store/apps/details?id=com.example.jap_counter',
       'share.saved': 'Saved image to: {path}',
       'share.donate': 'Tap to support',
+
+      // Notifications
+      'notification.streak.21plus': '🔥 21+ days of continuous practice — Amazing!',
+      'notification.streak.7plus': '🌸 7 days of discipline — Keep the momentum!',
+      'notification.streak.default': '🙏 Take a few quiet moments today.',
+      'notification.body.withMalas': 'Today you completed {malas} malas — {streakMsg}',
+      'notification.body.noMalas': 'Your practice awaits — {streakMsg}',
+      'notification.title.morning': 'Good Morning Sadhak',
+      'notification.title.noon': 'Midday Meditation',
+      'notification.title.evening': 'Evening Practice',
+      'notification.body.noon': 'Take a moment of peace — {note}',
+      'notification.body.evening': 'Complete the day in meditation 🌙',
+      'notification.dynamic.title': "Today's Jap Count: {count}",
+      'notification.dynamic.body': 'Complete your practice with "Radhe Radhe" 🌸',
+      'notification.motivation.title': '🌞 A New Day of Practice',
+      'notification.motivation.body': 'Complete your japs today, just like yesterday 🙏',
     },
     'hi': {
       // Navigation
@@ -307,6 +330,13 @@ class AppStrings {
       'counter.goal.status.progress': 'प्रगति: {malas} / {goal} माला{suffix}',
       'counter.mala.new': 'नई माला प्रारंभ करें',
       'counter.mala.remaining': '{count} और जप इस माला को पूर्ण करेंगे',
+      'counter.malaCompleted': '🎯 माला पूर्ण! साधना जारी रखें।',
+      'counter.streak.milestone': '✨ {days}-दिन की श्रंखला! जारी रखें।',
+      'counter.streak.dedication': '🔥 {days}-दिन की साधना — निरंतर जारी है!',
+      'counter.goal.dialog.title': 'दैनिक जप लक्ष्य चुनें (माला)',
+      'counter.goal.dialog.noGoal': 'कोई दैनिक लक्ष्य नहीं',
+      'counter.goal.dialog.goalText': 'प्रति दिन {count} माला{suffix}',
+      'counter.goal.dialog.hint': 'दैनिक माला लक्ष्य समायोजित करने हेतु स्लाइडर का उपयोग करें।',
 
       // Timer
       'timer.complete.title': 'साधना पूर्ण हुई',
@@ -346,6 +376,22 @@ class AppStrings {
           '🌸 आज ही Radha Jap Counter डाउनलोड करें: https://play.google.com/store/apps/details?id=com.example.jap_counter',
       'share.saved': 'चित्र सहेजा गया: {path}',
       'share.donate': 'सहयोग हेतु टैप करें',
+
+      // Notifications
+      'notification.streak.21plus': '🔥 21+ दिन की निरंतर साधना — अद्भुत है!',
+      'notification.streak.7plus': '🌸 7 दिन का अनुशासन — स्थिरता बनाए रखें।',
+      'notification.streak.default': '🙏 आज भी कुछ पल शांत बैठें।',
+      'notification.body.withMalas': 'आज आपने {malas} माला जपी हैं — {streakMsg}',
+      'notification.body.noMalas': 'आपकी साधना प्रतीक्षा कर रही है — {streakMsg}',
+      'notification.title.morning': 'सुप्रभात साधक',
+      'notification.title.noon': 'मध्याह्न ध्यान',
+      'notification.title.evening': 'संध्या साधना',
+      'notification.body.noon': 'क्षणिक शांति लें — {note}',
+      'notification.body.evening': 'दिवस की पूर्णता ध्यान में 🌙',
+      'notification.dynamic.title': 'आज का जप संख्याः {count}',
+      'notification.dynamic.body': '"राधे राधे" के संग साधना पूर्ण करें 🌸',
+      'notification.motivation.title': '🌞 नई साधना का दिन',
+      'notification.motivation.body': 'कल की तरह आज भी अपने जाप पूरे करें 🙏',
     },
   };
 

@@ -7,6 +7,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../data/activity_store.dart';
 import '../data/dedication_store.dart';
 import '../data/insight_store.dart';
+import '../l10n/app_localizations.dart';
 
 class NotificationService {
   NotificationService._();
@@ -34,10 +35,10 @@ class NotificationService {
   Future<void> init() async {
     if (_initialized) return;
 
-    // Timezone
+    // Timezone - use device local timezone
     try {
       tzdata.initializeTimeZones();
-      tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+      tz.setLocalLocation(tz.local);
     } catch (e) {
       if (kDebugMode) debugPrint('[Notifications] TZ init failed: $e');
     }
@@ -102,28 +103,41 @@ class NotificationService {
     await _plugin.cancelAll();
   }
 
-  Future<void> scheduleDefaults() async {
+  Future<void> scheduleDefaults({String language = 'hi'}) async {
     await cancelAll();
 
     final dstore = await DedicationStore.create();
     final note = dstore.note.isEmpty ? 'Radha Jap Counter' : dstore.note;
     final streakDays = await ActivityStore.currentStreak();
-    final streakMsg = (streakDays >= 21)
-        ? '🔥 21+ दिन की निरंतर साधना — अद्भुत है!'
-        : (streakDays >= 7)
-        ? '🌸 7 दिन का अनुशासन — स्थिरता बनाए रखें।'
-        : '🙏 आज भी कुछ पल शांत बैठें।';
+    
+    // Get localized streak message
+    final streakMsgKey = streakDays >= 21
+        ? 'notification.streak.21plus'
+        : streakDays >= 7
+        ? 'notification.streak.7plus'
+        : 'notification.streak.default';
+    final streakMsg = AppStrings.resolve(language, streakMsgKey);
 
     final insights = await InsightStore.create();
     final malas = insights.getTodayMalas();
-    final body = malas >= 1
-        ? 'आज आपने $malas माला जपी हैं — $streakMsg'
-        : 'आपकी साधना प्रतीक्षा कर रही है — $streakMsg';
+    
+    // Get localized body message
+    final bodyKey = malas >= 1 ? 'notification.body.withMalas' : 'notification.body.noMalas';
+    var body = AppStrings.resolve(language, bodyKey);
+    body = body.replaceAll('{malas}', '$malas').replaceAll('{streakMsg}', streakMsg);
+
+    // Get localized titles and bodies
+    final morningTitle = AppStrings.resolve(language, 'notification.title.morning');
+    final noonTitle = AppStrings.resolve(language, 'notification.title.noon');
+    final eveningTitle = AppStrings.resolve(language, 'notification.title.evening');
+    var noonBody = AppStrings.resolve(language, 'notification.body.noon');
+    noonBody = noonBody.replaceAll('{note}', note);
+    final eveningBody = AppStrings.resolve(language, 'notification.body.evening');
 
     final notifications = [
-      _dailyAt('सुप्रभात साधक', body, 7, 0, id: 700),
-      _dailyAt('मध्याह्न ध्यान', 'क्षणिक शांति लें — $note', 12, 0, id: 1200),
-      _dailyAt('संध्या साधना', 'दिवस की पूर्णता ध्यान में 🌙', 18, 0, id: 1800),
+      _dailyAt(morningTitle, body, 7, 0, id: 700),
+      _dailyAt(noonTitle, noonBody, 12, 0, id: 1200),
+      _dailyAt(eveningTitle, eveningBody, 18, 0, id: 1800),
     ];
 
     for (final n in notifications) {
@@ -157,7 +171,7 @@ class NotificationService {
     }
   }
 
-  Future<void> scheduleDynamicJapReminder(int todayJaps) async {
+  Future<void> scheduleDynamicJapReminder(int todayJaps, {String language = 'hi'}) async {
     final notificationDetails = const NotificationDetails(
       android: AndroidNotificationDetails(
         'daily_jap_count',
@@ -175,11 +189,16 @@ class NotificationService {
       time = time.add(const Duration(days: 1));
     }
 
+    // Get localized notification text
+    var title = AppStrings.resolve(language, 'notification.dynamic.title');
+    title = title.replaceAll('{count}', '$todayJaps');
+    final body = AppStrings.resolve(language, 'notification.dynamic.body');
+
     try {
       await _plugin.zonedSchedule(
         4,
-        'आज का जप संख्याः $todayJaps',
-        '“राधे राधे” के संग साधना पूर्ण करें 🌸',
+        title,
+        body,
         tz.TZDateTime.from(time, tz.local),
         notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -201,7 +220,7 @@ class NotificationService {
     }
   }
 
-  Future<void> scheduleDailyMotivation() async {
+  Future<void> scheduleDailyMotivation({String language = 'hi'}) async {
     final tzNow = tz.TZDateTime.now(tz.local);
     var scheduled7am = tz.TZDateTime(
       tz.local,
@@ -214,11 +233,16 @@ class NotificationService {
     if (scheduled7am.isBefore(tzNow)) {
       scheduled7am = scheduled7am.add(const Duration(days: 1));
     }
+    
+    // Get localized notification text
+    final title = AppStrings.resolve(language, 'notification.motivation.title');
+    final body = AppStrings.resolve(language, 'notification.motivation.body');
+    
     try {
       await _plugin.zonedSchedule(
         2001,
-        '🌞 नई साधना का दिन',
-        'कल की तरह आज भी अपने जाप पूरे करें 🙏',
+        title,
+        body,
         scheduled7am,
         NotificationDetails(
           android: AndroidNotificationDetails(

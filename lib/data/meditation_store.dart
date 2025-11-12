@@ -32,10 +32,10 @@ class MeditationStore {
     }
   }
 
+  /// Synchronous getter for today's minutes.
+  /// Note: Uses synchronous SharedPreferences operations which are safe for getters.
+  /// For async contexts, prefer [getTodayMinutesAsync()] instead.
   int get todayMinutes {
-    // Use async version to ensure data consistency
-    // Note: This is a getter, so we use sync version but it's safe
-    // because SharedPreferences getters are synchronous and safe
     _ensureTodaySync();
     return _prefs.getInt(_kTodayMinutes) ?? 0;
   }
