@@ -54,14 +54,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     _loadLanguage();
     _initNotifications(); // fire-and-forget
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      for (final page in _pages) {
-        if (page is StatefulWidget) {
-          final key = page.key;
-          if (key is GlobalKey) {
-            key.currentState;
-          }
-        }
-      }
       final counter = await CounterStore.create();
       final today = counter.todayJaps ~/ 108;
       await initializeDateFormatting(_language == 'hi' ? 'hi' : 'en');
@@ -263,6 +255,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timerService.dispose();
+    // Dispose StatsAmbience singleton
+    unawaited(StatsAmbience.instance.dispose());
     super.dispose();
   }
 

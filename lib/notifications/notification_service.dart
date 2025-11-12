@@ -133,12 +133,15 @@ class NotificationService {
           n.title,
           n.body,
           n.scheduledDate,
-          const NotificationDetails(
+          NotificationDetails(
             android: AndroidNotificationDetails(
-              'daily_sadhana',
-              'Daily Reminders',
+              _channel.id,
+              _channel.name,
+              channelDescription: _channel.description,
               importance: Importance.high,
               priority: Priority.high,
+              playSound: true,
+              icon: '@mipmap/ic_launcher',
             ),
           ),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -199,28 +202,35 @@ class NotificationService {
   }
 
   Future<void> scheduleDailyMotivation() async {
-    const android = AndroidNotificationDetails(
-      'daily_motivation',
-      'Daily Motivation',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
-    const details = NotificationDetails(android: android);
     final tzNow = tz.TZDateTime.now(tz.local);
-    final tomorrow7am = tz.TZDateTime(
+    var scheduled7am = tz.TZDateTime(
       tz.local,
       tzNow.year,
       tzNow.month,
       tzNow.day,
       7,
-    ).add(const Duration(days: 1));
+    );
+    // If it's already past 7am today, schedule for tomorrow
+    if (scheduled7am.isBefore(tzNow)) {
+      scheduled7am = scheduled7am.add(const Duration(days: 1));
+    }
     try {
       await _plugin.zonedSchedule(
         2001,
         '🌞 नई साधना का दिन',
         'कल की तरह आज भी अपने जाप पूरे करें 🙏',
-        tomorrow7am,
-        details,
+        scheduled7am,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channel.id,
+            _channel.name,
+            channelDescription: _channel.description,
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+            icon: '@mipmap/ic_launcher',
+          ),
+        ),
         androidAllowWhileIdle: true,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
@@ -233,56 +243,6 @@ class NotificationService {
     }
   }
 
-  Future<void> _scheduleDailyAt({
-    required int hour,
-    required int minute,
-    required int id,
-    required String title,
-    required String body,
-  }) async {
-    final now = tz.TZDateTime.now(tz.local);
-    var scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
-    if (scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
-
-    await _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      scheduled,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
-          channelDescription: _channel.description,
-          priority: Priority.high,
-          importance: Importance.high,
-          playSound: true,
-          icon: '@mipmap/ic_launcher',
-        ),
-        iOS: const DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents:
-          DateTimeComponents.time, // repeat daily at this time
-    );
-
-    if (kDebugMode) {
-      debugPrint(
-        '[Notifications] Scheduled $hour:${minute.toString().padLeft(2, '0')} with: $title',
-      );
-    }
-  }
 }
 
 class _DailyNotification {

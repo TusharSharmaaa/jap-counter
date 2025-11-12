@@ -89,7 +89,15 @@ class ActivityStore {
   static Future<void> recordDailySummary(int japs, int malas) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_kDailyHistory);
-    final history = raw == null ? <String, dynamic>{} : Map<String, dynamic>.from(jsonDecode(raw));
+    Map<String, dynamic> history;
+    try {
+      history = raw == null
+          ? <String, dynamic>{}
+          : Map<String, dynamic>.from(jsonDecode(raw));
+    } catch (e) {
+      // Handle corrupted JSON data
+      history = <String, dynamic>{};
+    }
     final key = _yyyymmdd(DateTime.now());
     history[key] = {
       'japs': japs,
@@ -102,6 +110,11 @@ class ActivityStore {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_kDailyHistory);
     if (raw == null) return {};
-    return Map<String, dynamic>.from(jsonDecode(raw));
+    try {
+      return Map<String, dynamic>.from(jsonDecode(raw));
+    } catch (e) {
+      // Handle corrupted JSON data - return empty map
+      return {};
+    }
   }
 }

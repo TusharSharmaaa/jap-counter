@@ -58,15 +58,10 @@ class GitaService {
 
   /// Optional: prefetch next verse (non-blocking, ignore errors)
   static Future<void> prefetch(int chapter, int verse) async {
-    final k = _key(chapter, verse);
-    if (_cache.containsKey(k)) return;
     try {
-      final url = Uri.parse('$_base/slok/$chapter/$verse');
-      final res = await http.get(url);
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body) as Map<String, dynamic>;
-        _cache[k] = GitaVerse.fromJson(data);
-      }
-    } catch (_) {}
+      await fetchVerse(chapter, verse);
+    } catch (_) {
+      // Silently ignore prefetch errors
+    }
   }
 }

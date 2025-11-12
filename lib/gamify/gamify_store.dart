@@ -15,6 +15,10 @@ class GamifyStore {
     return prefs.getInt(_kLevel) ?? 1;
   }
 
+  // Maximum values to prevent integer overflow and performance issues
+  static const int _maxLevel = 1000;
+  static const int _maxXp = 1000000; // 1 million XP cap
+
   static int _xpForNext(int level) => 100 + (level - 1) * 50;
 
   static Future<Map<String, dynamic>> addXp(int delta) async {
@@ -23,24 +27,37 @@ class GamifyStore {
     var level = prefs.getInt(_kLevel) ?? 1;
     final previousLevel = level;
 
-    currentXp += delta;
+    // Cap delta to prevent overflow
+    final safeDelta = delta.clamp(0, _maxXp);
+    currentXp = (currentXp + safeDelta).clamp(0, _maxXp);
     var leveled = false;
 
-    while (currentXp >= _xpForNext(level)) {
+    // Cap level to prevent infinite loops and overflow
+    final maxLevel = _maxLevel;
+    int iterations = 0;
+    const maxIterations = 1000; // Safety limit for loop iterations
+
+    while (currentXp >= _xpForNext(level) && level < maxLevel && iterations < maxIterations) {
       currentXp -= _xpForNext(level);
       level += 1;
       leveled = true;
+      iterations++;
+    }
+
+    // If we hit max level, cap XP
+    if (level >= maxLevel) {
+      currentXp = _maxXp;
     }
 
     await prefs.setInt(_kXp, currentXp);
-    await prefs.setInt(_kLevel, level);
+    await prefs.setInt(_kLevel, level.clamp(1, maxLevel));
 
     return {
       'xp': currentXp,
-      'level': level,
+      'level': level.clamp(1, maxLevel),
       'leveledUp': leveled,
       'prevLevel': previousLevel,
-      'nextThreshold': _xpForNext(level),
+      'nextThreshold': level >= maxLevel ? _maxXp : _xpForNext(level),
     };
   }
 

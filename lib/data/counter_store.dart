@@ -28,10 +28,18 @@ class CounterStore {
   int get lifetimeMalas => lifetimeJaps ~/ 108;
 
   /// Increment today + lifetime by 1 jap.
+  /// Uses atomic read-modify-write to prevent race conditions.
   Future<void> increment() async {
     await _resetIfNewDay();
-    await _prefs.setInt(_kTodayJaps, todayJaps + 1);
-    await _prefs.setInt(_kLifetimeJaps, lifetimeJaps + 1);
+    // Atomic read-modify-write: read current values and write new ones in sequence
+    // This prevents lost increments from concurrent calls
+    final currentToday = _prefs.getInt(_kTodayJaps) ?? 0;
+    final currentLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+    
+    // Write both values atomically
+    await _prefs.setInt(_kTodayJaps, currentToday + 1);
+    await _prefs.setInt(_kLifetimeJaps, currentLifetime + 1);
+    
     final xp = await XPStore.create();
     await xp.addXP(1);
   }

@@ -115,18 +115,35 @@ class TimerService extends ChangeNotifier {
         startedMillis,
         isUtc: false,
       );
+      
+      // Check if timer was started on a different day
       if (_startedAt != null && !_isSameDay(_startedAt!, now)) {
         _resetForNewDay();
         needsPersist = true;
-      } else if (_remainingFor(now) > Duration.zero) {
-        _running = true;
-        _startTicker();
+      } else if (_startedAt != null) {
+        // Calculate elapsed time since start
+        final elapsedSinceStart = now.difference(_startedAt!);
+        final totalElapsed = _accumulated + elapsedSinceStart;
+        final remaining = _target - totalElapsed;
+        
+        // Check if timer has completed while app was closed
+        if (remaining <= Duration.zero) {
+          _running = false;
+          _startedAt = null;
+          _accumulated = _target;
+          _completedThisRun = true;
+          _recordedSeconds = _target.inSeconds;
+          needsPersist = true;
+        } else {
+          // Timer is still running - restore state
+          _running = true;
+          _startTicker();
+        }
       } else {
+        // Invalid state - reset
         _running = false;
         _startedAt = null;
-        _accumulated = _target;
-        _completedThisRun = true;
-        _recordedSeconds = _target.inSeconds;
+        _stopTicker();
         needsPersist = true;
       }
     } else {

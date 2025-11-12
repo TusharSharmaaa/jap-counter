@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:confetti/confetti.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -126,43 +127,13 @@ class _CounterPageState extends State<CounterPage> {
 
     if (wasZero) {
       await ActivityStore.markTodayActive();
-    }
-    if (wasZero) {
-      final streak = await ActivityStore.currentStreak();
-      if (!mounted) return;
-      if (streak == 7 || streak == 21 || streak == 40) {
-        try {
-          await GamifyStore.awardBadge('streak_$streak');
-        } catch (_) {}
-        try {
-          HapticFeedback.mediumImpact();
-        } catch (_) {}
-        try {
-          final bell = AudioPlayer();
-          await bell.play(AssetSource('audio/bell_end.mp3'));
-        } catch (_) {}
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text('✨ $streak-day streak! Keep going.'),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-      }
+      // Check for milestone streaks when starting from zero
+      await _handleStreakMilestones(context, showSnackBar: true);
     }
 
     if (willBe % 108 == 0) {
-      try {
-        final streak = await ActivityStore.currentStreak();
-        if (streak == 7 || streak == 21 || streak == 40) {
-          final dedicationStore = await DedicationStore.create();
-          await dedicationStore.setNote(
-            '🔥 $streak-Day Streak — साधना निरंतर जारी है!',
-          );
-        }
-      } catch (_) {}
+      // Check for streak milestones when completing a mala
+      await _handleStreakMilestones(context, showSnackBar: false);
       try {
         HapticFeedback.mediumImpact();
       } catch (_) {}
@@ -201,8 +172,16 @@ class _CounterPageState extends State<CounterPage> {
 
     await _checkGoalCompletion();
 
-    final ns = NotificationService();
-    await ns.scheduleDynamicJapReminder(_today);
+    // Schedule notification reminder (non-blocking, errors handled internally)
+    try {
+      final ns = NotificationService();
+      await ns.scheduleDynamicJapReminder(_today);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Counter] Notification scheduling failed: $e');
+      }
+      // Continue execution even if notification fails
+    }
   }
 
   Future<void> _checkGoalCompletion() async {
@@ -271,6 +250,57 @@ class _CounterPageState extends State<CounterPage> {
   double get _goalProgress {
     if (_dailyGoal <= 0) return 0;
     return (_malas / _dailyGoal).clamp(0, 1).toDouble();
+  }
+
+  /// Handles streak milestone checks and celebrations.
+  /// Extracted to avoid code duplication.
+  Future<void> _handleStreakMilestones(
+    BuildContext context, {
+    required bool showSnackBar,
+  }) async {
+    try {
+      final streak = await ActivityStore.currentStreak();
+      if (!mounted) return;
+      
+      if (streak == 7 || streak == 21 || streak == 40) {
+        try {
+          await GamifyStore.awardBadge('streak_$streak');
+        } catch (_) {}
+        
+        if (showSnackBar) {
+          try {
+            HapticFeedback.mediumImpact();
+          } catch (_) {}
+          try {
+            final bell = AudioPlayer();
+            await bell.play(AssetSource('audio/bell_end.mp3'));
+          } catch (_) {}
+          if (mounted) {
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                SnackBar(
+                  content: Text('✨ $streak-day streak! Keep going.'),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+          }
+        } else {
+          // When completing a mala, update dedication note
+          try {
+            final dedicationStore = await DedicationStore.create();
+            await dedicationStore.setNote(
+              '🔥 $streak-Day Streak — साधना निरंतर जारी है!',
+            );
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Counter] Streak milestone check failed: $e');
+      }
+    }
   }
 
   Future<void> _editGoal() async {
