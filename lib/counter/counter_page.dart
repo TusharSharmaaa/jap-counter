@@ -16,6 +16,7 @@ import '../gamify/gamify_store.dart';
 import '../l10n/app_localizations.dart';
 import '../notifications/notification_service.dart';
 import '../theme/glow_theme.dart';
+import '../theme/responsive_tokens.dart';
 
 class CounterPage extends StatefulWidget {
   const CounterPage({super.key});
@@ -40,6 +41,7 @@ class _CounterPageState extends State<CounterPage> {
   bool _glowActive = false;
   int _currentMalaCountDisplay = 0;
   Timer? _malaResetTimer;
+  Timer? _batchFlushTimer;
 
   @override
   void initState() {
@@ -116,6 +118,12 @@ class _CounterPageState extends State<CounterPage> {
     final wasZero = _today == 0;
     final willBe = _today + 1;
     await store.increment();
+    
+    // Schedule batch flush timer (cancels previous)
+    _batchFlushTimer?.cancel();
+    _batchFlushTimer = Timer(const Duration(seconds: 2), () {
+      store.flushPending();
+    });
 
     try {
       final insights = await InsightStore.create();
@@ -444,35 +452,46 @@ class _CounterPageState extends State<CounterPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 16),
+                    SizedBox(height: ResponsiveTokens.spacingMD),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _StatTile(
-                              title: "Today's Japs",
-                              value: _today.toString(),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _StatTile(
-                              title: "Malas",
-                              value: _malas.toString(),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _StatTile(
-                              title: "Lifetime Malas",
-                              value: _lifetimeMalas.toString(),
-                            ),
-                          ),
-                        ],
+                      padding: EdgeInsets.symmetric(
+                        horizontal: ResponsiveTokens.spacingSM,
+                      ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isTablet = ResponsiveTokens.isTablet(constraints.maxWidth);
+                          final spacing = isTablet 
+                              ? ResponsiveTokens.spacingMD 
+                              : ResponsiveTokens.spacingSM;
+                          
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: _StatTile(
+                                  title: "Today's Japs",
+                                  value: _today.toString(),
+                                ),
+                              ),
+                              SizedBox(width: spacing),
+                              Expanded(
+                                child: _StatTile(
+                                  title: "Malas",
+                                  value: _malas.toString(),
+                                ),
+                              ),
+                              SizedBox(width: spacing),
+                              Expanded(
+                                child: _StatTile(
+                                  title: "Lifetime Malas",
+                                  value: _lifetimeMalas.toString(),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: ResponsiveTokens.spacingLG),
                     _GoalSummary(
                       dailyGoal: _dailyGoal,
                       goalProgress: _goalProgress,
@@ -481,64 +500,81 @@ class _CounterPageState extends State<CounterPage> {
                       onEditGoal: _editGoal,
                     ),
                     Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Tap to Count',
-                              style: theme.textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 16),
-                            AnimatedScale(
-                              scale: _pulse ? 1.08 : 1.0,
-                              duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeOut,
-                              child: Container(
-                                height: 240,
-                                width: 240,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: RadialGradient(
-                                    colors: [
-                                      theme.colorScheme.primary.withOpacity(
-                                        0.25,
-                                      ),
-                                      theme.colorScheme.surface,
-                                    ],
-                                    radius: 0.85,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: theme.colorScheme.primary
-                                          .withOpacity(0.3),
-                                      blurRadius: 30,
-                                      spreadRadius: 2,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Use minimum of width/height to ensure circle fits
+                          final availableSize = constraints.maxWidth < constraints.maxHeight
+                              ? constraints.maxWidth
+                              : constraints.maxHeight;
+                          // Circle size: 60% of available space, clamped between 200-280
+                          final circleSize = (availableSize * 0.6).clamp(200.0, 280.0);
+                          
+                          return Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Tap to Count',
+                                  style: theme.textTheme.titleLarge,
+                                ),
+                                SizedBox(height: ResponsiveTokens.spacingMD),
+                                AnimatedScale(
+                                  scale: _pulse ? 1.08 : 1.0,
+                                  duration: const Duration(milliseconds: 220),
+                                  curve: Curves.easeOut,
+                                  child: Container(
+                                    height: circleSize,
+                                    width: circleSize,
+                                    constraints: BoxConstraints(
+                                      minWidth: 200,
+                                      minHeight: 200,
+                                      maxWidth: 280,
+                                      maxHeight: 280,
                                     ),
-                                  ],
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '$_today',
-                                    style: theme.textTheme.displayLarge
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          foreground: Paint()
-                                            ..shader = GlowTheme.linearGradient(
-                                              context,
-                                            ),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: RadialGradient(
+                                        colors: [
+                                          theme.colorScheme.primary.withOpacity(
+                                            0.25,
+                                          ),
+                                          theme.colorScheme.surface,
+                                        ],
+                                        radius: 0.85,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: theme.colorScheme.primary
+                                              .withOpacity(0.3),
+                                          blurRadius: 30,
+                                          spreadRadius: 2,
                                         ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '$_today',
+                                        style: theme.textTheme.displayLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              foreground: Paint()
+                                                ..shader = GlowTheme.linearGradient(
+                                                  context,
+                                                ),
+                                            ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
+                                SizedBox(height: ResponsiveTokens.spacingMD),
+                                _MalaProgressDisplay(
+                                  currentMalaCount: _currentMalaCountDisplay,
+                                  malasCompleted: _malas,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 20),
-                            _MalaProgressDisplay(
-                              currentMalaCount: _currentMalaCountDisplay,
-                              malasCompleted: _malas,
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -556,6 +592,9 @@ class _CounterPageState extends State<CounterPage> {
     _confettiController.dispose();
     _bellPlayer?.dispose();
     _cancelMalaResetTimer();
+    _batchFlushTimer?.cancel();
+    // Flush any pending increments before dispose
+    _store?.flushPending();
     super.dispose();
   }
 }
@@ -567,21 +606,37 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 68,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.labelMedium),
-          const Spacer(),
-          Text(value, style: Theme.of(context).textTheme.titleLarge),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Responsive height: min 56dp, max 80dp, scales with available space
+        final height = (constraints.maxHeight.clamp(56.0, 80.0))
+            .clamp(ResponsiveTokens.buttonMinHeight, 80.0);
+        
+        return Container(
+          height: height,
+          constraints: BoxConstraints(
+            minHeight: ResponsiveTokens.buttonMinHeight,
+            maxHeight: 80,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Theme.of(context).dividerColor),
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: ResponsiveTokens.spacingSM,
+            vertical: ResponsiveTokens.spacingSM,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.labelMedium),
+              const Spacer(),
+              Text(value, style: Theme.of(context).textTheme.titleLarge),
+            ],
+          ),
+        );
+      },
     );
   }
 }

@@ -27,14 +27,42 @@ class CounterStore {
   int get todayMalas => todayJaps ~/ 108;
   int get lifetimeMalas => lifetimeJaps ~/ 108;
 
-  /// Increment today + lifetime by 1 jap.
+  // Batch persistence state
+  int _pendingIncrements = 0;
+  static const int _batchSize = 10; // Flush every 10 taps
+  static const Duration _batchTimeout = Duration(seconds: 2);
+
+  /// Increment today + lifetime by 1 jap (batched for performance).
+  /// Flushes immediately if batch size reached or after timeout.
   Future<void> increment() async {
     await _resetIfNewDay();
-    await _prefs.setInt(_kTodayJaps, todayJaps + 1);
-    await _prefs.setInt(_kLifetimeJaps, lifetimeJaps + 1);
-    final xp = await XPStore.create();
-    await xp.addXP(1);
+    _pendingIncrements++;
+    
+    // Flush if batch size reached
+    if (_pendingIncrements >= _batchSize) {
+      await _flushPending();
+    }
   }
+
+  /// Flush pending increments to storage.
+  Future<void> _flushPending() async {
+    if (_pendingIncrements == 0) return;
+    
+    final toAdd = _pendingIncrements;
+    _pendingIncrements = 0;
+    
+    final currentToday = _prefs.getInt(_kTodayJaps) ?? 0;
+    final currentLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+    
+    await _prefs.setInt(_kTodayJaps, currentToday + toAdd);
+    await _prefs.setInt(_kLifetimeJaps, currentLifetime + toAdd);
+    
+    final xp = await XPStore.create();
+    await xp.addXP(toAdd);
+  }
+
+  /// Force flush any pending increments (call on pause/dispose).
+  Future<void> flushPending() => _flushPending();
 
   /// Clears only today's japs (used on new day).
   Future<void> _resetToday() async {

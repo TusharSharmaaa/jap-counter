@@ -16,6 +16,7 @@ import '../core/ad_manager.dart';
 import '../core/sound_manager.dart';
 import '../data/meditation_store.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/responsive_tokens.dart';
 import 'timer_service.dart';
 
 class TimerPage extends StatefulWidget {
@@ -600,13 +601,23 @@ class _TimerPageState extends State<TimerPage>
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  padding: EdgeInsets.fromLTRB(
+                    ResponsiveTokens.spacingMD,
+                    ResponsiveTokens.spacingSM + 4,
+                    ResponsiveTokens.spacingMD,
+                    ResponsiveTokens.spacingSM,
+                  ),
                   child: _HeaderCard(soundLabel: _ambienceLabel(context)),
                 ),
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const ClampingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    padding: EdgeInsets.fromLTRB(
+                      ResponsiveTokens.spacingMD,
+                      ResponsiveTokens.spacingSM,
+                      ResponsiveTokens.spacingMD,
+                      ResponsiveTokens.spacingMD,
+                    ),
                     child: AnimatedOpacity(
                       opacity: _visible ? 1 : 0,
                       duration: const Duration(milliseconds: 700),
@@ -614,7 +625,8 @@ class _TimerPageState extends State<TimerPage>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           LayoutBuilder(
-                            builder: (context, _) {
+                            builder: (context, constraints) {
+                              final isNarrow = constraints.maxWidth < 420;
                               final duration = _DurationSection(
                                 presets: _presets,
                                 selected: _selectedMinutes,
@@ -626,23 +638,36 @@ class _TimerPageState extends State<TimerPage>
                                 onSelect: _selectAmbience,
                                 enabled: !isRunning,
                               );
+                              
+                              // Stack vertically on narrow screens to prevent overflow
+                              if (isNarrow) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    duration,
+                                    SizedBox(height: ResponsiveTokens.spacingSM),
+                                    sound,
+                                  ],
+                                );
+                              }
+                              
                               return Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(child: duration),
-                                  const SizedBox(width: 12),
+                                  SizedBox(width: ResponsiveTokens.spacingSM),
                                   Expanded(child: sound),
                                 ],
                               );
                             },
                           ),
-                          const SizedBox(height: 24),
+                          SizedBox(height: ResponsiveTokens.spacingLG),
                           _PrimaryTimerCard(
                             readout: _readout,
                             progress: _progress,
                             statusText: _statusText,
                           ),
-                          const SizedBox(height: 24),
+                          SizedBox(height: ResponsiveTokens.spacingLG),
                           Row(
                             children: [
                               Expanded(
@@ -660,7 +685,7 @@ class _TimerPageState extends State<TimerPage>
                               ),
                             ],
                           ),
-                          const SizedBox(height: 32),
+                          SizedBox(height: ResponsiveTokens.spacingMD * 2),
                           FilledButton.icon(
                             onPressed: _shareBusy ? null : _shareMeditation,
                             icon: _shareBusy
@@ -677,7 +702,7 @@ class _TimerPageState extends State<TimerPage>
                                 : const Icon(Icons.ios_share),
                             label: Text(context.tr('timer.share.cta')),
                           ),
-                          const SizedBox(height: 48),
+                          SizedBox(height: ResponsiveTokens.spacingXL),
                         ],
                       ),
                     ),
@@ -707,21 +732,28 @@ class _PrimaryTimerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: theme.dividerColor.withOpacity(.35)),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          padding: EdgeInsets.symmetric(
+            vertical: ResponsiveTokens.spacingLG,
+            horizontal: constraints.maxWidth < 360 
+                ? ResponsiveTokens.spacingMD 
+                : 20,
           ),
-        ],
-      ),
-      child: Column(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: theme.dividerColor.withOpacity(.35)),
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.shadow.withOpacity(.05),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
@@ -731,12 +763,12 @@ class _PrimaryTimerCard extends StatelessWidget {
               letterSpacing: 1.2,
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: ResponsiveTokens.spacingMD),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(value: progress, minHeight: 8),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: ResponsiveTokens.spacingSM + 2),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 250),
             child: Text(
@@ -750,6 +782,8 @@ class _PrimaryTimerCard extends StatelessWidget {
           ),
         ],
       ),
+        );
+      },
     );
   }
 }
@@ -761,47 +795,77 @@ class _HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withOpacity(.4)),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 360;
+        return Container(
+          padding: EdgeInsets.all(isNarrow ? ResponsiveTokens.spacingSM : ResponsiveTokens.spacingMD),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.dividerColor.withOpacity(.4)),
+          ),
       child: Row(
         children: [
           Container(
             width: 44,
             height: 44,
+            constraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 40,
+              maxWidth: 48,
+              maxHeight: 48,
+            ),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: theme.colorScheme.primary.withOpacity(.12),
             ),
             child: const Icon(Icons.spa),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: ResponsiveTokens.spacingSM),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Meditation Timer', style: theme.textTheme.titleMedium),
+                Text(
+                  'Meditation Timer',
+                  style: theme.textTheme.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 Text(
                   'भक्ति में ध्यान, ध्यान में शांति।',
                   style: theme.textTheme.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.graphic_eq, size: 18),
-              const SizedBox(width: 4),
-              Text(soundLabel, style: theme.textTheme.labelLarge),
-            ],
+          SizedBox(width: ResponsiveTokens.spacingXS),
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.graphic_eq, size: 18),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    soundLabel,
+                    style: theme.textTheme.labelLarge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
+        );
+      },
     );
   }
 }
@@ -821,28 +885,32 @@ class _DurationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withOpacity(.4)),
-      ),
-      child: DropdownButtonFormField<int>(
-        value: selected,
-        icon: const Icon(Icons.expand_more),
-        decoration: InputDecoration(
-          labelText: 'Select time',
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 360;
+        return Container(
+          padding: EdgeInsets.all(isNarrow ? ResponsiveTokens.spacingSM : 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.dividerColor.withOpacity(.4)),
           ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 14,
-          ),
-        ),
+          child: DropdownButtonFormField<int>(
+            value: selected,
+            icon: const Icon(Icons.expand_more),
+            isExpanded: isNarrow, // Prevent overflow on narrow screens
+            decoration: InputDecoration(
+              labelText: 'Select time',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
+              ),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: isNarrow ? ResponsiveTokens.spacingSM : 12,
+                vertical: 14,
+              ),
+            ),
         items: presets
             .map((m) => DropdownMenuItem(value: m, child: Text('$m minutes')))
             .toList(),
@@ -851,7 +919,9 @@ class _DurationSection extends StatelessWidget {
             : (value) {
                 if (value != null) onSelect(value);
               },
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -871,28 +941,32 @@ class _AmbienceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withOpacity(.4)),
-      ),
-      child: DropdownButtonFormField<String>(
-        value: selected,
-        icon: const Icon(Icons.expand_more),
-        decoration: InputDecoration(
-          labelText: context.tr('timer.ambience.label'),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 360;
+        return Container(
+          padding: EdgeInsets.all(isNarrow ? ResponsiveTokens.spacingSM : 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.dividerColor.withOpacity(.4)),
           ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 14,
-          ),
-        ),
+          child: DropdownButtonFormField<String>(
+            value: selected,
+            icon: const Icon(Icons.expand_more),
+            isExpanded: isNarrow, // Prevent overflow on narrow screens
+            decoration: InputDecoration(
+              labelText: context.tr('timer.ambience.label'),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
+              ),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: isNarrow ? ResponsiveTokens.spacingSM : 12,
+                vertical: 14,
+              ),
+            ),
         items: _options
             .map(
               (id) => DropdownMenuItem(
@@ -903,12 +977,14 @@ class _AmbienceSection extends StatelessWidget {
             .toList(),
         onChanged: !enabled
             ? null
-            : (value) {
+              : (value) {
                 if (value != null) {
                   unawaited(onSelect(value));
                 }
               },
-      ),
+          ),
+        );
+      },
     );
   }
 }

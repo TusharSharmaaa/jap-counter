@@ -32,6 +32,7 @@ import 'counter/counter_page.dart';
 import 'timer/timer_service.dart';
 import 'core/sound_manager.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'theme/responsive_tokens.dart';
 
 class App extends StatefulWidget {
   const App({super.key});
@@ -513,28 +514,30 @@ class _StatsPageState extends State<_StatsPage> {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          RefreshIndicator(
-            onRefresh: _refresh,
-            child: _buildStatsList(context, todayMalas, lifetimeMalas),
-          ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: ConfettiWidget(
-              confettiController: _confetti,
-              blastDirectionality: BlastDirectionality.explosive,
-              emissionFrequency: 0.05,
-              numberOfParticles: 20,
-              colors: const [
-                Colors.orange,
-                Colors.yellow,
-                Colors.pink,
-                Colors.white,
-              ],
+      body: SafeArea(
+        child: Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: _refresh,
+              child: _buildStatsList(context, todayMalas, lifetimeMalas),
             ),
-          ),
-        ],
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConfettiWidget(
+                confettiController: _confetti,
+                blastDirectionality: BlastDirectionality.explosive,
+                emissionFrequency: 0.05,
+                numberOfParticles: 20,
+                colors: const [
+                  Colors.orange,
+                  Colors.yellow,
+                  Colors.pink,
+                  Colors.white,
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -545,7 +548,12 @@ class _StatsPageState extends State<_StatsPage> {
     int lifetimeMalas,
   ) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.only(
+        left: ResponsiveTokens.spacingMD,
+        right: ResponsiveTokens.spacingMD,
+        top: ResponsiveTokens.spacingMD,
+        bottom: ResponsiveTokens.spacingMD + 12, // Extra padding to prevent overflow
+      ),
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -772,96 +780,117 @@ class _StatsPageState extends State<_StatsPage> {
                     context.tr('stats.progressTitle'),
                     style: theme.textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 164,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: data.map((e) {
-                        final val = e['value'] as int? ?? 0;
-                        final dayLabel = e['day'] as String? ?? '';
-                        final dateLabel = e['dateLabel'] as String? ?? '';
-                        final normalized = val == 0 ? 0.0 : val / safeMax;
-                        final barHeight = val == 0
-                            ? 6.0
-                            : (normalized * 96).clamp(14.0, 96.0);
+                  SizedBox(height: ResponsiveTokens.spacingSM),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Responsive chart height: scales with available width, accounting for labels
+                      final chartHeight = (constraints.maxWidth * 0.45).clamp(140.0, 220.0);
+                      return SizedBox(
+                        height: chartHeight,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: data.map((e) {
+                            final val = e['value'] as int? ?? 0;
+                            final dayLabel = e['day'] as String? ?? '';
+                            final dateLabel = e['dateLabel'] as String? ?? '';
+                            final normalized = val == 0 ? 0.0 : val / safeMax;
+                            // Reduce max bar height to leave room for labels
+                            final maxBarHeight = chartHeight - 60; // Reserve space for labels
+                            final barHeight = val == 0
+                                ? 6.0
+                                : (normalized * maxBarHeight).clamp(14.0, maxBarHeight);
 
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.surfaceVariant
-                                        .withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '$val',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeOutCubic,
-                                  height: barHeight,
-                                  width: 14,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.bottomCenter,
-                                      end: Alignment.topCenter,
-                                      colors: [
-                                        theme.colorScheme.primary,
-                                        theme.colorScheme.primaryContainer,
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: theme.colorScheme.primary
-                                            .withOpacity(0.2),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 3),
+                            return Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
                                       ),
-                                    ],
-                                  ),
-                                  alignment: Alignment.topCenter,
-                                  child: val > 0
-                                      ? Icon(
-                                          Icons.energy_savings_leaf,
-                                          size: 12,
-                                          color: theme.colorScheme.onPrimary,
-                                        )
-                                      : null,
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.surfaceVariant
+                                            .withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '$val',
+                                        style: theme.textTheme.labelSmall?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    LayoutBuilder(
+                                      builder: (context, barConstraints) {
+                                        // Responsive bar width: scales with available space
+                                        final barWidth = (barConstraints.maxWidth * 0.15).clamp(10.0, 18.0);
+                                        
+                                        return AnimatedContainer(
+                                          duration: const Duration(milliseconds: 220),
+                                          curve: Curves.easeOutCubic,
+                                          height: barHeight,
+                                          width: barWidth,
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.bottomCenter,
+                                              end: Alignment.topCenter,
+                                              colors: [
+                                                theme.colorScheme.primary,
+                                                theme.colorScheme.primaryContainer,
+                                              ],
+                                            ),
+                                            borderRadius: BorderRadius.circular(6),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: theme.colorScheme.primary
+                                                    .withOpacity(0.2),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
+                                          ),
+                                          alignment: Alignment.topCenter,
+                                          child: val > 0
+                                              ? Icon(
+                                                  Icons.energy_savings_leaf,
+                                                  size: 12,
+                                                  color: theme.colorScheme.onPrimary,
+                                                )
+                                              : null,
+                                        );
+                                      },
+                                    ),
+                                    SizedBox(height: ResponsiveTokens.spacingXS),
+                                    Text(
+                                      dayLabel,
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 11,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      dateLabel,
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                        fontSize: 9,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  dayLabel,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  dateLabel,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -990,7 +1019,7 @@ class _StatsPageState extends State<_StatsPage> {
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: ResponsiveTokens.spacingLG),
         FutureBuilder<int>(
           future: ActivityStore.totalActiveDays(),
           builder: (context, snap) {
@@ -1008,8 +1037,10 @@ class _StatsPageState extends State<_StatsPage> {
           context.tr('stats.calendar'),
           style: Theme.of(context).textTheme.titleMedium,
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: ResponsiveTokens.spacingXS + 2),
         _ActivityCalendar(todayJaps: _today, todayMalas: todayMalas),
+        // Add extra bottom padding to prevent overflow
+        SizedBox(height: ResponsiveTokens.spacingMD),
       ],
     );
   }

@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/ad_manager.dart';
 import '../core/gita_progress_manager.dart';
 import '../utils/quote_image_generator.dart';
+import '../theme/responsive_tokens.dart';
 import 'gita_service.dart';
 import 'quote_theme.dart';
 
@@ -322,47 +323,56 @@ class _GitaPageState extends State<GitaPage> {
                               shloka: shloka,
                               onCopy: () => _copyShloka(shloka),
                             ),
-                            const SizedBox(height: 24),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: _verse > 1
-                                        ? () => _prevVerse()
-                                        : null,
-                                    child: const Text('Prev'),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    onPressed: _sharing
-                                        ? null
-                                        : () => _shareOnWhatsApp(shloka),
-                                    icon: _sharing
-                                        ? SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color:
-                                                  theme.colorScheme.onPrimary,
-                                            ),
-                                          )
-                                        : const Icon(Icons.share),
-                                    label: const Text('Share'),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: () => _nextVerse(),
-                                    child: const Text('Next'),
-                                  ),
-                                ),
-                              ],
+                            SizedBox(height: ResponsiveTokens.spacingLG),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final isTablet = ResponsiveTokens.isTablet(constraints.maxWidth);
+                                final spacing = isTablet 
+                                    ? ResponsiveTokens.spacingMD 
+                                    : ResponsiveTokens.spacingSM;
+                                
+                                return Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: _verse > 1
+                                            ? () => _prevVerse()
+                                            : null,
+                                        child: const Text('Prev'),
+                                      ),
+                                    ),
+                                    SizedBox(width: spacing),
+                                    Expanded(
+                                      child: FilledButton.icon(
+                                        onPressed: _sharing
+                                            ? null
+                                            : () => _shareOnWhatsApp(shloka),
+                                        icon: _sharing
+                                            ? SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color:
+                                                      theme.colorScheme.onPrimary,
+                                                ),
+                                              )
+                                            : const Icon(Icons.share),
+                                        label: const Text('Share'),
+                                      ),
+                                    ),
+                                    SizedBox(width: spacing),
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: () => _nextVerse(),
+                                        child: const Text('Next'),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: ResponsiveTokens.spacingLG),
                           ],
                         );
                       },
