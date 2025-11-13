@@ -197,4 +197,40 @@ class ActivityStore {
       return {};
     }
   }
+  
+  /// Calculate total lifetime japs from all historical data
+  /// This is the sum of all japs recorded in daily history
+  static Future<int> calculateTotalLifetimeJaps() async {
+    final history = await getDailyHistory();
+    int total = 0;
+    
+    for (final entry in history.values) {
+      if (entry is Map<String, dynamic>) {
+        final japs = entry['japs'] as num?;
+        if (japs != null) {
+          total += japs.toInt();
+        }
+      }
+    }
+    
+    return total;
+  }
+  
+  /// Calculate total lifetime malas from all historical data
+  /// This is the sum of all malas recorded in daily history
+  static Future<int> calculateTotalLifetimeMalas() async {
+    final history = await getDailyHistory();
+    int total = 0;
+    
+    for (final entry in history.values) {
+      if (entry is Map<String, dynamic>) {
+        final malas = entry['malas'] as num?;
+        if (malas != null) {
+          total += malas.toInt();
+        }
+      }
+    }
+    
+    return total;
+  }
 }

@@ -412,10 +412,12 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
   Future<Map<String, dynamic>> _loadAllStats({String? locale}) async {
     final chartLocale = locale ?? 'en';
     final results = await Future.wait([
-      // Counter stats
+      // Counter stats - includes lifetime malas calculated from completed malas in history
       CounterStore.create().then((s) => {
         'today': s.todayJaps,
         'lifetime': s.lifetimeJaps,
+        'todayMalas': s.todayMalas,
+        'lifetimeMalas': s.lifetimeMalas, // This is calculated from completed malas in history
       }),
       // Activity stats
       Future.wait([
@@ -466,6 +468,36 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
   void onBecameVisible() {
     if (_ambienceEnabled) {
       StatsAmbience.instance.start();
+    }
+    // Refresh stats data when page becomes visible to show real-time updates
+    unawaited(_refreshStatsData());
+  }
+  
+  /// Refresh stats data without full refresh animation (called on visibility)
+  Future<void> _refreshStatsData() async {
+    // Record current daily summary to ensure stats are up to date
+    final s = await CounterStore.create();
+    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
+    
+    if (!mounted) return;
+    
+    // Invalidate chart cache to ensure fresh data
+    WeeklyChartData.invalidateCache();
+    
+    // Reload all stats with correct locale
+    final language = AppLocalizationScope.of(context).language;
+    final locale = language == 'hi' ? 'hi' : 'en';
+    _allStatsFuture = _loadAllStats(locale: locale);
+    
+    // Update local state with latest counter data
+    setState(() {
+      _today = s.todayJaps;
+      _lifetime = s.lifetimeJaps;
+    });
+    
+    // Ensure today is marked active if user has japs today
+    if (s.todayJaps > 0) {
+      await ActivityStore.markTodayActive();
     }
   }
 
@@ -635,6 +667,16 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
         final dedication = stats['dedication'] as String;
         final chart = stats['chart'] as List<Map<String, dynamic>>;
         
+        // Use counter data from FutureBuilder for real-time accuracy
+        // This ensures stats always reflect the latest counter values
+        final todayJapsFromCounter = counter['today'] ?? _today;
+        final lifetimeJapsFromCounter = counter['lifetime'] ?? _lifetime;
+        
+        // Use malas directly from CounterStore (calculated from completed malas in history)
+        // This ensures we only count COMPLETE malas (108 japs = 1 mala)
+        final todayMalasFromCounter = counter['todayMalas'] ?? (todayJapsFromCounter ~/ 108);
+        final lifetimeMalasFromCounter = counter['lifetimeMalas'] ?? (lifetimeJapsFromCounter ~/ 108);
+        
         final streak = activity['streak'] ?? 0;
         final activeDays = activity['activeDays'] ?? 0;
         
@@ -758,21 +800,21 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                   Expanded(
                     child: _NeoTile(
                       title: context.tr('stats.metric.todayJaps'),
-                      value: _today.toString(),
+                      value: todayJapsFromCounter.toString(),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _NeoTile(
                       title: context.tr('stats.metric.todayMalas'),
-                      value: todayMalas.toString(),
+                      value: todayMalasFromCounter.toString(),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _NeoTile(
                       title: context.tr('stats.metric.lifetimeMalas'),
-                      value: lifetimeMalas.toString(),
+                      value: lifetimeMalasFromCounter.toString(),
                     ),
                   ),
                 ],
@@ -798,7 +840,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
               const SizedBox(height: 16),
               Builder(
                 builder: (context) {
-                  final reached = todayMalas >= goal;
+                  final reached = todayMalasFromCounter >= goal;
                   return Container(
                     margin: const EdgeInsets.only(top: 8),
                     padding: const EdgeInsets.all(12),
@@ -821,7 +863,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                               reached
                                   ? 'stats.dailyGoal.met'
                                   : 'stats.dailyGoal.pending',
-                              args: {'todayMalas': '$todayMalas', 'goal': '$goal'},
+                              args: {'todayMalas': '$todayMalasFromCounter', 'goal': '$goal'},
                             ),
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
@@ -1048,8 +1090,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                       : () async {
                           setState(() => _shareBusy = true);
                           try {
-                            final int todayJaps = counter['today'] ?? 0;
-                            final int lifetimeMalasLocal = lifetimeMalas;
+                            final int todayJaps = todayJapsFromCounter;
+                            final int lifetimeMalasLocal = lifetimeMalasFromCounter;
                             final int streakDays = streak;
                             debugPrint(
                               '[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
@@ -1065,8 +1107,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           }
                         },
                   onLongPress: () async {
-                    final int todayJaps = counter['today'] ?? 0;
-                    final int lifetimeMalasLocal = lifetimeMalas;
+                    final int todayJaps = todayJapsFromCounter;
+                    final int lifetimeMalasLocal = lifetimeMalasFromCounter;
                     final int streakDays = streak;
                     debugPrint(
                       '[Stats][DEV] Long-press bypass → opening preview directly',

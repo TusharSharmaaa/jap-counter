@@ -33,6 +33,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   bool _loading = true;
   int _today = 0;
   int _lifetime = 0;
+  int _lifetimeMalas = 0; // Store lifetime malas separately (calculated from completed malas)
   bool _pulse = false;
   int _dailyGoal = 0;
   bool _goalCompletedShown = false;
@@ -81,6 +82,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       _store = store;
       _today = store.todayJaps;
       _lifetime = store.lifetimeJaps;
+      _lifetimeMalas = store.lifetimeMalas; // Use lifetime malas from store (calculated from completed malas)
       _dailyGoal = goalStore.dailyMalasGoal;
       _goalCompletedShown = congratulatedToday;
       _currentMalaCountDisplay = _calculateCurrentMalaDisplay(store.todayJaps);
@@ -131,6 +133,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     setState(() {
       _today = updatedToday;
       _lifetime = store.lifetimeJaps;
+      _lifetimeMalas = store.lifetimeMalas; // Update lifetime malas from store (calculated from completed malas)
       _currentMalaCountDisplay = malaCompleted ? 108 : remainder;
     });
 
@@ -142,6 +145,20 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
 
     // Non-critical operations: Fire and forget
     unawaited(_recordInsight(willBe));
+    
+    // Record daily summary after every increment to keep stats page in real-time sync
+    // This ensures the stats page always shows accurate data
+    unawaited(ActivityStore.recordDailySummary(updatedToday, updatedToday ~/ 108));
+    
+    // Refresh lifetime malas calculation from history after recording summary
+    // This ensures lifetime malas reflects the latest completed malas from history
+    unawaited(store.refreshLifetimeMalas().then((_) {
+      if (mounted) {
+        setState(() {
+          _lifetimeMalas = store.lifetimeMalas;
+        });
+      }
+    }));
     
     if (wasZero) {
       unawaited(ActivityStore.markTodayActive());
@@ -165,7 +182,6 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
           );
       }
       _triggerConfetti();
-      unawaited(ActivityStore.recordDailySummary(updatedToday, updatedToday ~/ 108));
       unawaited(_recordSession(willBe));
     }
 
@@ -314,7 +330,8 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   }
 
   int get _malas => _today ~/ 108;
-  int get _lifetimeMalas => _lifetime ~/ 108;
+  // Use stored lifetime malas (calculated from completed malas in history)
+  // This ensures we only count COMPLETE malas (108 japs = 1 mala)
   double get _goalProgress {
     if (_dailyGoal <= 0) return 0;
     return (_malas / _dailyGoal).clamp(0, 1).toDouble();
