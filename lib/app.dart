@@ -750,7 +750,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                             ),
                           ],
                         ),
-                        if (streak > 0)
+                        if (streak >= 3)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: StreakBadge(streakDays: streak),
