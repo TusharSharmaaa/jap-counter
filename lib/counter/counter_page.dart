@@ -199,7 +199,8 @@ class _CounterPageState extends State<CounterPage> {
   Future<void> _scheduleNotification() async {
     try {
       final ns = NotificationService();
-      final language = AppLocalizationScope.of(context).language;
+      final scope = AppLocalizationScope.maybeOf(context);
+      final language = scope?.language ?? 'en';
       await ns.scheduleDynamicJapReminder(_today, language: language);
     } catch (e) {
       if (kDebugMode) {
@@ -220,27 +221,61 @@ class _CounterPageState extends State<CounterPage> {
 
   Future<void> _showGoalCompleteDialog() async {
     if (!mounted) return;
-    final language = AppLocalizationScope.of(context).language;
+    final scope = AppLocalizationScope.maybeOf(context);
+    final language = scope?.language ?? 'en';
     final suffix = language == 'hi'
         ? (_dailyGoal == 1 ? '' : 'एँ')
         : (_dailyGoal == 1 ? '' : 's');
+    
+    // Safe translation helper
+    String safeTr(String key, {Map<String, String>? args}) {
+      if (scope != null) {
+        return context.tr(key, args: args);
+      }
+      var value = AppStrings.resolve(language, key);
+      if (args != null) {
+        args.forEach((k, v) {
+          value = value.replaceAll('{$k}', v);
+        });
+      }
+      return value;
+    }
+    
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('counter.goal.complete.title')),
-        content: Text(
-          context.tr(
-            'counter.goal.complete.message',
-            args: {'count': '$_dailyGoal', 'suffix': suffix},
+      builder: (ctx) {
+        final dialogScope = AppLocalizationScope.maybeOf(ctx);
+        final dialogLanguage = dialogScope?.language ?? language;
+        
+        String dialogSafeTr(String key, {Map<String, String>? args}) {
+          if (dialogScope != null) {
+            return ctx.tr(key, args: args);
+          }
+          var value = AppStrings.resolve(dialogLanguage, key);
+          if (args != null) {
+            args.forEach((k, v) {
+              value = value.replaceAll('{$k}', v);
+            });
+          }
+          return value;
+        }
+        
+        return AlertDialog(
+          title: Text(dialogSafeTr('counter.goal.complete.title')),
+          content: Text(
+            dialogSafeTr(
+              'counter.goal.complete.message',
+              args: {'count': '$_dailyGoal', 'suffix': suffix},
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.tr('counter.goal.complete.button')),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(dialogSafeTr('common.ok')),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -321,7 +356,8 @@ class _CounterPageState extends State<CounterPage> {
           // When completing a mala, update dedication note
           try {
             final dedicationStore = await DedicationStore.create();
-            final language = AppLocalizationScope.of(context).language;
+            final scope = AppLocalizationScope.maybeOf(context);
+            final language = scope?.language ?? 'en';
             final note = AppStrings.resolve(language, 'counter.streak.dedication')
                 .replaceAll('{days}', '$streak');
             await dedicationStore.setNote(note);
@@ -336,22 +372,43 @@ class _CounterPageState extends State<CounterPage> {
   }
 
   Future<void> _editGoal() async {
+    // Get language from outer context before showing dialog
+    final scope = AppLocalizationScope.maybeOf(context);
+    final language = scope?.language ?? 'en';
+    
     final result = await showDialog<int>(
       context: context,
       builder: (ctx) {
         int sliderValue = _dailyGoal.clamp(0, 50);
         return StatefulBuilder(
-          builder: (context, setLocalState) {
-            final language = AppLocalizationScope.of(context).language;
-            final suffix = language == 'hi'
+          builder: (dialogContext, setLocalState) {
+            // Use outer context's language or fallback
+            final dialogScope = AppLocalizationScope.maybeOf(dialogContext);
+            final dialogLanguage = dialogScope?.language ?? language;
+            final suffix = dialogLanguage == 'hi'
                 ? (sliderValue == 1 ? '' : 'एँ')
                 : (sliderValue == 1 ? '' : 's');
+            
+            // Safe translation helper
+            String safeTr(String key, {Map<String, String>? args}) {
+              if (dialogScope != null) {
+                return dialogContext.tr(key, args: args);
+              }
+              var value = AppStrings.resolve(dialogLanguage, key);
+              if (args != null) {
+                args.forEach((k, v) {
+                  value = value.replaceAll('{$k}', v);
+                });
+              }
+              return value;
+            }
+            
             final goalText = sliderValue == 0
-                ? context.tr('counter.goal.dialog.noGoal')
-                : context.tr('counter.goal.dialog.goalText', args: {'count': '$sliderValue', 'suffix': suffix});
+                ? safeTr('counter.goal.dialog.noGoal')
+                : safeTr('counter.goal.dialog.goalText', args: {'count': '$sliderValue', 'suffix': suffix});
             
             return AlertDialog(
-              title: Text(context.tr('counter.goal.dialog.title')),
+              title: Text(safeTr('counter.goal.dialog.title')),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -359,7 +416,7 @@ class _CounterPageState extends State<CounterPage> {
                   Text(
                     goalText,
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                   ),
@@ -376,23 +433,23 @@ class _CounterPageState extends State<CounterPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    context.tr('counter.goal.dialog.hint'),
+                    safeTr('counter.goal.dialog.hint'),
                     textAlign: TextAlign.center,
-                    style: Theme.of(context)
+                    style: Theme.of(dialogContext)
                         .textTheme
                         .bodySmall
-                        ?.copyWith(color: Theme.of(context).hintColor),
+                        ?.copyWith(color: Theme.of(dialogContext).hintColor),
                   ),
                 ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: Text(context.tr('common.cancel')),
+                  child: Text(safeTr('common.cancel')),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, sliderValue),
-                  child: Text(context.tr('common.save')),
+                  child: Text(safeTr('common.save')),
                 ),
               ],
             );
@@ -759,13 +816,30 @@ class _GoalSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final language = AppLocalizationScope.of(context).language;
+    final scope = AppLocalizationScope.maybeOf(context);
+    // Use default language if scope is not available (shouldn't happen normally)
+    final language = scope?.language ?? 'en';
     final suffix = language == 'hi'
         ? (dailyGoal == 1 ? '' : 'एँ')
         : (dailyGoal == 1 ? '' : 's');
+    
+    // Helper function to safely resolve translations
+    String safeTr(String key, {Map<String, String>? args}) {
+      if (scope != null) {
+        return context.tr(key, args: args);
+      }
+      var value = AppStrings.resolve(language, key);
+      if (args != null) {
+        args.forEach((k, v) {
+          value = value.replaceAll('{$k}', v);
+        });
+      }
+      return value;
+    }
+    
     final goalLabel = dailyGoal == 0
-        ? context.tr('counter.goal.cta')
-        : context.tr(
+        ? safeTr('counter.goal.cta')
+        : safeTr(
             'counter.goal.label',
             args: {'count': '$dailyGoal', 'suffix': suffix},
           );
@@ -780,7 +854,7 @@ class _GoalSummary extends StatelessWidget {
       statusKey = 'counter.goal.status.progress';
       statusArgs = {'malas': '$malas', 'goal': '$dailyGoal', 'suffix': suffix};
     }
-    final statusText = context.tr(statusKey, args: statusArgs);
+    final statusText = safeTr(statusKey, args: statusArgs);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),

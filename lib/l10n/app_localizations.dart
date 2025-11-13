@@ -16,6 +16,11 @@ class AppLocalizationScope extends InheritedWidget {
     return scope!;
   }
 
+  static AppLocalizationScope? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<AppLocalizationScope>();
+  }
+
   @override
   bool updateShouldNotify(covariant AppLocalizationScope oldWidget) =>
       language != oldWidget.language;
