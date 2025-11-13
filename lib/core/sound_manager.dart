@@ -180,10 +180,16 @@ class SoundManager {
 
   Future<void> dispose() async {
     try {
+      await stopAmbience();
+    } catch (_) {}
+    try {
       await _ambiencePlayer.dispose();
     } catch (_) {}
     try {
       await _sfxPlayer.dispose();
+    } catch (_) {}
+    try {
+      await _session?.setActive(false);
     } catch (_) {}
     _initialized = false;
     _ambiencePrepared = false;

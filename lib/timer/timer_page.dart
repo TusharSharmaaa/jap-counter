@@ -661,27 +661,29 @@ class _TimerPageState extends State<TimerPage>
                           ),
                           const SizedBox(height: 24),
                           // Use ValueListenableBuilder for timer display (only rebuilds display text)
-                          ValueListenableBuilder<String>(
-                            valueListenable: svc.displayNotifier,
-                            builder: (context, display, _) {
-                              // Calculate status text based on current state
-                              String statusText;
-                              if (isRunning) {
-                                statusText = '🕉️ साधना जारी है...';
-                              } else if (isCompleted) {
-                                statusText = '🌸 Meditation complete';
-                              } else if (isPaused) {
-                                statusText = '⏸️ ध्यान विराम';
-                              } else {
-                                statusText = '🙏 मन को शांत करें';
-                              }
-                              
-                              return _PrimaryTimerCard(
-                                readout: display,
-                                progress: svc.progress,
-                                statusText: statusText,
-                              );
-                            },
+                          RepaintBoundary(
+                            child: ValueListenableBuilder<String>(
+                              valueListenable: svc.displayNotifier,
+                              builder: (context, display, _) {
+                                // Calculate status text based on current state
+                                String statusText;
+                                if (isRunning) {
+                                  statusText = '🕉️ साधना जारी है...';
+                                } else if (isCompleted) {
+                                  statusText = '🌸 Meditation complete';
+                                } else if (isPaused) {
+                                  statusText = '⏸️ ध्यान विराम';
+                                } else {
+                                  statusText = '🙏 मन को शांत करें';
+                                }
+                                
+                                return _PrimaryTimerCard(
+                                  readout: display,
+                                  progress: svc.progress,
+                                  statusText: statusText,
+                                );
+                              },
+                            ),
                           ),
                           const SizedBox(height: 24),
                           Row(

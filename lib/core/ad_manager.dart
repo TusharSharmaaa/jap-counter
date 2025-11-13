@@ -119,6 +119,10 @@ class AdManager {
   final Map<String, int> _interstitialRetryCounts = {};
 
   final ListQueue<_AdAttemptLog> _attemptHistory = ListQueue();
+  
+  // Track counter session state to pause ad preloading during active sessions
+  bool _isCounterActive = false;
+  Timer? _preloadTimer;
 
   SharedPreferences? _prefs;
   Future<void>? _bootstrapFuture;
@@ -416,6 +420,11 @@ class AdManager {
     bool ensureReady = true,
   }) async {
     try {
+      // Skip preloading if counter is active
+      if (_isCounterActive) {
+        _logInfo('Skipping preload for $placementId (counter active)');
+        return false;
+      }
       if (ensureReady) {
         await _waitUntilReady();
       }
@@ -435,6 +444,38 @@ class AdManager {
       );
       return false;
     }
+  }
+  
+  /// Called when counter session starts - pauses ad preloading
+  void onCounterSessionStart() {
+    _isCounterActive = true;
+    _pauseAdPreloading();
+  }
+  
+  /// Called when counter session ends - resumes ad preloading
+  void onCounterSessionEnd() {
+    _isCounterActive = false;
+    _resumeAdPreloading();
+  }
+  
+  void _pauseAdPreloading() {
+    _preloadTimer?.cancel();
+    _preloadTimer = null;
+    _logInfo('Ad preloading paused (counter active)');
+  }
+  
+  void _resumeAdPreloading() {
+    _scheduleNextPreload();
+    _logInfo('Ad preloading resumed (counter inactive)');
+  }
+  
+  void _scheduleNextPreload() {
+    _preloadTimer?.cancel();
+    _preloadTimer = Timer(const Duration(seconds: 30), () {
+      if (!_isCounterActive) {
+        unawaited(preloadAll(force: false, ensureReady: false));
+      }
+    });
   }
 
   Future<void> recordEvent(
@@ -909,6 +950,8 @@ class AdManager {
     String placementId, {
     bool force = false,
   }) async {
+    // Skip preloading if counter is active
+    if (_isCounterActive && !force) return;
     if (!force && _rewardedCache[placementId] != null) return;
     final placement = _placements[placementId] as Map<String, dynamic>?;
     if (!_isPlacementEnabled(placement, 'rewarded')) return;
@@ -971,6 +1014,8 @@ class AdManager {
     String placementId, {
     bool force = false,
   }) async {
+    // Skip preloading if counter is active
+    if (_isCounterActive && !force) return;
     if (!force && _interstitialCache[placementId] != null) return;
     final placement = _placements[placementId] as Map<String, dynamic>?;
     if (!_isPlacementEnabled(placement, 'interstitial')) return;
@@ -1289,6 +1334,10 @@ class AdManager {
 
   /// Dispose method to clean up resources and prevent memory leaks
   void dispose() {
+    // Cancel preload timer
+    _preloadTimer?.cancel();
+    _preloadTimer = null;
+    
     // Cancel all retry timers
     for (final timer in _rewardedRetryTimers.values) {
       timer.cancel();

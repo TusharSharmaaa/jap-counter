@@ -389,14 +389,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
   static const _ambienceKey = 'stats.ambience.enabled';
   bool _ambienceEnabled = false;
 
-  // Cache Futures to prevent unnecessary rebuilds
-  Future<int>? _streakFuture;
-  Future<Set<String>>? _badgesFuture;
-  Future<int>? _goalFuture;
-  Future<List<Map<String, dynamic>>>? _chartFuture;
-  Future<String>? _dedicationFuture;
-  Future<int>? _activeDaysFuture;
-  int? _cachedStreak;
+  // Load all stats in one batch to avoid multiple FutureBuilders
+  Future<Map<String, dynamic>>? _allStatsFuture;
 
   @override
   bool get wantKeepAlive => true; // Preserve state when hidden
@@ -410,31 +404,47 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
 
     _loadAmbiencePref();
     
-    // Initialize cached futures
-    _streakFuture = ActivityStore.currentStreak().then((streak) {
-      _cachedStreak = streak;
-      return streak;
-    });
-    _badgesFuture = GamifyStore.badges();
-    _goalFuture = GoalStore.create().then((gs) => gs.dailyMalasGoal);
-    // Chart future will be built in build() method where context is available for locale
-    _chartFuture = WeeklyChartData.build(locale: 'en'); // Default, will be updated in build
-    _dedicationFuture = DedicationStore.create().then((s) => s.note);
-    _activeDaysFuture = ActivityStore.totalActiveDays();
+    // Load all stats once in parallel
+    _allStatsFuture = _loadAllStats();
   }
   
-  Future<List<Map<String, dynamic>>> _buildChartFuture(BuildContext context) {
-    // Get language from context for chart data formatting
-    try {
-      final language = AppLocalizationScope.of(context).language;
-      final locale = language == 'hi' ? 'hi' : 'en';
-      return WeeklyChartData.build(locale: locale);
-    } catch (_) {
-      // Fallback to English if context not available
-      return WeeklyChartData.build(locale: 'en');
-    }
+  /// Load all stats data in parallel for better performance
+  Future<Map<String, dynamic>> _loadAllStats({String? locale}) async {
+    final chartLocale = locale ?? 'en';
+    final results = await Future.wait([
+      // Counter stats
+      CounterStore.create().then((s) => {
+        'today': s.todayJaps,
+        'lifetime': s.lifetimeJaps,
+      }),
+      // Activity stats
+      Future.wait([
+        ActivityStore.currentStreak(),
+        ActivityStore.totalActiveDays(),
+      ]).then((values) => {
+        'streak': values[0],
+        'activeDays': values[1],
+      }),
+      // Goal
+      GoalStore.create().then((gs) => gs.dailyMalasGoal),
+      // Badges
+      GamifyStore.badges(),
+      // Dedication
+      DedicationStore.create().then((s) => s.note),
+      // Chart data
+      WeeklyChartData.build(locale: chartLocale),
+    ]);
+    
+    return {
+      'counter': results[0] as Map<String, int>,
+      'activity': results[1] as Map<String, int>,
+      'goal': results[2] as int,
+      'badges': results[3] as Set<String>,
+      'dedication': results[4] as String,
+      'chart': results[5] as List<Map<String, dynamic>>,
+    };
   }
-
+  
   @override
   void dispose() {
     _confetti.dispose();
@@ -474,20 +484,10 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     // Invalidate chart cache before refreshing
     WeeklyChartData.invalidateCache();
     
-    // Refresh cached futures on manual refresh
-    _streakFuture = ActivityStore.currentStreak().then((streak) {
-      _cachedStreak = streak;
-      return streak;
-    });
-    _badgesFuture = GamifyStore.badges();
-    _goalFuture = GoalStore.create().then((gs) => gs.dailyMalasGoal);
-    // Invalidate and rebuild chart with correct locale
-    WeeklyChartData.invalidateCache();
+    // Reload all stats in one batch with correct locale
     final language = AppLocalizationScope.of(context).language;
     final locale = language == 'hi' ? 'hi' : 'en';
-    _chartFuture = WeeklyChartData.build(locale: locale);
-    _dedicationFuture = DedicationStore.create().then((s) => s.note);
-    _activeDaysFuture = ActivityStore.totalActiveDays();
+    _allStatsFuture = _loadAllStats(locale: locale);
     
     setState(() {
       _today = s.todayJaps;
@@ -502,9 +502,14 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
       await ActivityStore.markTodayActive();
     }
 
-    final streak = await _streakFuture;
-    if (streak != null && [7, 21, 40].contains(streak)) {
-      _confetti.play();
+    // Reload stats and check for milestone streaks
+    final reloadedStats = await _allStatsFuture;
+    if (reloadedStats != null) {
+      final activity = reloadedStats['activity'] as Map<String, int>;
+      final streak = activity['streak'] ?? 0;
+      if ([7, 21, 40].contains(streak)) {
+        _confetti.play();
+      }
     }
   }
 
@@ -615,47 +620,65 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     int lifetimeMalas,
   ) {
     // Use CustomScrollView for better performance
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                ),
-                child: FutureBuilder<int>(
-                  future: _streakFuture,
-                  builder: (context, snap) {
-                    final streak = snap.data ?? 0;
-                    final theme = Theme.of(context);
-                    if (streak == 7 || streak == 21 || streak == 40) {
-                      if (_confetti.state != ConfettiControllerState.playing) {
-                        _confetti.play();
-                      }
-                    }
-                    String streakMessage;
-                    if (streak == 0) {
-                      streakMessage = context.tr('stats.noActiveStreak');
-                    } else if (streak == 7) {
-                      streakMessage = context.tr('stats.streakMessage.7');
-                    } else if (streak == 21) {
-                      streakMessage = context.tr('stats.streakMessage.21');
-                    } else if (streak == 40) {
-                      streakMessage = context.tr('stats.streakMessage.40');
-                    } else {
-                      streakMessage = context.tr(
-                        'stats.streakMessage.generic',
-                        args: {'days': '$streak'},
-                      );
-                    }
-                    return Column(
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _allStatsFuture,
+      builder: (context, statsSnapshot) {
+        if (!statsSnapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        final stats = statsSnapshot.data!;
+        final counter = stats['counter'] as Map<String, int>;
+        final activity = stats['activity'] as Map<String, int>;
+        final goal = stats['goal'] as int;
+        final badges = stats['badges'] as Set<String>;
+        final dedication = stats['dedication'] as String;
+        final chart = stats['chart'] as List<Map<String, dynamic>>;
+        
+        final streak = activity['streak'] ?? 0;
+        final activeDays = activity['activeDays'] ?? 0;
+        
+        // Trigger confetti for milestone streaks
+        if (streak == 7 || streak == 21 || streak == 40) {
+          if (_confetti.state != ConfettiControllerState.playing) {
+            _confetti.play();
+          }
+        }
+        
+        return CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Theme.of(context).dividerColor),
+                    ),
+                    child: Builder(
+                      builder: (context) {
+                        final theme = Theme.of(context);
+                        String streakMessage;
+                        if (streak == 0) {
+                          streakMessage = context.tr('stats.noActiveStreak');
+                        } else if (streak == 7) {
+                          streakMessage = context.tr('stats.streakMessage.7');
+                        } else if (streak == 21) {
+                          streakMessage = context.tr('stats.streakMessage.21');
+                        } else if (streak == 40) {
+                          streakMessage = context.tr('stats.streakMessage.40');
+                        } else {
+                          streakMessage = context.tr(
+                            'stats.streakMessage.generic',
+                            args: {'days': '$streak'},
+                          );
+                        }
+                        return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
@@ -699,16 +722,11 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                         ),
                       ],
                     );
-                  },
-                ),
-              ),
-              FutureBuilder<Set<String>>(
-                future: _badgesFuture,
-                builder: (context, snapshot) {
-                  final badges = snapshot.data ?? <String>{};
-                  if (badges.isEmpty) return const SizedBox.shrink();
-
-                  return Padding(
+                      },
+                    ),
+                  ),
+                  if (badges.isEmpty) const SizedBox.shrink() else
+                  Padding(
                     padding: const EdgeInsets.only(top: 12),
                     child: Wrap(
                       spacing: 8,
@@ -733,9 +751,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                         );
                       }).toList(),
                     ),
-                  );
-                },
-              ),
+                  ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -780,10 +796,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                 ],
               ),
               const SizedBox(height: 16),
-              FutureBuilder<int>(
-                future: _goalFuture,
-                builder: (context, snap) {
-                  final goal = snap.data ?? 1;
+              Builder(
+                builder: (context) {
                   final reached = todayMalas >= goal;
                   return Container(
                     margin: const EdgeInsets.only(top: 8),
@@ -817,13 +831,11 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                   );
                 },
               ),
-              FutureBuilder<List<Map<String, dynamic>>>(
-                future: _buildChartFuture(context),
-                builder: (context, snap) {
-                  final data = snap.data ?? [];
-                  if (data.isEmpty) return const SizedBox.shrink();
+              Builder(
+                builder: (context) {
+                  if (chart.isEmpty) return const SizedBox.shrink();
                   final theme = Theme.of(context);
-                  final maxMalas = data.fold<int>(0, (prev, element) {
+                  final maxMalas = chart.fold<int>(0, (prev, element) {
                     final val = element['value'] as int? ?? 0;
                     return val > prev ? val : prev;
                   });
@@ -848,7 +860,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               final availableWidth = constraints.maxWidth;
-                              final barCount = data.length;
+                              final barCount = chart.length;
                               final barWidth = availableWidth / barCount;
                               
                               return SizedBox(
@@ -857,7 +869,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   mainAxisSize: MainAxisSize.max,
-                                  children: data.asMap().entries.map((entry) {
+                                  children: chart.asMap().entries.map((entry) {
                                     final index = entry.key;
                                     final e = entry.value;
                                     final val = e['value'] as int? ?? 0;
@@ -961,13 +973,11 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                   );
                 },
               ),
-              FutureBuilder<String>(
-                future: _dedicationFuture,
-                builder: (context, snap) {
-                  final note = snap.data ?? '';
-                  final dedicationText = note.isEmpty
+              Builder(
+                builder: (context) {
+                  final dedicationText = dedication.isEmpty
                       ? context.tr('stats.dedication.empty')
-                      : context.tr('stats.dedication.title', args: {'note': note});
+                      : context.tr('stats.dedication.title', args: {'note': dedication});
                   return Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -988,7 +998,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                         const SizedBox(width: 8),
                         TextButton.icon(
                           onPressed: () async {
-                            final controller = TextEditingController(text: note);
+                            final controller = TextEditingController(text: dedication);
                             final updated = await showDialog<String>(
                               context: context,
                               builder: (ctx) => AlertDialog(
@@ -1038,11 +1048,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                       : () async {
                           setState(() => _shareBusy = true);
                           try {
-                            final counter = await CounterStore.create();
-                            final int todayJaps = counter.todayJaps;
-                            final int lifetimeMalasLocal = counter.lifetimeMalas;
-                            final int streakDays = _cachedStreak ?? 
-                                await ActivityStore.currentStreak();
+                            final int todayJaps = counter['today'] ?? 0;
+                            final int lifetimeMalasLocal = lifetimeMalas;
+                            final int streakDays = streak;
                             debugPrint(
                               '[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
                             );
@@ -1057,11 +1065,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           }
                         },
                   onLongPress: () async {
-                    final counter = await CounterStore.create();
-                    final int todayJaps = counter.todayJaps;
-                    final int lifetimeMalasLocal = counter.lifetimeMalas;
-                    final int streakDays = _cachedStreak ?? 
-                        await ActivityStore.currentStreak();
+                    final int todayJaps = counter['today'] ?? 0;
+                    final int lifetimeMalasLocal = lifetimeMalas;
+                    final int streakDays = streak;
                     debugPrint(
                       '[Stats][DEV] Long-press bypass → opening preview directly',
                     );
@@ -1085,18 +1091,12 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                 ),
               ),
               const SizedBox(height: 24),
-              FutureBuilder<int>(
-                future: _activeDaysFuture,
-                builder: (context, snap) {
-                  final count = snap.data ?? 0;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      context.tr('stats.daysActive', args: {'count': '$count'}),
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  );
-                },
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  context.tr('stats.daysActive', args: {'count': '$activeDays'}),
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
               ),
               Text(
                 context.tr('stats.calendar'),
@@ -1108,6 +1108,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
           ),
         ),
       ],
+    );
+      },
     );
   }
 

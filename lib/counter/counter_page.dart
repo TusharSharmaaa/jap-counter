@@ -5,6 +5,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../core/ad_manager.dart';
 import '../core/prefs_manager.dart';
 import '../data/activity_store.dart';
 import '../data/counter_store.dart';
@@ -25,7 +26,7 @@ class CounterPage extends StatefulWidget {
   State<CounterPage> createState() => _CounterPageState();
 }
 
-class _CounterPageState extends State<CounterPage> {
+class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   CounterStore? _store;
   bool _loading = true;
   int _today = 0;
@@ -45,12 +46,24 @@ class _CounterPageState extends State<CounterPage> {
   @override
   void initState() {
     super.initState();
+    // Listen for app going to background
+    WidgetsBinding.instance.addObserver(this);
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 3),
     );
     // Create AudioPlayer once for reuse
     _bellPlayer = AudioPlayer();
+    // Pause ad preloading during counter session
+    AdManager.instance.onCounterSessionStart();
     _init();
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // App going to background - force sync
+      _store?.forceSyncNow();
+    }
   }
 
   Future<void> _init() async {
@@ -283,7 +296,8 @@ class _CounterPageState extends State<CounterPage> {
     if (_confettiShownRecently) return;
     _confettiShownRecently = true;
     _confettiController.play();
-    Future.delayed(const Duration(seconds: 3), () {
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) _confettiController.stop();
       _confettiShownRecently = false;
     });
   }
@@ -551,16 +565,17 @@ class _CounterPageState extends State<CounterPage> {
               child: ConfettiWidget(
                 confettiController: _confettiController,
                 blastDirectionality: BlastDirectionality.explosive,
-                numberOfParticles: 24,
-                emissionFrequency: 0.04,
-                maxBlastForce: 12,
-                minBlastForce: 6,
-                gravity: 0.2,
+                particleDrag: 0.05,
+                emissionFrequency: 0.05,
+                numberOfParticles: 15,
+                maxBlastForce: 10,
+                minBlastForce: 5,
+                gravity: 0.3,
+                shouldLoop: false,
                 colors: const [
-                  Colors.amber,
+                  Colors.orange,
                   Colors.pink,
                   Colors.purple,
-                  Colors.white,
                 ],
               ),
             ),
@@ -577,40 +592,44 @@ class _CounterPageState extends State<CounterPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const SizedBox(height: 16),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: _StatTile(
-                                  title: "Today's Japs",
-                                  value: _today.toString(),
+                        RepaintBoundary(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _StatTile(
+                                    title: "Today's Japs",
+                                    value: _today.toString(),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _StatTile(
-                                  title: "Malas",
-                                  value: _malas.toString(),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _StatTile(
+                                    title: "Malas",
+                                    value: _malas.toString(),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _StatTile(
-                                  title: "Lifetime Malas",
-                                  value: _lifetimeMalas.toString(),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _StatTile(
+                                    title: "Lifetime Malas",
+                                    value: _lifetimeMalas.toString(),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                         SizedBox(height: isSmallScreen ? 12 : 24),
-                        _GoalSummary(
-                          dailyGoal: _dailyGoal,
-                          goalProgress: _goalProgress,
-                          goalCompletedShown: _goalCompletedShown,
-                          malas: _malas,
-                          onEditGoal: _editGoal,
+                        RepaintBoundary(
+                          child: _GoalSummary(
+                            dailyGoal: _dailyGoal,
+                            goalProgress: _goalProgress,
+                            goalCompletedShown: _goalCompletedShown,
+                            malas: _malas,
+                            onEditGoal: _editGoal,
+                          ),
                         ),
                         Expanded(
                           child: Center(
@@ -619,72 +638,19 @@ class _CounterPageState extends State<CounterPage> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
+                                  const Text(
                                     'Tap to Count',
-                                    style: theme.textTheme.titleLarge,
+                                    style: TextStyle(fontSize: 18),
                                   ),
-                                  SizedBox(height: isSmallScreen ? 12 : 16),
-                                  AnimatedScale(
-                                    scale: _pulse ? 1.08 : 1.0,
-                                    duration: const Duration(milliseconds: 220),
-                                    curve: Curves.easeOut,
-                                    child: LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        final maxSize = constraints.maxWidth < constraints.maxHeight
-                                            ? constraints.maxWidth * 0.6
-                                            : constraints.maxHeight * 0.4;
-                                        final circleSize = (maxSize.clamp(180.0, 240.0));
-                                        
-                                        return Container(
-                                          height: circleSize,
-                                          width: circleSize,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: RadialGradient(
-                                              colors: [
-                                                theme.colorScheme.primary.withOpacity(
-                                                  0.25,
-                                                ),
-                                                theme.colorScheme.surface,
-                                              ],
-                                              radius: 0.85,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: theme.colorScheme.primary
-                                                    .withOpacity(0.3),
-                                                blurRadius: 30,
-                                                spreadRadius: 2,
-                                              ),
-                                            ],
-                                          ),
-                                          child: Center(
-                                            child: FittedBox(
-                                              fit: BoxFit.scaleDown,
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(16.0),
-                                                child: Text(
-                                                  '$_today',
-                                                  style: theme.textTheme.displayLarge
-                                                      ?.copyWith(
-                                                        fontWeight: FontWeight.bold,
-                                                        foreground: Paint()
-                                                          ..shader = GlowTheme.linearGradient(
-                                                            context,
-                                                          ),
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
+                                  SizedBox(height: isSmallScreen ? 12 : 16), // Cannot be const due to conditional
+                                  RepaintBoundary(
+                                    child: _CounterButton(
+                                      today: _today,
+                                      pulse: _pulse,
+                                      currentMalaCount: _currentMalaCountDisplay,
+                                      malasCompleted: _malas,
+                                      isSmallScreen: isSmallScreen,
                                     ),
-                                  ),
-                                  SizedBox(height: isSmallScreen ? 12 : 20),
-                                  _MalaProgressDisplay(
-                                    currentMalaCount: _currentMalaCountDisplay,
-                                    malasCompleted: _malas,
                                   ),
                                   SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
                                 ],
@@ -706,6 +672,11 @@ class _CounterPageState extends State<CounterPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // Force sync before disposal
+    _store?.forceSyncNow();
+    // Resume ad preloading when counter session ends
+    AdManager.instance.onCounterSessionEnd();
     _confettiController.dispose();
     _bellPlayer?.dispose();
     _cancelMalaResetTimer();
@@ -758,6 +729,88 @@ class _StatTile extends StatelessWidget {
   }
 }
 
+class _CounterButton extends StatelessWidget {
+  final int today;
+  final bool pulse;
+  final int currentMalaCount;
+  final int malasCompleted;
+  final bool isSmallScreen;
+
+  const _CounterButton({
+    required this.today,
+    required this.pulse,
+    required this.currentMalaCount,
+    required this.malasCompleted,
+    required this.isSmallScreen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedScale(
+          scale: pulse ? 1.08 : 1.0,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final maxSize = constraints.maxWidth < constraints.maxHeight
+                  ? constraints.maxWidth * 0.6
+                  : constraints.maxHeight * 0.4;
+              final circleSize = (maxSize.clamp(180.0, 240.0));
+              
+              return Container(
+                height: circleSize,
+                width: circleSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      theme.colorScheme.primary.withOpacity(0.25),
+                      theme.colorScheme.surface,
+                    ],
+                    radius: 0.85,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.colorScheme.primary.withOpacity(0.3),
+                      blurRadius: 30,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        '$today',
+                        style: theme.textTheme.displayLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          foreground: Paint()
+                            ..shader = GlowTheme.linearGradient(context),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        SizedBox(height: isSmallScreen ? 12 : 20), // Cannot be const due to conditional
+        _MalaProgressDisplay(
+          currentMalaCount: currentMalaCount,
+          malasCompleted: malasCompleted,
+        ),
+      ],
+    );
+  }
+}
+
 class _MalaProgressDisplay extends StatelessWidget {
   final int currentMalaCount;
   final int malasCompleted;
@@ -770,7 +823,6 @@ class _MalaProgressDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final normalized = currentMalaCount.clamp(0, 108).toInt();
-    final progress = normalized / 108.0;
     final primaryLabelStyle = theme.textTheme.titleSmall?.copyWith(
       fontWeight: FontWeight.w700,
       letterSpacing: 0.2,

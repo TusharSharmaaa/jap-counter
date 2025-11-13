@@ -65,8 +65,12 @@ class CounterStore {
       _cachedLifetime = (_cachedLifetime ?? _prefs.getInt(_kLifetimeJaps) ?? 0) + 1;
       _cacheDirty = true;
       
-      // Schedule debounced sync to disk
-      _scheduleSync();
+      // Sync every 10 taps OR after 500ms of inactivity
+      if (_cachedToday! % 10 == 0) {
+        await _syncToDisk(); // Force sync every 10 taps
+      } else {
+        _scheduleSync();
+      }
       
       // Update XP asynchronously (non-blocking)
       unawaited(_updateXP());
@@ -75,6 +79,12 @@ class CounterStore {
       _currentIncrement = null;
       completer.complete();
     }
+  }
+  
+  /// Force immediate sync to disk (used when app goes to background or closes).
+  Future<void> forceSyncNow() async {
+    _syncTimer?.cancel();
+    await _syncToDisk();
   }
   
   void _scheduleSync() {
