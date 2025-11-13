@@ -31,7 +31,6 @@ class TimerService extends ChangeNotifier {
   Timer? _ticker;
   int _recordedSeconds = 0;
   int? _lastDisplayedSeconds;
-  DateTime? _cachedNow; // Cache DateTime.now() to reduce system calls
   final ValueNotifier<String> displayNotifier = ValueNotifier<String>('');
 
   Duration get target => _target;
@@ -44,7 +43,9 @@ class TimerService extends ChangeNotifier {
     if (!_running || _startedAt == null) {
       return _accumulated;
     }
-    final now = _cachedNow ?? DateTime.now();
+    // Always use DateTime.now() for accurate real-time calculations
+    // The cached value is only used within the ticker for performance
+    final now = DateTime.now();
     return _accumulated + now.difference(_startedAt!);
   }
 
@@ -96,25 +97,7 @@ class TimerService extends ChangeNotifier {
       }
     }
 
-    // SIMPLE RULE: When app loads, if timer is NOT running, reset it to starting time
-    // This ensures that when app is closed and reopened, timer always starts fresh
-    if (running != true) {
-      // Timer is paused or idle - reset it to starting time
-      if (_accumulated > Duration.zero || startedMillis != null) {
-        if (kDebugMode) {
-          debugPrint(
-            '[TimerService] App loaded with paused/idle timer -> resetting to starting time',
-          );
-        }
-        _accumulated = Duration.zero;
-        _startedAt = null;
-        _runId = '';
-        _recordedSeconds = 0;
-        _completedThisRun = false;
-        needsPersist = true;
-      }
-    }
-
+    // Restore timer state
     if (running == true && startedMillis != null) {
       _startedAt = DateTime.fromMillisecondsSinceEpoch(
         startedMillis,
@@ -122,7 +105,6 @@ class TimerService extends ChangeNotifier {
       );
       
       // Check if timer was started on a different day
-      // Use timezone-aware comparison to handle day boundaries correctly
       final startDate = _startedAt!;
       final startDay = DateTime(startDate.year, startDate.month, startDate.day);
       final nowDay = DateTime(now.year, now.month, now.day);
@@ -131,7 +113,7 @@ class TimerService extends ChangeNotifier {
         // Timer was started on a previous day - reset it
         _resetForNewDay();
         needsPersist = true;
-      } else if (_startedAt != null) {
+      } else {
         // Calculate elapsed time since start
         final elapsedSinceStart = now.difference(_startedAt!);
         final totalElapsed = _accumulated + elapsedSinceStart;
@@ -139,37 +121,53 @@ class TimerService extends ChangeNotifier {
         
         // Check if timer has completed while app was closed
         if (remaining <= Duration.zero) {
+          // Timer completed while app was closed
           _running = false;
           _startedAt = null;
           _accumulated = _target;
           _completedThisRun = true;
           _recordedSeconds = _target.inSeconds;
+          _stopTicker();
           needsPersist = true;
         } else {
-          // Timer is still running - restore state
+          // Timer is still running - restore state and start ticker
           _running = true;
           _startTicker();
         }
-      } else {
-        // Invalid state - reset
-        _running = false;
-        _startedAt = null;
-        _stopTicker();
-        needsPersist = true;
       }
     } else {
+      // Timer is not running - ensure clean state
       _running = false;
       _startedAt = null;
       _stopTicker();
+      // Only reset accumulated if we have a valid pause state (accumulated > 0)
+      // Otherwise, keep it at zero for fresh starts
+      if (accumSecs == null || accumSecs == 0) {
+        // No previous state, ensure everything is reset
+        if (_accumulated > Duration.zero || _runId.isNotEmpty) {
+          _accumulated = Duration.zero;
+          _runId = '';
+          _recordedSeconds = 0;
+          _completedThisRun = false;
+          needsPersist = true;
+        }
+      }
     }
 
     if (needsPersist) {
       await _persist();
     }
 
+    // Update display notifier to reflect current state
+    final currentSeconds = remaining.inSeconds;
+    _lastDisplayedSeconds = currentSeconds;
+    final minutes = currentSeconds ~/ 60;
+    final secs = currentSeconds % 60;
+    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+
     if (kDebugMode) {
       debugPrint(
-        '[TimerService] load -> running=$_running startedAt=$_startedAt accumulated=$_accumulated target=$_target',
+        '[TimerService] load -> running=$_running startedAt=$_startedAt accumulated=${_accumulated.inSeconds}s target=${_target.inSeconds}s remaining=${remaining.inSeconds}s',
       );
     }
 
@@ -207,36 +205,56 @@ class TimerService extends ChangeNotifier {
 
   void _startTicker() {
     _stopTicker();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      // Cache DateTime.now() once per tick to reduce system calls
-      _cachedNow = DateTime.now();
+    if (!_running) {
+      // Don't start ticker if not running
+      return;
+    }
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      // Check running state first - if false, stop ticker and return
+      if (!_running) {
+        timer.cancel();
+        _ticker = null;
+        return;
+      }
       
-      if (!_running) return;
+      // Calculate remaining time using current time
+      final now = DateTime.now();
+      final elapsedSinceStart = _startedAt != null 
+          ? now.difference(_startedAt!) 
+          : Duration.zero;
+      final totalElapsed = _accumulated + elapsedSinceStart;
+      final remainder = _target - totalElapsed;
+      final remaining = remainder.isNegative ? Duration.zero : remainder;
+      
+      // Check if timer has completed
       if (remaining == Duration.zero) {
+        timer.cancel();
+        _ticker = null;
         unawaited(_complete());
         return;
       }
-      // Only notify if displayed seconds changed to reduce rebuilds
+      
+      // Only update display if seconds changed to reduce rebuilds
       final currentSeconds = remaining.inSeconds;
       if (_lastDisplayedSeconds != currentSeconds) {
         _lastDisplayedSeconds = currentSeconds;
         // Update display notifier for selective listening
         final minutes = currentSeconds ~/ 60;
-        final seconds = currentSeconds % 60;
-        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-        // Only notify listeners for other state changes (not display)
+        final secs = currentSeconds % 60;
+        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+        // Notify listeners for state changes
         notifyListeners();
       }
     });
     if (kDebugMode) {
-      debugPrint('[TimerService] _startTicker -> tickerCreated');
+      debugPrint('[TimerService] _startTicker -> tickerCreated, running=$_running');
     }
-    _lastDisplayedSeconds = remaining.inSeconds;
-    // Initialize display notifier
+    // Initialize display immediately
     final initialSeconds = remaining.inSeconds;
+    _lastDisplayedSeconds = initialSeconds;
     final minutes = initialSeconds ~/ 60;
-    final seconds = initialSeconds % 60;
-    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    final secs = initialSeconds % 60;
+    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     notifyListeners();
   }
 
@@ -247,43 +265,50 @@ class TimerService extends ChangeNotifier {
 
   Future<void> start({String? runId}) async {
     if (_running) return;
+    
     // Clear pause timestamp when starting
     final prefs = await PrefsManager.instance;
     await prefs.remove(_kPausedAtMillis);
-    final newRunId =
-        runId ??
-        (_runId.isEmpty
-            ? DateTime.now().microsecondsSinceEpoch.toString()
-            : _runId);
+    
+    // Determine if this is a new run or resuming
     final wasCompleted = remaining == Duration.zero && !_running;
     final isNewRun =
         wasCompleted || _runId.isEmpty || _accumulated == Duration.zero;
+    
     if (isNewRun) {
+      // Starting fresh - reset everything
       _accumulated = Duration.zero;
       _recordedSeconds = 0;
+      _runId = runId ?? DateTime.now().microsecondsSinceEpoch.toString();
+    } else {
+      // Resuming existing run - keep accumulated time and runId
+      _runId = runId ?? _runId;
     }
-    _runId = newRunId;
+    
     _completedThisRun = false;
     _startedAt = DateTime.now();
     _running = true;
     _startTicker();
     await _persist();
+    notifyListeners();
     if (kDebugMode) {
       debugPrint(
-        '[TimerService] start -> runId=$_runId accumulated=$_accumulated startedAt=$_startedAt',
+        '[TimerService] start -> runId=$_runId accumulated=${_accumulated.inSeconds}s isNewRun=$isNewRun',
       );
     }
   }
 
   Future<void> resume({String? runId}) async {
     if (_running || remaining == Duration.zero) return;
+    
     // Clear pause timestamp when resuming
     final prefs = await PrefsManager.instance;
     await prefs.remove(_kPausedAtMillis);
-    final resumeId =
-        runId ??
-        (_runId.isEmpty
-            ? DateTime.now().microsecondsSinceEpoch.toString()
+    
+    // Use existing runId or create new one
+    final resumeId = runId ?? 
+        (_runId.isEmpty 
+            ? DateTime.now().microsecondsSinceEpoch.toString() 
             : _runId);
     _runId = resumeId;
     _completedThisRun = false;
@@ -291,19 +316,30 @@ class TimerService extends ChangeNotifier {
     _running = true;
     _startTicker();
     await _persist();
+    notifyListeners();
     if (kDebugMode) {
       debugPrint(
-        '[TimerService] resume -> runId=$_runId accumulated=$_accumulated startedAt=$_startedAt',
+        '[TimerService] resume -> runId=$_runId accumulated=${_accumulated.inSeconds}s remaining=${remaining.inSeconds}s',
       );
     }
   }
 
   Future<void> pause() async {
     if (!_running) return;
+    
+    // Update accumulated time with current elapsed time
     _accumulated = elapsed;
     _startedAt = null;
     _running = false;
     _stopTicker();
+    
+    // Update display to show paused state
+    final pausedSeconds = remaining.inSeconds;
+    _lastDisplayedSeconds = pausedSeconds;
+    final minutes = pausedSeconds ~/ 60;
+    final secs = pausedSeconds % 60;
+    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    
     // Save pause timestamp to detect if app was closed
     final prefs = await PrefsManager.instance;
     await prefs.setInt(
@@ -314,7 +350,7 @@ class TimerService extends ChangeNotifier {
     notifyListeners();
     if (kDebugMode) {
       debugPrint(
-        '[TimerService] pause -> accumulated=$_accumulated recorded=$_recordedSeconds',
+        '[TimerService] pause -> accumulated=${_accumulated.inSeconds}s recorded=$_recordedSeconds remaining=${remaining.inSeconds}s',
       );
     }
   }
@@ -327,6 +363,14 @@ class TimerService extends ChangeNotifier {
     _completedThisRun = false;
     _runId = '';
     _recordedSeconds = 0;
+    
+    // Update display to show reset state (target time)
+    final resetSeconds = _target.inSeconds;
+    _lastDisplayedSeconds = resetSeconds;
+    final minutes = resetSeconds ~/ 60;
+    final secs = resetSeconds % 60;
+    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    
     // Clear pause timestamp when resetting
     final prefs = await PrefsManager.instance;
     await prefs.remove(_kPausedAtMillis);
@@ -342,6 +386,14 @@ class TimerService extends ChangeNotifier {
     _completedThisRun = false;
     _runId = '';
     _recordedSeconds = 0;
+    
+    // Update display to show new target time
+    final targetSeconds = _target.inSeconds;
+    _lastDisplayedSeconds = targetSeconds;
+    final minutes = targetSeconds ~/ 60;
+    final secs = targetSeconds % 60;
+    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    
     await _persist();
     notifyListeners();
   }
@@ -362,6 +414,11 @@ class TimerService extends ChangeNotifier {
     _startedAt = null;
     _recordedSeconds = _target.inSeconds;
     _stopTicker();
+    
+    // Update display to show completed state (00:00)
+    _lastDisplayedSeconds = 0;
+    displayNotifier.value = '00:00';
+    
     await _persist();
     notifyListeners();
     if (kDebugMode) {
@@ -384,35 +441,62 @@ class TimerService extends ChangeNotifier {
 
   void refresh() {
     if (_running && !_hasInFlightTicker) {
+      // Timer is running but ticker is not - restart it
       _startTicker();
     } else {
+      // Update display notifier even when not running
+      final currentSeconds = remaining.inSeconds;
+      if (_lastDisplayedSeconds != currentSeconds) {
+        _lastDisplayedSeconds = currentSeconds;
+        final minutes = currentSeconds ~/ 60;
+        final secs = currentSeconds % 60;
+        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+      }
       notifyListeners();
     }
   }
 
   Future<int> captureUncreditedMinutes({bool forceFull = false}) async {
+    // Calculate total elapsed seconds
     final totalSecs = forceFull ? _target.inSeconds : elapsed.inSeconds;
     final cappedSecs = totalSecs.clamp(0, _target.inSeconds);
+    
+    // Calculate delta from what we've already recorded
     final deltaSecs = cappedSecs - _recordedSeconds;
     if (deltaSecs <= 0) {
+      // No new time to credit
       return 0;
     }
 
     int minutes;
     if (forceFull) {
+      // Credit all remaining time (used when timer completes)
       minutes = (deltaSecs / 60).ceil();
       _recordedSeconds = cappedSecs;
     } else {
+      // Only credit full minutes (used during pause)
       if (deltaSecs < 60) {
+        // Less than a minute - don't credit yet
         return 0;
       }
+      // Credit full minutes only
       minutes = deltaSecs ~/ 60;
       _recordedSeconds += minutes * 60;
+      // Ensure we don't exceed the total
       if (_recordedSeconds > cappedSecs) {
         _recordedSeconds = cappedSecs;
       }
     }
+    
+    // Persist the updated recorded seconds
     await _persist();
+    
+    if (kDebugMode) {
+      debugPrint(
+        '[TimerService] captureUncreditedMinutes -> minutes=$minutes recorded=$_recordedSeconds total=$cappedSecs',
+      );
+    }
+    
     return minutes;
   }
 

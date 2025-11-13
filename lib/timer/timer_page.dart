@@ -166,9 +166,11 @@ class _TimerPageState extends State<TimerPage>
       await _safeSoundCall(() => _soundManager.pauseAmbience());
       _wasRunning = false;
       await _ensureWakelockActive(false);
+      // Only commit progress if timer was actually running
+      // This prevents double-counting when app goes to background
+      await _commitProgress();
     }
-    await _commitProgress();
-    // setState removed - _commitProgress already updates state
+    // Don't commit progress if timer wasn't running - prevents unwanted counting
   }
 
   Future<void> _commitProgress({bool forceFull = false}) async {
@@ -186,7 +188,13 @@ class _TimerPageState extends State<TimerPage>
   }
 
   Future<void> _finalizeSessionOnExit() async {
-    await _pauseForInterruption();
+    // Only pause and commit if timer is running
+    final wasRunning = _timerService.running;
+    if (wasRunning) {
+      await _timerService.pause();
+      await _safeSoundCall(() => _soundManager.pauseAmbience());
+      await _commitProgress();
+    }
     await _ensureWakelockActive(false);
   }
 
@@ -363,6 +371,7 @@ class _TimerPageState extends State<TimerPage>
     await _timerService.pause();
     await _safeSoundCall(() => _soundManager.pauseAmbience());
     await _ensureWakelockActive(false);
+    // Commit progress when user manually pauses
     await _commitProgress();
     if (mounted) setState(() {});
   }
@@ -394,12 +403,14 @@ class _TimerPageState extends State<TimerPage>
 
   Future<void> _reset() async {
     HapticFeedback.selectionClick();
-    if (_timerService.running) {
+    final wasRunning = _timerService.running;
+    if (wasRunning) {
       await _timerService.pause();
       await _safeSoundCall(() => _soundManager.pauseAmbience());
+      // Commit any progress before resetting
+      await _commitProgress();
     }
     await _ensureWakelockActive(false);
-    await _commitProgress();
     _activeRunId = null;
     await _timerService.reset();
     await _safeSoundCall(() => _soundManager.stopAmbience());
