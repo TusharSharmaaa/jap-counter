@@ -42,15 +42,6 @@ class _SettingsPageState extends State<SettingsPage> {
   TapFeedbackSettings? _feedbackSettings;
 
   static const _keyReminders = 'notificationsEnabled';
-  
-  // Available sound assets
-  static const List<String> _soundAssets = [
-    'audio/bell_end.mp3',
-    'audio/om_loop.wav',
-    'audio/flute_loop.mp3',
-    'audio/birds_loop.mp3',
-    'audio/water_loop.mp3',
-  ];
 
   @override
   void initState() {
@@ -348,7 +339,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   _SoundFeedbackSettings(
                     settings: _feedbackSettings!,
-                    soundAssets: _soundAssets,
                     onChanged: _updateFeedbackSettings,
                   ),
                 ],
@@ -696,7 +686,9 @@ class _HapticFeedbackSettingsState extends State<_HapticFeedbackSettings> {
   }
 
   void _syncFromWidget() {
-    _mode = widget.settings.hapticMode;
+    // Migrate any remaining everyN to everyMala (shouldn't happen due to migration in load, but safety check)
+    final mode = widget.settings.hapticMode;
+    _mode = mode == HapticMode.everyN ? HapticMode.everyMala : mode;
     _n = _sanitizeInterval(widget.settings.hapticN);
   }
 
@@ -768,7 +760,7 @@ class _HapticFeedbackSettingsState extends State<_HapticFeedbackSettings> {
           ),
         ),
         const SizedBox(height: 12),
-        ...HapticMode.values.map(
+        ...HapticMode.values.where((mode) => mode != HapticMode.everyN).map(
           (mode) => RadioListTile<HapticMode>(
             value: mode,
             contentPadding: EdgeInsets.zero,
@@ -783,49 +775,6 @@ class _HapticFeedbackSettingsState extends State<_HapticFeedbackSettings> {
             subtitle: Text(_descriptionFor(mode)),
           ),
         ),
-        if (_mode == HapticMode.everyN) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Tap interval',
-            style: theme.textTheme.labelLarge,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Slider(
-                  value: _n.toDouble(),
-                  min: _minInterval.toDouble(),
-                  max: _maxInterval.toDouble(),
-                  divisions: _maxInterval - _minInterval,
-                  label: '$_n',
-                  onChanged: (value) => _updateN(value.round()),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '$_n taps',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Tip: 8 12 taps keeps a gentle rhythm without being distracting.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
         const SizedBox(height: 16),
         FilledButton.tonalIcon(
           onPressed: _previewHaptic,
@@ -839,12 +788,10 @@ class _HapticFeedbackSettingsState extends State<_HapticFeedbackSettings> {
 
 class _SoundFeedbackSettings extends StatefulWidget {
   final TapFeedbackSettings settings;
-  final List<String> soundAssets;
   final ValueChanged<TapFeedbackSettings> onChanged;
 
   const _SoundFeedbackSettings({
     required this.settings,
-    required this.soundAssets,
     required this.onChanged,
   });
 
@@ -869,18 +816,20 @@ class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
   @override
   void didUpdateWidget(covariant _SoundFeedbackSettings oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.settings != widget.settings ||
-        oldWidget.soundAssets != widget.soundAssets) {
+    if (oldWidget.settings != widget.settings) {
       _syncFromWidget();
     }
   }
 
   void _syncFromWidget() {
-    _mode = widget.settings.soundMode;
+    // Migrate any remaining everyN or everyTap to everyMala (shouldn't happen due to migration in load, but safety check)
+    final mode = widget.settings.soundMode;
+    _mode = (mode == SoundMode.everyN || mode == SoundMode.everyTap) 
+        ? SoundMode.everyMala 
+        : mode;
     _n = _sanitizeInterval(widget.settings.soundN);
-    _asset = widget.soundAssets.contains(widget.settings.soundAsset)
-        ? widget.settings.soundAsset
-        : (widget.soundAssets.isNotEmpty ? widget.soundAssets.first : '');
+    // Always use bell sound
+    _asset = 'audio/bell_end.mp3';
   }
 
   int _sanitizeInterval(int value) {
@@ -905,13 +854,13 @@ class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
   String _descriptionFor(SoundMode mode) {
     switch (mode) {
       case SoundMode.off:
-        return 'Mute the bell sound during counting.';
+        return 'No sound feedback while you count.';
       case SoundMode.everyTap:
         return 'Play a short chime on every counter tap.';
       case SoundMode.everyN:
         return 'Play a sound after a custom number of taps.';
       case SoundMode.everyMala:
-        return 'Ring only when a full mala (108) completes.';
+        return 'Play a short bell sound when a full mala (108) completes.';
     }
   }
 
@@ -929,7 +878,11 @@ class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
   void _updateMode(SoundMode mode) {
     if (_mode == mode) return;
     setState(() => _mode = mode);
-    widget.onChanged(widget.settings.copyWith(soundMode: mode));
+    // Always use bell sound when updating mode
+    widget.onChanged(widget.settings.copyWith(
+      soundMode: mode,
+      soundAsset: 'audio/bell_end.mp3',
+    ));
   }
 
   void _updateN(int value) {
@@ -951,10 +904,11 @@ class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
       return;
     }
     HapticFeedback.selectionClick();
+    // Always use bell sound
     final current = widget.settings.copyWith(
       soundMode: _mode,
       soundN: _n,
-      soundAsset: _asset,
+      soundAsset: 'audio/bell_end.mp3',
     );
     await TapFeedbackController.instance.updateSettings(current);
     await TapFeedbackController.instance.previewSound();
@@ -969,13 +923,13 @@ class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Fine-tune how sound accompanies your counting journey.',
+          'Choose when to hear a short bell sound during your counting.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 12),
-        ...SoundMode.values.map(
+        ...SoundMode.values.where((mode) => mode != SoundMode.everyN && mode != SoundMode.everyTap).map(
           (mode) => RadioListTile<SoundMode>(
             value: mode,
             contentPadding: EdgeInsets.zero,
@@ -990,82 +944,6 @@ class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
             subtitle: Text(_descriptionFor(mode)),
           ),
         ),
-        if (_mode == SoundMode.everyN) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Tap interval',
-            style: theme.textTheme.labelLarge,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Slider(
-                  value: _n.toDouble(),
-                  min: _minInterval.toDouble(),
-                  max: _maxInterval.toDouble(),
-                  divisions: _maxInterval - _minInterval,
-                  label: '$_n',
-                  onChanged: (value) => _updateN(value.round()),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '$_n taps',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Set how often the chime plays between malas.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-        if (!disableSoundControls) ...[
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _asset.isEmpty ? null : _asset,
-            items: widget.soundAssets
-                .map(
-                  (asset) => DropdownMenuItem<String>(
-                    value: asset,
-                    child: Text(_displayNameForAsset(asset)),
-                  ),
-                )
-                .toList(),
-            decoration: const InputDecoration(
-              labelText: 'Sound clip',
-              isDense: true,
-            ),
-            onChanged: disableSoundControls ? null : (value) {
-              if (value != null) {
-                _updateAsset(value);
-              }
-            },
-          ),
-        ],
-        if (disableSoundControls)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Enable sound feedback to pick a bell or chime.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
         const SizedBox(height: 16),
         FilledButton.tonalIcon(
           onPressed: disableSoundControls ? null : _previewSound,

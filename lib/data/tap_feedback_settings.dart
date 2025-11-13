@@ -1,4 +1,3 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import '../core/prefs_manager.dart';
 
 enum HapticMode {
@@ -23,11 +22,14 @@ class TapFeedbackSettings {
   static const String _kSoundAsset = 'tap_feedback.sound_asset';
 
   // Defaults
-  static const HapticMode defaultHapticMode = HapticMode.everyN;
+  static const HapticMode defaultHapticMode = HapticMode.everyMala;
   static const int defaultHapticN = 10;
   static const SoundMode defaultSoundMode = SoundMode.everyMala;
   static const int defaultSoundN = 108;
   static const String defaultSoundAsset = 'audio/bell_end.mp3';
+  
+  // Special sound for everyMala mode
+  static const String malaBellSound = 'audio/Temple Bell.mp3';
 
   final HapticMode hapticMode;
   final int hapticN;
@@ -45,25 +47,73 @@ class TapFeedbackSettings {
 
   static Future<TapFeedbackSettings> load() async {
     final prefs = await PrefsManager.instance;
+    final storedHapticModeIndex = prefs.getInt(_kHapticMode);
+    HapticMode hapticMode;
+    
+    if (storedHapticModeIndex == null) {
+      // New user - use default
+      hapticMode = defaultHapticMode;
+    } else {
+      final loadedMode = HapticMode.values[storedHapticModeIndex];
+      // Migrate existing everyN users to everyMala
+      if (loadedMode == HapticMode.everyN) {
+        hapticMode = HapticMode.everyMala;
+        // Save the migration
+        await prefs.setInt(_kHapticMode, hapticMode.index);
+      } else {
+        hapticMode = loadedMode;
+      }
+    }
+    
+    final storedSoundModeIndex = prefs.getInt(_kSoundMode);
+    SoundMode soundMode;
+    
+    if (storedSoundModeIndex == null) {
+      // New user - use default
+      soundMode = defaultSoundMode;
+    } else {
+      final loadedMode = SoundMode.values[storedSoundModeIndex];
+      // Migrate existing everyN and everyTap users to everyMala
+      if (loadedMode == SoundMode.everyN || loadedMode == SoundMode.everyTap) {
+        soundMode = SoundMode.everyMala;
+        // Save the migration
+        await prefs.setInt(_kSoundMode, soundMode.index);
+      } else {
+        soundMode = loadedMode;
+      }
+    }
+    
+    // Always use bell sound, ignore stored asset if it's not bell
+    final storedAsset = prefs.getString(_kSoundAsset);
+    final soundAsset = (storedAsset == 'audio/bell_end.mp3') 
+        ? 'audio/bell_end.mp3'
+        : defaultSoundAsset;
+    // Save bell sound if it wasn't already set
+    if (soundAsset != storedAsset) {
+      await prefs.setString(_kSoundAsset, soundAsset);
+    }
+    
     return TapFeedbackSettings(
-      hapticMode: HapticMode.values[
-          prefs.getInt(_kHapticMode) ?? defaultHapticMode.index],
+      hapticMode: hapticMode,
       hapticN: prefs.getInt(_kHapticN) ?? defaultHapticN,
-      soundMode: SoundMode.values[
-          prefs.getInt(_kSoundMode) ?? defaultSoundMode.index],
+      soundMode: soundMode,
       soundN: prefs.getInt(_kSoundN) ?? defaultSoundN,
-      soundAsset: prefs.getString(_kSoundAsset) ?? defaultSoundAsset,
+      soundAsset: soundAsset,
     );
   }
 
   Future<void> save() async {
     final prefs = await PrefsManager.instance;
+    // Always ensure bell sound is saved
+    final assetToSave = (soundAsset == 'audio/bell_end.mp3') 
+        ? soundAsset 
+        : defaultSoundAsset;
     await Future.wait([
       prefs.setInt(_kHapticMode, hapticMode.index),
       prefs.setInt(_kHapticN, hapticN),
       prefs.setInt(_kSoundMode, soundMode.index),
       prefs.setInt(_kSoundN, soundN),
-      prefs.setString(_kSoundAsset, soundAsset),
+      prefs.setString(_kSoundAsset, assetToSave),
     ]);
   }
 

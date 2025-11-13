@@ -86,6 +86,7 @@ flutter:
     - assets/audio/birds_loop.mp3
     - assets/audio/water_loop.mp3
     - assets/audio/bell_end.mp3
+    - assets/audio/Temple Bell.mp3
     - assets/config/ad_policy.json
 
 

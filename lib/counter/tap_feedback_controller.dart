@@ -18,8 +18,10 @@ class TapFeedbackController {
   AudioPlayer? _audioPlayer;
   String? _loadedSoundAsset;
   Timer? _debounceTimer;
+  Timer? _soundStopTimer;
   DateTime _lastTapTime = DateTime.fromMillisecondsSinceEpoch(0);
   static const Duration _debounceDuration = Duration(milliseconds: 60);
+  static const Duration _soundTrimDuration = Duration(seconds: 1);
 
   /// Initialize with settings and preload audio.
   Future<void> initialize(TapFeedbackSettings settings) async {
@@ -48,8 +50,19 @@ class TapFeedbackController {
     }
 
     try {
-      final asset = _settings!.soundAsset;
+      // Use Temple Bell sound when sound mode is "everyMala"
+      final asset = _settings!.soundMode == SoundMode.everyMala
+          ? TapFeedbackSettings.malaBellSound
+          : _settings!.soundAsset;
+      
+      if (kDebugMode) {
+        debugPrint('[TapFeedback] Preloading sound: $asset (mode: ${_settings!.soundMode})');
+      }
+      
       if (_loadedSoundAsset == asset && _audioPlayer != null) {
+        if (kDebugMode) {
+          debugPrint('[TapFeedback] Sound already loaded: $asset');
+        }
         return;
       }
 
@@ -69,9 +82,13 @@ class TapFeedbackController {
       // Preload the source
       await _audioPlayer!.setSource(AssetSource(asset));
       _loadedSoundAsset = asset;
-    } catch (e) {
+      
       if (kDebugMode) {
-        debugPrint('[TapFeedback] Sound preload failed: $e');
+        debugPrint('[TapFeedback] Sound preloaded successfully: $asset');
+      }
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[TapFeedback] Sound preload failed: $e\n$stackTrace');
       }
       _loadedSoundAsset = null;
     }
@@ -182,15 +199,41 @@ class TapFeedbackController {
 
   /// Trigger sound feedback using preloaded audio player.
   Future<void> _triggerSound() async {
-    if (_audioPlayer == null || _loadedSoundAsset == null) return;
+    if (_audioPlayer == null || _loadedSoundAsset == null) {
+      if (kDebugMode) {
+        debugPrint('[TapFeedback] Cannot play sound: player=${_audioPlayer != null}, asset=${_loadedSoundAsset != null}');
+        // Try to reload audio if not loaded
+        if (_settings != null && _settings!.soundMode != SoundMode.off) {
+          debugPrint('[TapFeedback] Attempting to reload audio...');
+          await _preloadAudio();
+          if (_audioPlayer == null || _loadedSoundAsset == null) {
+            debugPrint('[TapFeedback] Still cannot play sound after reload');
+            return;
+          }
+        } else {
+          return;
+        }
+      } else {
+        return;
+      }
+    }
 
     try {
-      // Reset to beginning and play (fire-and-forget for low latency)
-      unawaited(_audioPlayer!.seek(Duration.zero));
-      unawaited(_audioPlayer!.resume());
-    } catch (e) {
+      // Cancel any existing stop timer
+      _soundStopTimer?.cancel();
+      
+      // Stop any currently playing sound
+      await _audioPlayer!.stop();
+      
+      // Play the sound from the beginning
+      await _audioPlayer!.play(AssetSource(_loadedSoundAsset!));
+      
       if (kDebugMode) {
-        debugPrint('[TapFeedback] Sound failed: $e');
+        debugPrint('[TapFeedback] Playing sound: $_loadedSoundAsset');
+      }
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[TapFeedback] Sound playback failed: $e\n$stackTrace');
       }
     }
   }
@@ -205,7 +248,11 @@ class TapFeedbackController {
     if (_settings == null) {
       await initialize(await TapFeedbackSettings.load());
     }
-    if (_audioPlayer == null || _loadedSoundAsset != _settings!.soundAsset) {
+    // Reload audio if needed (especially for everyMala mode which uses different sound)
+    final expectedAsset = _settings!.soundMode == SoundMode.everyMala
+        ? TapFeedbackSettings.malaBellSound
+        : _settings!.soundAsset;
+    if (_audioPlayer == null || _loadedSoundAsset != expectedAsset) {
       await _preloadAudio();
     }
     await _triggerSound();
@@ -214,6 +261,7 @@ class TapFeedbackController {
   /// Dispose resources.
   void dispose() {
     _debounceTimer?.cancel();
+    _soundStopTimer?.cancel();
     unawaited(_disposeSoundResources());
   }
 }
