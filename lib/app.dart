@@ -1015,68 +1015,78 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                   );
                 },
               ),
+              const SizedBox(height: 16),
               Builder(
                 builder: (context) {
                   final dedicationText = dedication.isEmpty
                       ? context.tr('stats.dedication.empty')
                       : context.tr('stats.dedication.title', args: {'note': dedication});
-                  return Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Theme.of(context).dividerColor),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.favorite, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            dedicationText,
-                            style: Theme.of(context).textTheme.bodyMedium,
+                  return InkWell(
+                    onTap: () async {
+                      final controller = TextEditingController(text: dedication);
+                      final updated = await showDialog<String>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Text(context.tr('stats.dedication.editTitle')),
+                          content: TextField(
+                            controller: controller,
+                            maxLines: 3,
+                            textInputAction: TextInputAction.done,
+                            decoration: InputDecoration(
+                              hintText: context.tr('stats.dedication.hint'),
+                              border: const OutlineInputBorder(),
+                            ),
                           ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, null),
+                              child: Text(context.tr('common.cancel')),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.pop(ctx, controller.text.trim()),
+                              child: Text(context.tr('common.save')),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        TextButton.icon(
-                          onPressed: () async {
-                            final controller = TextEditingController(text: dedication);
-                            final updated = await showDialog<String>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: Text(context.tr('stats.dedication.editTitle')),
-                                content: TextField(
-                                  controller: controller,
-                                  maxLines: 3,
-                                  textInputAction: TextInputAction.done,
-                                  decoration: InputDecoration(
-                                    hintText: context.tr('stats.dedication.hint'),
-                                    border: const OutlineInputBorder(),
-                                  ),
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, null),
-                                    child: Text(context.tr('common.cancel')),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () =>
-                                        Navigator.pop(ctx, controller.text.trim()),
-                                    child: Text(context.tr('common.save')),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (updated != null) {
-                              final ds = await DedicationStore.create();
-                              await ds.setNote(updated);
-                              if (context.mounted) setState(() {});
-                            }
-                          },
-                          icon: const Icon(Icons.edit, size: 18),
-                          label: Text(context.tr('common.edit')),
-                        ),
-                      ],
+                      );
+                      if (updated != null && context.mounted) {
+                        final ds = await DedicationStore.create();
+                        await ds.setNote(updated);
+                        // Reload stats to update FutureBuilder in real-time
+                        final language = AppLocalizationScope.of(context).language;
+                        final locale = language == 'hi' ? 'hi' : 'en';
+                        setState(() {
+                          _allStatsFuture = _loadAllStats(locale: locale);
+                        });
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Theme.of(context).dividerColor),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.favorite, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              dedicationText,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.edit,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
