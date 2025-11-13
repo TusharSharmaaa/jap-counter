@@ -175,7 +175,7 @@ class AppStrings {
       'timer.share.lifetime': 'Lifetime',
       'timer.share.cta': 'Share meditation',
       'timer.share.caption':
-          'Today: {today} · Lifetime: {lifetime} — Radha Jap Counter',
+          'Today: {today} · Lifetime: {lifetime} — Naam Jap Counter : Sadhna',
       'timer.share.error': 'Unable to share right now. Please try again.',
 
       // Share card
@@ -188,13 +188,13 @@ class AppStrings {
       'share.streakDays': 'Practice Days · {value}',
       'share.dedication': '💠 Dedication: {note}',
       'share.motto': '“Practice, Always.” 🌼',
-      'share.footer': 'Radha Jap Counter',
+      'share.footer': 'Naam Jap Counter : Sadhna',
       'share.footerSub': 'Download from Play Store today',
       'share.saveTooltip': 'Save Image',
       'share.whatsappTooltip': 'WhatsApp (Text)',
-      'share.shareText': '🌸 Glimpse of my practice — with Radha Jap Counter.',
+      'share.shareText': '🌸 Glimpse of my practice — with Naam Jap Counter : Sadhna.',
       'share.shareTextLink':
-          '🌸 Download Radha Jap Counter today: https://play.google.com/store/apps/details?id=com.example.jap_counter',
+          '🌸 Download Naam Jap Counter : Sadhna today: https://play.google.com/store/apps/details?id=com.example.jap_counter',
       'share.saved': 'Saved image to: {path}',
       'share.donate': 'Tap to support',
 
@@ -359,7 +359,7 @@ class AppStrings {
       'timer.share.lifetime': 'कुल योग',
       'timer.share.cta': 'ध्यान साझा करें',
       'timer.share.caption':
-          'आज: {today} · कुल: {lifetime} — Radha Jap Counter',
+          'आज: {today} · कुल: {lifetime} — Naam Jap Counter : Sadhna',
       'timer.share.error': 'अभी साझा नहीं कर सके। कृपया पुनः प्रयास करें।',
 
       // Share card
@@ -372,13 +372,13 @@ class AppStrings {
       'share.streakDays': 'अभ्यास के दिन · {value}',
       'share.dedication': '💠 समर्पण: {note}',
       'share.motto': '“साधना निरंतर।” 🌼',
-      'share.footer': 'Radha Jap Counter',
+      'share.footer': 'Naam Jap Counter : Sadhna',
       'share.footerSub': 'आज ही Play Store से डाउनलोड करें',
       'share.saveTooltip': 'चित्र सहेजें',
       'share.whatsappTooltip': 'व्हाट्सऐप (पाठ)',
-      'share.shareText': '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
+      'share.shareText': '🌸 मेरी साधना की झलक — Naam Jap Counter : Sadhna के साथ।',
       'share.shareTextLink':
-          '🌸 आज ही Radha Jap Counter डाउनलोड करें: https://play.google.com/store/apps/details?id=com.example.jap_counter',
+          '🌸 आज ही Naam Jap Counter : Sadhna डाउनलोड करें: https://play.google.com/store/apps/details?id=com.example.jap_counter',
       'share.saved': 'चित्र सहेजा गया: {path}',
       'share.donate': 'सहयोग हेतु टैप करें',
 

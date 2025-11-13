@@ -45,7 +45,7 @@ class AboutPage extends StatelessWidget {
                     ],
                   ).createShader(rect),
                   child: const Text(
-                    'Radha Jap Counter',
+                    'Naam Jap Counter : Sadhna',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 22,

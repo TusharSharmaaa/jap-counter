@@ -19,7 +19,7 @@ class PrivacyPolicyPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Radha Jap Counter respects your privacy. This app stores your jap counts, meditation minutes, '
+            'Naam Jap Counter : Sadhna respects your privacy. This app stores your jap counts, meditation minutes, '
                 'and preferences locally on your device. We do not collect personal information like name, email, or phone number.',
             style: theme.textTheme.bodyMedium,
           ),

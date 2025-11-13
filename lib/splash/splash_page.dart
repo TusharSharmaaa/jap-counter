@@ -57,7 +57,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                   ],
                 ).createShader(rect),
                 child: const Text(
-                  'Radha Jap Counter',
+                  'Naam Jap Counter : Sadhna',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,

@@ -180,7 +180,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     return ChangeNotifierProvider<TimerService>.value(
       value: _timerService,
       child: MaterialApp(
-        title: 'Radha Jap Counter',
+        title: 'Naam Jap Counter : Sadhna',
         theme: buildTheme(Brightness.light),
         darkTheme: buildTheme(Brightness.dark),
         themeMode: _themeMode,

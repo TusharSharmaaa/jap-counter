@@ -19,7 +19,7 @@ class TermsConditionsPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'By using the Radha Jap Counter app, you agree to the following terms and conditions.',
+            'By using the Naam Jap Counter : Sadhna app, you agree to the following terms and conditions.',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
@@ -59,7 +59,7 @@ class TermsConditionsPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Thank you for using Radha Jap Counter. May your sadhna bring peace and devotion.',
+            'Thank you for using Naam Jap Counter : Sadhna. May your sadhna bring peace and devotion.',
             style: theme.textTheme.bodyMedium,
           ),
         ],

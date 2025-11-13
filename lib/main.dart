@@ -39,7 +39,7 @@ class SplashApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Radha Jap Counter',
+      title: 'Naam Jap Counter : Sadhna',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),

@@ -115,7 +115,7 @@ class NotificationService {
 
   Future<void> _scheduleDefaultsAsync(String language) async {
     final dstore = await DedicationStore.create();
-    final note = dstore.note.isEmpty ? 'Radha Jap Counter' : dstore.note;
+    final note = dstore.note.isEmpty ? 'Naam Jap Counter : Sadhna' : dstore.note;
     final streakDays = await ActivityStore.currentStreak();
     
     // Get localized streak message

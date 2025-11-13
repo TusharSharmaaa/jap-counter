@@ -113,7 +113,7 @@ class _SettingsPageState extends State<SettingsPage> {
     const pkg = 'com.example.jap_counter';
     final link = 'https://play.google.com/store/apps/details?id=$pkg';
     await SharePlus.instance.share(
-      ShareParams(text: link, subject: 'Radha Jap Counter'),
+      ShareParams(text: link, subject: 'Naam Jap Counter : Sadhna'),
     );
   }
 
@@ -450,7 +450,7 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: const EdgeInsets.only(bottom: 28),
           child: Column(
             children: [
-              Text('Radha Jap Counter$versionLabel', style: style),
+              Text('Naam Jap Counter : Sadhna$versionLabel', style: style),
               const SizedBox(height: 4),
               Text('Made with devotion in India', style: style),
             ],

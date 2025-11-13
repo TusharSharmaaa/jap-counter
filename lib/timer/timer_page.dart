@@ -1095,7 +1095,7 @@ class _TimerShareCard extends StatelessWidget {
           Divider(color: onPrimary.withOpacity(0.25), thickness: 1),
           const SizedBox(height: 12),
           Text(
-            'Radha Jap Counter',
+            'Naam Jap Counter : Sadhna',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: onPrimary,
               fontWeight: FontWeight.w600,
