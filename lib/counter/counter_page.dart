@@ -18,6 +18,8 @@ import '../l10n/app_localizations.dart';
 import '../notifications/notification_service.dart';
 import '../theme/glow_theme.dart';
 import '../utils/weekly_chart_data.dart';
+import 'tap_feedback_controller.dart';
+import '../data/tap_feedback_settings.dart';
 
 class CounterPage extends StatefulWidget {
   const CounterPage({super.key});
@@ -34,9 +36,6 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   bool _pulse = false;
   int _dailyGoal = 0;
   bool _goalCompletedShown = false;
-  DateTime _lastTapTime = DateTime.fromMillisecondsSinceEpoch(0);
-  bool _soundEnabled = true;
-  AudioPlayer? _bellPlayer;
   late final ConfettiController _confettiController;
   bool _confettiShownRecently = false;
   bool _glowActive = false;
@@ -51,8 +50,8 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 3),
     );
-    // Create AudioPlayer once for reuse
-    _bellPlayer = AudioPlayer();
+    // Initialize tap feedback controller
+    unawaited(_initFeedbackController());
     // Pause ad preloading during counter session
     AdManager.instance.onCounterSessionStart();
     _init();
@@ -66,10 +65,14 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _initFeedbackController() async {
+    final settings = await TapFeedbackSettings.load();
+    await TapFeedbackController.instance.initialize(settings);
+  }
+
   Future<void> _init() async {
     final store = await CounterStore.create();
     final goalStore = await GoalStore.create();
-    final prefs = await PrefsManager.instance;
 
     final congratulatedToday =
         goalStore.lastCongratsDate == GoalStore.todayKey();
@@ -80,7 +83,6 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       _lifetime = store.lifetimeJaps;
       _dailyGoal = goalStore.dailyMalasGoal;
       _goalCompletedShown = congratulatedToday;
-      _soundEnabled = prefs.getBool('settings.soundEnabled') ?? true;
       _currentMalaCountDisplay = _calculateCurrentMalaDisplay(store.todayJaps);
       _loading = false;
     });
@@ -88,34 +90,15 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
 
   Future<void> _handleJapTap() async {
     if (_loading || _store == null) return;
-    final now = DateTime.now();
-    if (now.difference(_lastTapTime) < const Duration(milliseconds: 200)) {
-      return;
-    }
-    _lastTapTime = now;
-    try {
-      await HapticFeedback.lightImpact();
-    } catch (_) {}
+    
+    // Trigger pulse and glow immediately for responsiveness
     _triggerPulse();
     setState(() => _glowActive = true);
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) setState(() => _glowActive = false);
     });
+    
     await _incrementJap();
-
-    if (_today > 0 && _today % 108 == 0) {
-      if (_soundEnabled) {
-        try {
-          await _bellPlayer!.play(AssetSource('audio/bell_end.mp3'));
-        } catch (e) {
-          debugPrint('[Counter] Bell play failed: $e');
-        }
-      }
-      _triggerConfetti();
-      await ActivityStore.recordDailySummary(_today, _today ~/ 108);
-      // Invalidate chart cache when counter increments
-      unawaited(_invalidateChartCache());
-    }
   }
 
   void _triggerPulse() {
@@ -151,6 +134,12 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       _currentMalaCountDisplay = malaCompleted ? 108 : remainder;
     });
 
+    // Trigger feedback via controller (handles debouncing and settings)
+    unawaited(TapFeedbackController.instance.handleTap(
+      currentCount: updatedToday,
+      isMalaComplete: malaCompleted,
+    ));
+
     // Non-critical operations: Fire and forget
     unawaited(_recordInsight(willBe));
     
@@ -163,9 +152,6 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       _scheduleMalaReset();
       // Check for streak milestones when completing a mala
       unawaited(_handleStreakMilestones(context, showSnackBar: false));
-      try {
-        HapticFeedback.mediumImpact();
-      } catch (_) {}
       _triggerPulse();
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -178,6 +164,8 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
             ),
           );
       }
+      _triggerConfetti();
+      unawaited(ActivityStore.recordDailySummary(updatedToday, updatedToday ~/ 108));
       unawaited(_recordSession(willBe));
     }
 
@@ -343,19 +331,17 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       if (!mounted) return;
       
       if (streak == 7 || streak == 21 || streak == 40) {
-        try {
-          await GamifyStore.awardBadge('streak_$streak');
-        } catch (_) {}
-        
-        if (showSnackBar) {
           try {
-            HapticFeedback.mediumImpact();
+            await GamifyStore.awardBadge('streak_$streak');
           } catch (_) {}
-          try {
-            // _bellPlayer is already initialized in initState
-            await _bellPlayer!.play(AssetSource('audio/bell_end.mp3'));
-          } catch (_) {}
-          if (mounted) {
+          
+          if (showSnackBar) {
+            // Use feedback controller for haptic/sound
+            unawaited(TapFeedbackController.instance.handleTap(
+              currentCount: _today,
+              isMalaComplete: false,
+            ));
+            if (mounted) {
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
               ..showSnackBar(
@@ -678,7 +664,6 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     // Resume ad preloading when counter session ends
     AdManager.instance.onCounterSessionEnd();
     _confettiController.dispose();
-    _bellPlayer?.dispose();
     _cancelMalaResetTimer();
     super.dispose();
   }

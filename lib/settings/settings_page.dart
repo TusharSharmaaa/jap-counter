@@ -14,6 +14,8 @@ import '../legal/terms_conditions.dart';
 import 'about_page.dart';
 import '../ui/glow_card.dart';
 import '../l10n/app_localizations.dart';
+import '../data/tap_feedback_settings.dart';
+import '../counter/tap_feedback_controller.dart';
 
 class SettingsPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -37,9 +39,18 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _reminders = false;
   bool _remindersLocked = false;
   int _goalMalas = 1;
-  bool _soundEnabled = true;
+  TapFeedbackSettings? _feedbackSettings;
 
   static const _keyReminders = 'notificationsEnabled';
+  
+  // Available sound assets
+  static const List<String> _soundAssets = [
+    'audio/bell_end.mp3',
+    'audio/om_loop.wav',
+    'audio/flute_loop.mp3',
+    'audio/birds_loop.mp3',
+    'audio/water_loop.mp3',
+  ];
 
   @override
   void initState() {
@@ -59,12 +70,13 @@ class _SettingsPageState extends State<SettingsPage> {
       final language = await LanguageStore.current();
       await ns.scheduleDefaults(language: language);
     }
+    final feedbackSettings = await TapFeedbackSettings.load();
     if (!mounted) return;
     setState(() {
       _remindersLocked = allowed;
       _reminders = shouldEnable;
       _goalMalas = gs.dailyMalasGoal;
-      _soundEnabled = prefs.getBool('settings.soundEnabled') ?? true;
+      _feedbackSettings = feedbackSettings;
     });
   }
 
@@ -101,11 +113,11 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _toggleBell(bool value) async {
+  Future<void> _updateFeedbackSettings(TapFeedbackSettings settings) async {
     HapticFeedback.lightImpact();
-    setState(() => _soundEnabled = value);
-    final prefs = await PrefsManager.instance;
-    await prefs.setBool('settings.soundEnabled', value);
+    setState(() => _feedbackSettings = settings);
+    await settings.save();
+    await TapFeedbackController.instance.updateSettings(settings);
   }
 
   Future<void> _shareApp() async {
@@ -318,19 +330,30 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
             const SizedBox(height: 16),
-            _SettingsSection(
-              icon: Icons.music_note,
-              title: context.tr('settings.sound'),
-              children: [
-                _SettingsSwitchTile(
-                  icon: Icons.music_note_outlined,
-                  title: context.tr('settings.sound.malaBell'),
-                  subtitle: context.tr('settings.sound.action'),
-                  value: _soundEnabled,
-                  onChanged: _toggleBell,
-                ),
-              ],
-            ),
+            if (_feedbackSettings != null) ...[
+              _SettingsSection(
+                icon: Icons.vibration,
+                title: 'Haptic Feedback',
+                children: [
+                  _HapticFeedbackSettings(
+                    settings: _feedbackSettings!,
+                    onChanged: _updateFeedbackSettings,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _SettingsSection(
+                icon: Icons.music_note,
+                title: 'Sound Feedback',
+                children: [
+                  _SoundFeedbackSettings(
+                    settings: _feedbackSettings!,
+                    soundAssets: _soundAssets,
+                    onChanged: _updateFeedbackSettings,
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             _SettingsSection(
               icon: Icons.flag,
@@ -633,6 +656,423 @@ class _ValuePill extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+}
+
+class _HapticFeedbackSettings extends StatefulWidget {
+  final TapFeedbackSettings settings;
+  final ValueChanged<TapFeedbackSettings> onChanged;
+
+  const _HapticFeedbackSettings({
+    required this.settings,
+    required this.onChanged,
+  });
+
+  @override
+  State<_HapticFeedbackSettings> createState() =>
+      _HapticFeedbackSettingsState();
+}
+
+class _HapticFeedbackSettingsState extends State<_HapticFeedbackSettings> {
+  static const int _minInterval = 1;
+  static const int _maxInterval = 50;
+
+  late HapticMode _mode;
+  late int _n;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromWidget();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HapticFeedbackSettings oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != widget.settings) {
+      _syncFromWidget();
+    }
+  }
+
+  void _syncFromWidget() {
+    _mode = widget.settings.hapticMode;
+    _n = _sanitizeInterval(widget.settings.hapticN);
+  }
+
+  int _sanitizeInterval(int value) {
+    if (value < _minInterval) return _minInterval;
+    if (value > _maxInterval) return _maxInterval;
+    return value;
+  }
+
+  String _labelFor(HapticMode mode) {
+    switch (mode) {
+      case HapticMode.off:
+        return 'Off';
+      case HapticMode.everyTap:
+        return 'Every tap';
+      case HapticMode.everyN:
+        return 'Every N taps';
+      case HapticMode.everyMala:
+        return 'Every mala';
+    }
+  }
+
+  String _descriptionFor(HapticMode mode) {
+    switch (mode) {
+      case HapticMode.off:
+        return 'No vibration feedback while you count.';
+      case HapticMode.everyTap:
+        return 'Feel a light tap on each counter tap.';
+      case HapticMode.everyN:
+        return 'Trigger a vibration after a custom number of taps.';
+      case HapticMode.everyMala:
+        return 'Celebrate with a vibration when a mala (108) completes.';
+    }
+  }
+
+  Future<void> _previewHaptic() async {
+    HapticFeedback.selectionClick();
+    final current = widget.settings.copyWith(
+      hapticMode: _mode,
+      hapticN: _n,
+    );
+    await TapFeedbackController.instance.updateSettings(current);
+    await TapFeedbackController.instance.previewHaptic();
+  }
+
+  void _updateMode(HapticMode mode) {
+    if (_mode == mode) return;
+    setState(() => _mode = mode);
+    widget.onChanged(widget.settings.copyWith(hapticMode: mode));
+  }
+
+  void _updateN(int value) {
+    final sanitized = _sanitizeInterval(value);
+    if (_n == sanitized) return;
+    setState(() => _n = sanitized);
+    widget.onChanged(widget.settings.copyWith(hapticN: sanitized));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Choose when the device should provide haptic feedback while counting.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...HapticMode.values.map(
+          (mode) => RadioListTile<HapticMode>(
+            value: mode,
+            contentPadding: EdgeInsets.zero,
+            groupValue: _mode,
+            onChanged: (value) {
+              if (value != null) {
+                HapticFeedback.selectionClick();
+                _updateMode(value);
+              }
+            },
+            title: Text(_labelFor(mode)),
+            subtitle: Text(_descriptionFor(mode)),
+          ),
+        ),
+        if (_mode == HapticMode.everyN) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Tap interval',
+            style: theme.textTheme.labelLarge,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  value: _n.toDouble(),
+                  min: _minInterval.toDouble(),
+                  max: _maxInterval.toDouble(),
+                  divisions: _maxInterval - _minInterval,
+                  label: '$_n',
+                  onChanged: (value) => _updateN(value.round()),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$_n taps',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tip: 8 12 taps keeps a gentle rhythm without being distracting.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        FilledButton.tonalIcon(
+          onPressed: _previewHaptic,
+          icon: const Icon(Icons.vibration_rounded),
+          label: const Text('Test haptic feedback'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SoundFeedbackSettings extends StatefulWidget {
+  final TapFeedbackSettings settings;
+  final List<String> soundAssets;
+  final ValueChanged<TapFeedbackSettings> onChanged;
+
+  const _SoundFeedbackSettings({
+    required this.settings,
+    required this.soundAssets,
+    required this.onChanged,
+  });
+
+  @override
+  State<_SoundFeedbackSettings> createState() => _SoundFeedbackSettingsState();
+}
+
+class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
+  static const int _minInterval = 1;
+  static const int _maxInterval = 108;
+
+  late SoundMode _mode;
+  late int _n;
+  late String _asset;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromWidget();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SoundFeedbackSettings oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != widget.settings ||
+        oldWidget.soundAssets != widget.soundAssets) {
+      _syncFromWidget();
+    }
+  }
+
+  void _syncFromWidget() {
+    _mode = widget.settings.soundMode;
+    _n = _sanitizeInterval(widget.settings.soundN);
+    _asset = widget.soundAssets.contains(widget.settings.soundAsset)
+        ? widget.settings.soundAsset
+        : (widget.soundAssets.isNotEmpty ? widget.soundAssets.first : '');
+  }
+
+  int _sanitizeInterval(int value) {
+    if (value < _minInterval) return _minInterval;
+    if (value > _maxInterval) return _maxInterval;
+    return value;
+  }
+
+  String _labelFor(SoundMode mode) {
+    switch (mode) {
+      case SoundMode.off:
+        return 'Off';
+      case SoundMode.everyTap:
+        return 'Every tap';
+      case SoundMode.everyN:
+        return 'Every N taps';
+      case SoundMode.everyMala:
+        return 'Every mala';
+    }
+  }
+
+  String _descriptionFor(SoundMode mode) {
+    switch (mode) {
+      case SoundMode.off:
+        return 'Mute the bell sound during counting.';
+      case SoundMode.everyTap:
+        return 'Play a short chime on every counter tap.';
+      case SoundMode.everyN:
+        return 'Play a sound after a custom number of taps.';
+      case SoundMode.everyMala:
+        return 'Ring only when a full mala (108) completes.';
+    }
+  }
+
+  String _displayNameForAsset(String asset) {
+    final name = asset.split('/').last;
+    final withoutExt = name.replaceAll('.mp3', '').replaceAll('.wav', '');
+    return withoutExt
+        .split('_')
+        .map((part) => part.isEmpty
+            ? ''
+            : part[0].toUpperCase() + part.substring(1).toLowerCase())
+        .join(' ');
+  }
+
+  void _updateMode(SoundMode mode) {
+    if (_mode == mode) return;
+    setState(() => _mode = mode);
+    widget.onChanged(widget.settings.copyWith(soundMode: mode));
+  }
+
+  void _updateN(int value) {
+    final sanitized = _sanitizeInterval(value);
+    if (_n == sanitized) return;
+    setState(() => _n = sanitized);
+    widget.onChanged(widget.settings.copyWith(soundN: sanitized));
+  }
+
+  void _updateAsset(String asset) {
+    if (_asset == asset) return;
+    setState(() => _asset = asset);
+    widget.onChanged(widget.settings.copyWith(soundAsset: asset));
+  }
+
+  Future<void> _previewSound() async {
+    if (_mode == SoundMode.off) {
+      HapticFeedback.selectionClick();
+      return;
+    }
+    HapticFeedback.selectionClick();
+    final current = widget.settings.copyWith(
+      soundMode: _mode,
+      soundN: _n,
+      soundAsset: _asset,
+    );
+    await TapFeedbackController.instance.updateSettings(current);
+    await TapFeedbackController.instance.previewSound();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final disableSoundControls = _mode == SoundMode.off;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Fine-tune how sound accompanies your counting journey.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...SoundMode.values.map(
+          (mode) => RadioListTile<SoundMode>(
+            value: mode,
+            contentPadding: EdgeInsets.zero,
+            groupValue: _mode,
+            onChanged: (value) {
+              if (value != null) {
+                HapticFeedback.selectionClick();
+                _updateMode(value);
+              }
+            },
+            title: Text(_labelFor(mode)),
+            subtitle: Text(_descriptionFor(mode)),
+          ),
+        ),
+        if (_mode == SoundMode.everyN) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Tap interval',
+            style: theme.textTheme.labelLarge,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  value: _n.toDouble(),
+                  min: _minInterval.toDouble(),
+                  max: _maxInterval.toDouble(),
+                  divisions: _maxInterval - _minInterval,
+                  label: '$_n',
+                  onChanged: (value) => _updateN(value.round()),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$_n taps',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Set how often the chime plays between malas.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+        if (!disableSoundControls) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _asset.isEmpty ? null : _asset,
+            items: widget.soundAssets
+                .map(
+                  (asset) => DropdownMenuItem<String>(
+                    value: asset,
+                    child: Text(_displayNameForAsset(asset)),
+                  ),
+                )
+                .toList(),
+            decoration: const InputDecoration(
+              labelText: 'Sound clip',
+              isDense: true,
+            ),
+            onChanged: disableSoundControls ? null : (value) {
+              if (value != null) {
+                _updateAsset(value);
+              }
+            },
+          ),
+        ],
+        if (disableSoundControls)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Enable sound feedback to pick a bell or chime.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        const SizedBox(height: 16),
+        FilledButton.tonalIcon(
+          onPressed: disableSoundControls ? null : _previewSound,
+          icon: const Icon(Icons.music_note_rounded),
+          label: const Text('Preview sound'),
+        ),
+      ],
     );
   }
 }
