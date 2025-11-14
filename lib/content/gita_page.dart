@@ -34,6 +34,27 @@ class GitaPage extends StatefulWidget {
 }
 
 class _GitaPageState extends State<GitaPage> {
+  static const List<int> _versesPerChapter = [
+    47,
+    72,
+    43,
+    42,
+    29,
+    47,
+    30,
+    28,
+    34,
+    42,
+    55,
+    20,
+    35,
+    27,
+    20,
+    24,
+    28,
+    78,
+  ];
+
   static const _storeLink =
       'https://play.google.com/store/apps/details?id=com.example.jap_counter';
 
@@ -58,11 +79,12 @@ class _GitaPageState extends State<GitaPage> {
   Future<void> _initProgress() async {
     try {
       final (chapter, shlok) = await GitaProgressManager.loadProgress();
+      final (safeChapter, safeVerse) = _clampProgress(chapter, shlok);
       if (!mounted) return;
-      final shouldAnnounce = chapter != 1 || shlok != 1;
+      final shouldAnnounce = safeChapter != 1 || safeVerse != 1;
       setState(() {
-        _chapter = chapter;
-        _verse = shlok;
+        _chapter = safeChapter;
+        _verse = safeVerse;
         _loadShloka();
         _initializing = false;
       });
@@ -71,7 +93,8 @@ class _GitaPageState extends State<GitaPage> {
           if (!mounted) return;
           _messengerKey.currentState?.showSnackBar(
             SnackBar(
-              content: Text('Resumed from Chapter $chapter • Shlok $shlok'),
+              content:
+                  Text('Resumed from Chapter $safeChapter • Shlok $safeVerse'),
             ),
           );
         });
@@ -128,27 +151,81 @@ class _GitaPageState extends State<GitaPage> {
   }
 
   Future<void> _prefetchNext() async {
-    // Aggressive prefetching for better performance
-    GitaService.prefetch(_chapter, _verse + 1, count: 5);
-    GitaService.prefetch(_chapter, _verse + 2, count: 3);
+    var currentChapter = _chapter;
+    var currentVerse = _verse;
+    for (int i = 0; i < 5; i++) {
+      final next = _nextPosition(currentChapter, currentVerse);
+      if (next == null) break;
+      currentChapter = next.$1;
+      currentVerse = next.$2;
+      unawaited(GitaService.fetchVerse(currentChapter, currentVerse));
+    }
   }
 
   Future<void> _prevVerse() async {
-    if (_verse <= 1) return;
+    final prev = _previousPosition(_chapter, _verse);
+    if (prev == null) return;
     setState(() {
-      _verse -= 1;
+      _chapter = prev.$1;
+      _verse = prev.$2;
       _loadShloka();
     });
     await GitaProgressManager.saveProgress(_chapter, _verse);
   }
 
   Future<void> _nextVerse() async {
+    final next = _nextPosition(_chapter, _verse);
+    if (next == null) {
+      _messengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('You have completed all 18 chapters!')),
+      );
+      return;
+    }
     setState(() {
-      _verse += 1;
+      _chapter = next.$1;
+      _verse = next.$2;
       _loadShloka();
     });
     await GitaProgressManager.saveProgress(_chapter, _verse);
   }
+
+  (int chapter, int verse) _clampProgress(int chapter, int verse) {
+    int safeChapter = chapter;
+    if (safeChapter < 1) safeChapter = 1;
+    if (safeChapter > _versesPerChapter.length) {
+      safeChapter = _versesPerChapter.length;
+    }
+
+    final maxVerse = _versesPerChapter[safeChapter - 1];
+    int safeVerse = verse;
+    if (safeVerse < 1) safeVerse = 1;
+    if (safeVerse > maxVerse) safeVerse = maxVerse;
+
+    return (safeChapter, safeVerse);
+  }
+
+  (int chapter, int verse)? _nextPosition(int chapter, int verse) {
+    final (safeChapter, safeVerse) = _clampProgress(chapter, verse);
+    final maxVerse = _versesPerChapter[safeChapter - 1];
+    if (safeVerse < maxVerse) {
+      return (safeChapter, safeVerse + 1);
+    }
+    if (safeChapter >= _versesPerChapter.length) return null;
+    return (safeChapter + 1, 1);
+  }
+
+  (int chapter, int verse)? _previousPosition(int chapter, int verse) {
+    final (safeChapter, safeVerse) = _clampProgress(chapter, verse);
+    if (safeVerse > 1) {
+      return (safeChapter, safeVerse - 1);
+    }
+    if (safeChapter <= 1) return null;
+    final prevChapter = safeChapter - 1;
+    return (prevChapter, _versesPerChapter[prevChapter - 1]);
+  }
+
+  bool get _hasNextVerse => _nextPosition(_chapter, _verse) != null;
+  bool get _hasPreviousVerse => _previousPosition(_chapter, _verse) != null;
 
   Future<void> _copyShloka(GitaShloka shloka) async {
     final buffer = StringBuffer()
@@ -350,7 +427,7 @@ class _GitaPageState extends State<GitaPage> {
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: _verse > 1
+                                    onPressed: _hasPreviousVerse
                                         ? () => _prevVerse()
                                         : null,
                                     child: const Text('Prev'),
@@ -379,7 +456,9 @@ class _GitaPageState extends State<GitaPage> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: () => _nextVerse(),
+                                    onPressed: _hasNextVerse
+                                        ? () => _nextVerse()
+                                        : null,
                                     child: const Text('Next'),
                                   ),
                                 ),
