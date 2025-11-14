@@ -1283,6 +1283,8 @@ class AdManager {
     _prefs = await PrefsManager.instance;
     _policyLoaded = true;
     _updateActiveAdUnitIds();
+    _adMobInitialized = true;
+    _bootstrapFuture = Future<void>.value();
   }
 
   @visibleForTesting
