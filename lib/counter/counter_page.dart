@@ -602,21 +602,21 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                               children: [
                                 Expanded(
                                   child: _StatTile(
-                                    title: "Today's Japs",
+                                    title: context.tr('counter.stat.todayJaps'),
                                     value: _today.toString(),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: _StatTile(
-                                    title: "Malas",
+                                    title: context.tr('counter.stat.malas'),
                                     value: _malas.toString(),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: _StatTile(
-                                    title: "Lifetime Malas",
+                                    title: context.tr('counter.stat.lifetimeMalas'),
                                     value: _lifetimeMalas.toString(),
                                   ),
                                 ),
@@ -641,9 +641,9 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Text(
-                                    'Tap to Count',
-                                    style: TextStyle(fontSize: 18),
+                                  Text(
+                                    context.tr('counter.tapToCount'),
+                                    style: const TextStyle(fontSize: 18),
                                   ),
                                   SizedBox(height: isSmallScreen ? 12 : 16), // Cannot be const due to conditional
                                   RepaintBoundary(

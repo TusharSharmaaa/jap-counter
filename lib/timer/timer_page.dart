@@ -598,15 +598,16 @@ class _TimerPageState extends State<TimerPage>
           primaryAction = () => unawaited(_start());
         }
 
-        final primaryLabel = isRunning
-            ? 'Pause'
-            : (isPaused ? 'Resume' : 'Start');
+        final primaryLabelKey = isRunning
+            ? 'timer.action.pause'
+            : (isPaused ? 'timer.action.resume' : 'timer.action.start');
+        final primaryLabel = context.tr(primaryLabelKey);
         final resetAction = (isIdle && svc.isPristine)
             ? null
             : () => unawaited(_reset());
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Timer'), centerTitle: true),
+          appBar: AppBar(title: Text(context.tr('nav.timer')), centerTitle: true),
           body: SafeArea(
             child: Column(
               children: [
@@ -666,17 +667,18 @@ class _TimerPageState extends State<TimerPage>
                               valueListenable: svc.displayNotifier,
                               builder: (context, display, _) {
                                 // Calculate status text based on current state
-                                String statusText;
+                                String statusKey;
                                 if (isRunning) {
-                                  statusText = '🕉️ साधना जारी है...';
+                                  statusKey = 'timer.status.running';
                                 } else if (isCompleted) {
-                                  statusText = '🌸 Meditation complete';
+                                  statusKey = 'timer.status.completed';
                                 } else if (isPaused) {
-                                  statusText = '⏸️ ध्यान विराम';
+                                  statusKey = 'timer.status.paused';
                                 } else {
-                                  statusText = '🙏 मन को शांत करें';
+                                  statusKey = 'timer.status.idle';
                                 }
-                                
+                                final statusText = context.tr(statusKey);
+
                                 return _PrimaryTimerCard(
                                   readout: display,
                                   progress: svc.progress,
@@ -698,7 +700,7 @@ class _TimerPageState extends State<TimerPage>
                               Expanded(
                                 child: OutlinedButton(
                                   onPressed: resetAction,
-                                  child: const Text('Reset'),
+                                  child: Text(context.tr('timer.action.reset')),
                                 ),
                               ),
                             ],

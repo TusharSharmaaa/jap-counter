@@ -324,7 +324,7 @@ class _SettingsPageState extends State<SettingsPage> {
             if (_feedbackSettings != null) ...[
               _SettingsSection(
                 icon: Icons.vibration,
-                title: 'Haptic Feedback',
+                title: context.tr('settings.haptic.title'),
                 children: [
                   _HapticFeedbackSettings(
                     settings: _feedbackSettings!,
@@ -335,7 +335,7 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 16),
               _SettingsSection(
                 icon: Icons.music_note,
-                title: 'Sound Feedback',
+                title: context.tr('settings.soundFeedback.title'),
                 children: [
                   _SoundFeedbackSettings(
                     settings: _feedbackSettings!,
@@ -698,30 +698,24 @@ class _HapticFeedbackSettingsState extends State<_HapticFeedbackSettings> {
     return value;
   }
 
-  String _labelFor(HapticMode mode) {
-    switch (mode) {
-      case HapticMode.off:
-        return 'Off';
-      case HapticMode.everyTap:
-        return 'Every tap';
-      case HapticMode.everyN:
-        return 'Every N taps';
-      case HapticMode.everyMala:
-        return 'Every mala';
-    }
+  String _labelFor(BuildContext context, HapticMode mode) {
+    final key = switch (mode) {
+      HapticMode.off => 'settings.haptic.mode.off',
+      HapticMode.everyTap => 'settings.haptic.mode.everyTap',
+      HapticMode.everyN => 'settings.haptic.mode.everyN',
+      HapticMode.everyMala => 'settings.haptic.mode.everyMala',
+    };
+    return context.tr(key);
   }
 
-  String _descriptionFor(HapticMode mode) {
-    switch (mode) {
-      case HapticMode.off:
-        return 'No vibration feedback while you count.';
-      case HapticMode.everyTap:
-        return 'Feel a light tap on each counter tap.';
-      case HapticMode.everyN:
-        return 'Trigger a vibration after a custom number of taps.';
-      case HapticMode.everyMala:
-        return 'Celebrate with a vibration when a mala (108) completes.';
-    }
+  String _descriptionFor(BuildContext context, HapticMode mode) {
+    final key = switch (mode) {
+      HapticMode.off => 'settings.haptic.mode.off.desc',
+      HapticMode.everyTap => 'settings.haptic.mode.everyTap.desc',
+      HapticMode.everyN => 'settings.haptic.mode.everyN.desc',
+      HapticMode.everyMala => 'settings.haptic.mode.everyMala.desc',
+    };
+    return context.tr(key);
   }
 
   Future<void> _previewHaptic() async {
@@ -754,7 +748,7 @@ class _HapticFeedbackSettingsState extends State<_HapticFeedbackSettings> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Choose when the device should provide haptic feedback while counting.',
+          context.tr('settings.haptic.description'),
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -771,15 +765,15 @@ class _HapticFeedbackSettingsState extends State<_HapticFeedbackSettings> {
                 _updateMode(value);
               }
             },
-            title: Text(_labelFor(mode)),
-            subtitle: Text(_descriptionFor(mode)),
+            title: Text(_labelFor(context, mode)),
+            subtitle: Text(_descriptionFor(context, mode)),
           ),
         ),
         const SizedBox(height: 16),
         FilledButton.tonalIcon(
           onPressed: _previewHaptic,
           icon: const Icon(Icons.vibration_rounded),
-          label: const Text('Test haptic feedback'),
+          label: Text(context.tr('settings.haptic.test')),
         ),
       ],
     );
@@ -838,30 +832,24 @@ class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
     return value;
   }
 
-  String _labelFor(SoundMode mode) {
-    switch (mode) {
-      case SoundMode.off:
-        return 'Off';
-      case SoundMode.everyTap:
-        return 'Every tap';
-      case SoundMode.everyN:
-        return 'Every N taps';
-      case SoundMode.everyMala:
-        return 'Every mala';
-    }
+  String _labelFor(BuildContext context, SoundMode mode) {
+    final key = switch (mode) {
+      SoundMode.off => 'settings.soundFeedback.mode.off',
+      SoundMode.everyTap => 'settings.soundFeedback.mode.everyTap',
+      SoundMode.everyN => 'settings.soundFeedback.mode.everyN',
+      SoundMode.everyMala => 'settings.soundFeedback.mode.everyMala',
+    };
+    return context.tr(key);
   }
 
-  String _descriptionFor(SoundMode mode) {
-    switch (mode) {
-      case SoundMode.off:
-        return 'No sound feedback while you count.';
-      case SoundMode.everyTap:
-        return 'Play a short chime on every counter tap.';
-      case SoundMode.everyN:
-        return 'Play a sound after a custom number of taps.';
-      case SoundMode.everyMala:
-        return 'Play a short bell sound when a full mala (108) completes.';
-    }
+  String _descriptionFor(BuildContext context, SoundMode mode) {
+    final key = switch (mode) {
+      SoundMode.off => 'settings.soundFeedback.mode.off.desc',
+      SoundMode.everyTap => 'settings.soundFeedback.mode.everyTap.desc',
+      SoundMode.everyN => 'settings.soundFeedback.mode.everyN.desc',
+      SoundMode.everyMala => 'settings.soundFeedback.mode.everyMala.desc',
+    };
+    return context.tr(key);
   }
 
   String _displayNameForAsset(String asset) {
@@ -923,7 +911,7 @@ class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Choose when to hear a short bell sound during your counting.',
+          context.tr('settings.soundFeedback.description'),
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -940,15 +928,15 @@ class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
                 _updateMode(value);
               }
             },
-            title: Text(_labelFor(mode)),
-            subtitle: Text(_descriptionFor(mode)),
+            title: Text(_labelFor(context, mode)),
+            subtitle: Text(_descriptionFor(context, mode)),
           ),
         ),
         const SizedBox(height: 16),
         FilledButton.tonalIcon(
           onPressed: disableSoundControls ? null : _previewSound,
           icon: const Icon(Icons.music_note_rounded),
-          label: const Text('Preview sound'),
+          label: Text(context.tr('settings.soundFeedback.preview')),
         ),
       ],
     );

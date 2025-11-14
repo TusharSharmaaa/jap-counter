@@ -119,6 +119,37 @@ class AppStrings {
       'settings.sound': 'Sound',
       'settings.sound.action': 'Play sound feedback on actions',
       'settings.sound.malaBell': 'Play bell sound on mala completion',
+      'settings.haptic.title': 'Haptic Feedback',
+      'settings.haptic.description':
+          'Choose when the device should provide haptic feedback while counting.',
+      'settings.haptic.test': 'Test haptic feedback',
+      'settings.haptic.mode.off': 'Off',
+      'settings.haptic.mode.everyTap': 'Every tap',
+      'settings.haptic.mode.everyN': 'Every N taps',
+      'settings.haptic.mode.everyMala': 'Every mala',
+      'settings.haptic.mode.off.desc': 'No vibration feedback while you count.',
+      'settings.haptic.mode.everyTap.desc':
+          'Feel a light tap on each counter tap.',
+      'settings.haptic.mode.everyN.desc':
+          'Trigger a vibration after a custom number of taps.',
+      'settings.haptic.mode.everyMala.desc':
+          'Celebrate with a vibration when a mala (108) completes.',
+      'settings.soundFeedback.title': 'Sound Feedback',
+      'settings.soundFeedback.description':
+          'Choose when to hear a short bell sound during your counting.',
+      'settings.soundFeedback.preview': 'Preview sound',
+      'settings.soundFeedback.mode.off': 'Off',
+      'settings.soundFeedback.mode.everyTap': 'Every tap',
+      'settings.soundFeedback.mode.everyN': 'Every N taps',
+      'settings.soundFeedback.mode.everyMala': 'Every mala',
+      'settings.soundFeedback.mode.off.desc':
+          'No sound feedback while you count.',
+      'settings.soundFeedback.mode.everyTap.desc':
+          'Play a short chime on every counter tap.',
+      'settings.soundFeedback.mode.everyN.desc':
+          'Play a sound after a custom number of taps.',
+      'settings.soundFeedback.mode.everyMala.desc':
+          'Play a short bell sound when a full mala (108) completes.',
       'settings.about': 'About',
       'settings.privacy': 'Privacy Policy',
       'settings.terms': 'Terms & Conditions',
@@ -158,6 +189,10 @@ class AppStrings {
       'counter.goal.dialog.noGoal': 'No daily goal',
       'counter.goal.dialog.goalText': '{count} mala{suffix} per day',
       'counter.goal.dialog.hint': 'Use the slider to adjust your daily mala goal.',
+      'counter.stat.todayJaps': "Today's Japs",
+      'counter.stat.malas': 'Malas',
+      'counter.stat.lifetimeMalas': 'Lifetime Malas',
+      'counter.tapToCount': 'Tap to Count',
 
       // Timer
       'timer.complete.title': 'Meditation Completed',
@@ -174,6 +209,14 @@ class AppStrings {
       'timer.share.today': 'Today',
       'timer.share.lifetime': 'Lifetime',
       'timer.share.cta': 'Share meditation',
+      'timer.action.start': 'Start',
+      'timer.action.pause': 'Pause',
+      'timer.action.resume': 'Resume',
+      'timer.action.reset': 'Reset',
+      'timer.status.running': '🕉️ Meditation in progress…',
+      'timer.status.completed': '🌸 Meditation complete',
+      'timer.status.paused': '⏸️ Meditation paused',
+      'timer.status.idle': '🙏 Steady your mind',
       'timer.share.caption':
           'Today: {today} · Lifetime: {lifetime} — Naam Jap Counter : Sadhna',
       'timer.share.error': 'Unable to share right now. Please try again.',
@@ -219,7 +262,7 @@ class AppStrings {
       'nav.counter': 'जप',
       'nav.stats': 'आँकड़े',
       'nav.gita': 'गीता',
-      'nav.timer': 'घड़ी',
+      'nav.timer': 'ध्यान',
       'nav.settings': 'सेटिंग्स',
 
       // Generic
@@ -303,6 +346,37 @@ class AppStrings {
       'settings.sound': 'ध्वनि',
       'settings.sound.action': 'क्रियाओं पर ध्वनि चलाएँ',
       'settings.sound.malaBell': 'माला पूर्ण होने पर घंटी बजाएँ',
+      'settings.haptic.title': 'हैप्टिक प्रतिक्रिया',
+      'settings.haptic.description':
+          'गिनती करते समय डिवाइस कब कंपन दे, यह चुनें।',
+      'settings.haptic.test': 'हैप्टिक प्रतिक्रिया जाँचें',
+      'settings.haptic.mode.off': 'बंद',
+      'settings.haptic.mode.everyTap': 'हर टैप पर',
+      'settings.haptic.mode.everyN': 'अनुकूल टैप पर',
+      'settings.haptic.mode.everyMala': 'हर माला पर',
+      'settings.haptic.mode.off.desc': 'गिनती के दौरान कोई कंपन नहीं।',
+      'settings.haptic.mode.everyTap.desc':
+          'हर काउंटर टैप पर हल्का कंपन महसूस करें।',
+      'settings.haptic.mode.everyN.desc':
+          'निर्धारित टैप संख्या के बाद कंपन चलाएँ।',
+      'settings.haptic.mode.everyMala.desc':
+          'प्रत्येक पूर्ण माला (108) पर कंपन से उत्सव मनाएँ।',
+      'settings.soundFeedback.title': 'ध्वनि प्रतिक्रिया',
+      'settings.soundFeedback.description':
+          'गिनती के दौरान छोटी घंटी कब सुननी है, चुनें।',
+      'settings.soundFeedback.preview': 'ध्वनि पूर्वावलोकन',
+      'settings.soundFeedback.mode.off': 'बंद',
+      'settings.soundFeedback.mode.everyTap': 'हर टैप पर',
+      'settings.soundFeedback.mode.everyN': 'अनुकूल टैप पर',
+      'settings.soundFeedback.mode.everyMala': 'हर माला पर',
+      'settings.soundFeedback.mode.off.desc':
+          'गिनती करते समय कोई ध्वनि नहीं।',
+      'settings.soundFeedback.mode.everyTap.desc':
+          'हर काउंटर टैप पर छोटी धुन चलाएँ।',
+      'settings.soundFeedback.mode.everyN.desc':
+          'निर्धारित टैप संख्या के बाद ध्वनि चलाएँ।',
+      'settings.soundFeedback.mode.everyMala.desc':
+          'पूर्ण माला (108) होने पर छोटी घंटी बजाएँ।',
       'settings.about': 'परिचय',
       'settings.privacy': 'गोपनीयता नीति',
       'settings.terms': 'नियम व शर्तें',
@@ -342,6 +416,10 @@ class AppStrings {
       'counter.goal.dialog.noGoal': 'कोई दैनिक लक्ष्य नहीं',
       'counter.goal.dialog.goalText': 'प्रति दिन {count} माला{suffix}',
       'counter.goal.dialog.hint': 'दैनिक माला लक्ष्य समायोजित करने हेतु स्लाइडर का उपयोग करें।',
+      'counter.stat.todayJaps': 'आज के जप',
+      'counter.stat.malas': 'मालाएँ',
+      'counter.stat.lifetimeMalas': 'जीवनभर की मालाएँ',
+      'counter.tapToCount': 'जप गिनने हेतु टैप करें',
 
       // Timer
       'timer.complete.title': 'साधना पूर्ण हुई',
@@ -358,6 +436,14 @@ class AppStrings {
       'timer.share.today': 'आज',
       'timer.share.lifetime': 'कुल योग',
       'timer.share.cta': 'ध्यान साझा करें',
+      'timer.action.start': 'प्रारंभ करें',
+      'timer.action.pause': 'विराम',
+      'timer.action.resume': 'पुनः प्रारंभ',
+      'timer.action.reset': 'रीसेट',
+      'timer.status.running': '🕉️ साधना जारी है...',
+      'timer.status.completed': '🌸 ध्यान पूर्ण',
+      'timer.status.paused': '⏸️ ध्यान विराम',
+      'timer.status.idle': '🙏 मन को शांत करें',
       'timer.share.caption':
           'आज: {today} · कुल: {lifetime} — Naam Jap Counter : Sadhna',
       'timer.share.error': 'अभी साझा नहीं कर सके। कृपया पुनः प्रयास करें।',
