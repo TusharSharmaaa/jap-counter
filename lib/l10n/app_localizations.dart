@@ -193,6 +193,7 @@ class AppStrings {
       'counter.stat.malas': 'Malas',
       'counter.stat.lifetimeMalas': 'Lifetime Malas',
       'counter.tapToCount': 'Tap to Count',
+      'counter.malaProgress.completed': 'Malas completed: {count}',
 
       // Timer
       'timer.complete.title': 'Meditation Completed',
@@ -420,6 +421,7 @@ class AppStrings {
       'counter.stat.malas': 'मालाएँ',
       'counter.stat.lifetimeMalas': 'जीवनभर की मालाएँ',
       'counter.tapToCount': 'जप गिनने हेतु टैप करें',
+      'counter.malaProgress.completed': 'पूर्ण मालाएँ: {count}',
 
       // Timer
       'timer.complete.title': 'साधना पूर्ण हुई',

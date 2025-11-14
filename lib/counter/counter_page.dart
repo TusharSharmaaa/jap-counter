@@ -843,7 +843,10 @@ class _MalaProgressDisplay extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Malas completed: $malasCompleted',
+          context.tr(
+            'counter.malaProgress.completed',
+            args: {'count': '$malasCompleted'},
+          ),
           style: captionStyle ?? theme.textTheme.bodySmall,
           textAlign: TextAlign.center,
         ),
