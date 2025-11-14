@@ -370,62 +370,100 @@ class _GitaPageState extends State<GitaPage> {
         body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              return SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 24,
-                    ),
-                    child: FutureBuilder<GitaShloka?>(
-                      future: _currentFuture,
-                      builder: (context, snapshot) {
-                        if (_initializing) {
-                          return _LoadingBody(theme: theme);
-                        }
+              final media = MediaQuery.of(context);
+              final bool isCompactWidth = constraints.maxWidth < 360;
+              final bool isLargeWidth = constraints.maxWidth > 600;
+              double textScale = 1.0;
+              if (isCompactWidth) {
+                textScale = 0.88;
+              } else if (isLargeWidth) {
+                textScale = 1.1;
+              }
+              final sanskritStyle = theme.textTheme.headlineSmall?.copyWith(
+                fontSize:
+                    (theme.textTheme.headlineSmall?.fontSize ?? 24) * textScale,
+                height: 1.5,
+                fontWeight: FontWeight.w600,
+              );
+              final translationStyle = theme.textTheme.bodyLarge?.copyWith(
+                fontSize:
+                    (theme.textTheme.bodyLarge?.fontSize ?? 16) * textScale,
+                height: 1.5,
+              );
+              final transliterationStyle = theme.textTheme.titleMedium?.copyWith(
+                fontSize:
+                    (theme.textTheme.titleMedium?.fontSize ?? 18) * textScale,
+                height: 1.4,
+              );
+              final double buttonHeight =
+                  constraints.maxHeight < 640 ? 48 : 56;
 
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return _LoadingBody(theme: theme);
-                        }
+              return SizedBox.expand(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                  child: FutureBuilder<GitaShloka?>(
+                    future: _currentFuture,
+                    builder: (context, snapshot) {
+                      if (_initializing) {
+                        return _LoadingBody(theme: theme);
+                      }
 
-                        if (snapshot.hasError ||
-                            !snapshot.hasData ||
-                            snapshot.data == null) {
-                          return _ErrorBody(
-                            onRetry: () {
-                              setState(() {
-                                _loadShloka();
-                              });
-                            },
-                          );
-                        }
+                      if (snapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return _LoadingBody(theme: theme);
+                      }
 
-                        final shloka = snapshot.data!;
-                        if (_lastRecordedRef != shloka.ref) {
-                          _lastRecordedRef = shloka.ref;
-                          AdManager.instance.recordEvent(
-                            'gita.session',
-                            'shloka_read',
-                          );
-                        }
-                        WidgetsBinding.instance.addPostFrameCallback(
-                          (_) => _prefetchNext(),
+                      if (snapshot.hasError ||
+                          !snapshot.hasData ||
+                          snapshot.data == null) {
+                        return _ErrorBody(
+                          onRetry: () {
+                            setState(() {
+                              _loadShloka();
+                            });
+                          },
                         );
+                      }
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _ShlokaCard(
-                              shloka: shloka,
-                              onCopy: () => _copyShloka(shloka),
+                      final shloka = snapshot.data!;
+                      if (_lastRecordedRef != shloka.ref) {
+                        _lastRecordedRef = shloka.ref;
+                        AdManager.instance.recordEvent(
+                          'gita.session',
+                          'shloka_read',
+                        );
+                      }
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _prefetchNext(),
+                      );
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: SingleChildScrollView(
+                              physics: const ClampingScrollPhysics(),
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: _ShlokaCard(
+                                shloka: shloka,
+                                onCopy: () => _copyShloka(shloka),
+                                sanskritStyle: sanskritStyle,
+                                translationStyle: translationStyle,
+                                transliterationStyle: transliterationStyle,
+                              ),
                             ),
-                            const SizedBox(height: 24),
-                            Row(
-                              children: [
-                                Expanded(
+                          ),
+                          Divider(
+                            thickness: 1,
+                            height: 24,
+                            color: theme.dividerColor.withValues(alpha: 0.7),
+                          ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SizedBox(
+                                  height: buttonHeight,
                                   child: OutlinedButton(
                                     onPressed: _hasPreviousVerse
                                         ? () => _prevVerse()
@@ -433,8 +471,11 @@ class _GitaPageState extends State<GitaPage> {
                                     child: const Text('Prev'),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: SizedBox(
+                                  height: buttonHeight,
                                   child: FilledButton.icon(
                                     onPressed: _sharing
                                         ? null
@@ -453,8 +494,11 @@ class _GitaPageState extends State<GitaPage> {
                                     label: const Text('Share'),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: SizedBox(
+                                  height: buttonHeight,
                                   child: OutlinedButton(
                                     onPressed: _hasNextVerse
                                         ? () => _nextVerse()
@@ -462,13 +506,13 @@ class _GitaPageState extends State<GitaPage> {
                                     child: const Text('Next'),
                                   ),
                                 ),
-                              ],
-                            ),
-                            SizedBox(height: MediaQuery.of(context).padding.bottom + 24),
-                          ],
-                        );
-                      },
-                    ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: media.padding.bottom),
+                        ],
+                      );
+                    },
                   ),
                 ),
               );
@@ -483,13 +527,36 @@ class _GitaPageState extends State<GitaPage> {
 class _ShlokaCard extends StatelessWidget {
   final GitaShloka shloka;
   final VoidCallback onCopy;
+  final TextStyle? sanskritStyle;
+  final TextStyle? translationStyle;
+  final TextStyle? transliterationStyle;
 
-  const _ShlokaCard({required this.shloka, required this.onCopy});
+  const _ShlokaCard({
+    required this.shloka,
+    required this.onCopy,
+    this.sanskritStyle,
+    this.translationStyle,
+    this.transliterationStyle,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final TextStyle? resolvedSanskritStyle = (sanskritStyle ??
+            textTheme.headlineSmall)
+        ?.copyWith(
+      height: 1.6,
+      fontWeight: FontWeight.w600,
+    );
+    final TextStyle? resolvedTranslationStyle =
+        (translationStyle ?? textTheme.bodyLarge)?.copyWith(
+      height: 1.6,
+    );
+    final TextStyle? resolvedTransliterationStyle =
+        (transliterationStyle ?? textTheme.titleMedium)?.copyWith(
+      height: 1.5,
+    );
 
     return Card(
       color: theme.cardColor,
@@ -525,10 +592,7 @@ class _ShlokaCard extends StatelessWidget {
             Text(
               shloka.sanskrit,
               textAlign: TextAlign.center,
-              style: textTheme.headlineSmall?.copyWith(
-                height: 1.6,
-                fontWeight: FontWeight.w600,
-              ),
+              style: resolvedSanskritStyle,
             ),
             if (shloka.transliteration != null &&
                 shloka.transliteration!.trim().isNotEmpty) ...[
@@ -536,7 +600,7 @@ class _ShlokaCard extends StatelessWidget {
               Text(
                 shloka.transliteration!,
                 textAlign: TextAlign.center,
-                style: textTheme.titleMedium?.copyWith(height: 1.5),
+                style: resolvedTransliterationStyle,
               ),
             ],
             if (shloka.translation.isNotEmpty) ...[
@@ -546,7 +610,7 @@ class _ShlokaCard extends StatelessWidget {
               Text(
                 shloka.translation,
                 textAlign: TextAlign.center,
-                style: textTheme.bodyLarge?.copyWith(height: 1.6),
+                style: resolvedTranslationStyle,
               ),
             ],
           ],
