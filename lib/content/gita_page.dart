@@ -479,55 +479,78 @@ class _GitaPageState extends State<GitaPage> {
                             height: 24,
                             color: theme.dividerColor.withValues(alpha: 0.7),
                           ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: SizedBox(
-                                  height: buttonHeight,
-                                  child: OutlinedButton(
-                                    onPressed: _hasPreviousVerse
-                                        ? () => _prevVerse()
-                                        : null,
-                                    child: const Text('Prev'),
+                          LayoutBuilder(
+                            builder: (context, buttonConstraints) {
+                              final isNarrow = buttonConstraints.maxWidth < 360;
+                              final buttonSpacing = isNarrow ? 8.0 : 12.0;
+                              final adjustedButtonHeight = isNarrow ? 44.0 : buttonHeight;
+                              
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: adjustedButtonHeight,
+                                      child: OutlinedButton(
+                                        onPressed: _hasPreviousVerse
+                                            ? () => _prevVerse()
+                                            : null,
+                                        child: const Text(
+                                          'Prev',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: SizedBox(
-                                  height: buttonHeight,
-                                  child: FilledButton.icon(
-                                    onPressed: _sharing
-                                        ? null
-                                        : () => _shareOnWhatsApp(shloka),
-                                    icon: _sharing
-                                        ? SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color:
-                                                  theme.colorScheme.onPrimary,
-                                            ),
-                                          )
-                                        : const Icon(Icons.share),
-                                    label: const Text('Share'),
+                                  SizedBox(width: buttonSpacing),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: adjustedButtonHeight,
+                                      child: FilledButton.icon(
+                                        onPressed: _sharing
+                                            ? null
+                                            : () => _shareOnWhatsApp(shloka),
+                                        icon: _sharing
+                                            ? SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color:
+                                                      theme.colorScheme.onPrimary,
+                                                ),
+                                              )
+                                            : Icon(
+                                                Icons.share,
+                                                size: isNarrow ? 18 : 24,
+                                              ),
+                                        label: Text(
+                                          'Share',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: SizedBox(
-                                  height: buttonHeight,
-                                  child: OutlinedButton(
-                                    onPressed: _hasNextVerse
-                                        ? () => _nextVerse()
-                                        : null,
-                                    child: const Text('Next'),
+                                  SizedBox(width: buttonSpacing),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: adjustedButtonHeight,
+                                      child: OutlinedButton(
+                                        onPressed: _hasNextVerse
+                                            ? () => _nextVerse()
+                                            : null,
+                                        child: const Text(
+                                          'Next',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ],
+                                ],
+                              );
+                            },
                           ),
                           SizedBox(height: media.padding.bottom),
                         ],

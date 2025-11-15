@@ -154,13 +154,18 @@ class _SettingsPageState extends State<SettingsPage> {
           color: DesignSystem.backgroundLight,
         ),
         child: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            MediaQuery.of(context).padding.bottom + 32,
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 360;
+            final padding = isNarrow ? 12.0 : 16.0;
+            
+            return ListView(
+              padding: EdgeInsets.fromLTRB(
+                padding,
+                padding,
+                padding,
+                MediaQuery.of(context).padding.bottom + 32,
+              ),
           children: [
             _SettingsSection(
               icon: Icons.dark_mode,
@@ -326,6 +331,8 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 24),
             _aboutFooter(context),
           ],
+            );
+          },
         ),
         ),
       ),

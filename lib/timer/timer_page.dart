@@ -812,39 +812,75 @@ class _TimerPageState extends State<TimerPage>
                             ),
                           ),
                           const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FilledButton(
-                                  onPressed: primaryAction,
-                                  child: Text(primaryLabel),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: resetAction,
-                                  child: Text(context.tr('timer.action.reset')),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 32),
-                          FilledButton.icon(
-                            onPressed: _shareBusy ? null : _shareMeditation,
-                            icon: _shareBusy
-                                ? SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Theme.of(context).colorScheme.onPrimary,
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isNarrow = constraints.maxWidth < 360;
+                              final buttonSpacing = isNarrow ? 8.0 : 12.0;
+                              final buttonHeight = isNarrow ? 44.0 : 48.0;
+                              
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: buttonHeight,
+                                      child: FilledButton(
+                                        onPressed: primaryAction,
+                                        child: Text(
+                                          primaryLabel,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                     ),
-                                  )
-                                : const Icon(Icons.ios_share),
-                            label: Text(context.tr('timer.share.cta')),
+                                  ),
+                                  SizedBox(width: buttonSpacing),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: buttonHeight,
+                                      child: OutlinedButton(
+                                        onPressed: resetAction,
+                                        child: Text(
+                                          context.tr('timer.action.reset'),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 32),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isNarrow = constraints.maxWidth < 360;
+                              final buttonHeight = isNarrow ? 44.0 : 48.0;
+                              
+                              return SizedBox(
+                                height: buttonHeight,
+                                child: FilledButton.icon(
+                                  onPressed: _shareBusy ? null : _shareMeditation,
+                                  icon: _shareBusy
+                                      ? SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                              Theme.of(context).colorScheme.onPrimary,
+                                            ),
+                                          ),
+                                        )
+                                      : const Icon(Icons.ios_share),
+                                  label: Text(
+                                    context.tr('timer.share.cta'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                           SizedBox(height: MediaQuery.of(context).padding.bottom + 24),
                         ],

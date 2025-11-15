@@ -234,32 +234,42 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               ],
             ),
             bottomNavigationBar: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        blurRadius: 24,
-                        offset: const Offset(0, -4),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 360;
+                  final iconSize = isNarrow ? 20.0 : 22.0;
+                  final fontSize = isNarrow ? 9.0 : 10.0;
+                  final horizontalPadding = isNarrow ? 4.0 : 8.0;
+                  final verticalPadding = isNarrow ? 4.0 : 6.0;
+                  
+                  return Padding(
+                    padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 12, vertical: 8),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 24,
+                            offset: const Offset(0, -4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _navIcon(Icons.touch_app, 0, 'nav.counter'),
-                      _navIcon(Icons.bar_chart, 1, 'nav.stats'),
-                      _navIcon(Icons.menu_book, 2, 'nav.gita'),
-                      _navIcon(Icons.timer, 3, 'nav.timer'),
-                      _navIcon(Icons.settings, 4, 'nav.settings'),
-                    ],
-                  ),
-                ),
+                      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _navIcon(Icons.touch_app, 0, 'nav.counter', iconSize: iconSize, fontSize: fontSize),
+                          _navIcon(Icons.bar_chart, 1, 'nav.stats', iconSize: iconSize, fontSize: fontSize),
+                          _navIcon(Icons.menu_book, 2, 'nav.gita', iconSize: iconSize, fontSize: fontSize),
+                          _navIcon(Icons.timer, 3, 'nav.timer', iconSize: iconSize, fontSize: fontSize),
+                          _navIcon(Icons.settings, 4, 'nav.settings', iconSize: iconSize, fontSize: fontSize),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -278,7 +288,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  Widget _navIcon(IconData icon, int idx, String labelKey) {
+  Widget _navIcon(IconData icon, int idx, String labelKey, {double iconSize = 22.0, double fontSize = 10.0}) {
     final active = _index == idx;
     final theme = Theme.of(context);
     final iconColor = active
@@ -291,7 +301,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         onTap: () => _handleNavTap(idx),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          padding: EdgeInsets.symmetric(vertical: 6, horizontal: 4),
           decoration: BoxDecoration(
             color: active
                 ? theme.colorScheme.primary.withValues(alpha: 0.15)
@@ -310,15 +320,15 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: iconColor, size: 22),
-              const SizedBox(height: 2),
+              Icon(icon, color: iconColor, size: iconSize),
+              SizedBox(height: fontSize > 9 ? 2 : 1),
               Flexible(
                 child: Text(
                   _translate(labelKey),
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: textColor,
                     fontWeight: active ? FontWeight.w600 : null,
-                    fontSize: 10,
+                    fontSize: fontSize,
                   ),
                   textAlign: TextAlign.center,
                   maxLines: 1,
@@ -975,208 +985,238 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                     ),
                   ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: GlassCard(
-                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
-                      borderRadius: DesignSystem.radiusCard,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            context.tr('stats.metric.todayJaps'),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF666666),
-                              letterSpacing: 0.2,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              todayJapsFromCounter.toString(),
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1A1A1A),
-                                letterSpacing: -0.5,
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 360;
+                  final cardSpacing = isNarrow ? DesignSystem.spacingXS : DesignSystem.spacingSM;
+                  final cardPadding = isNarrow ? DesignSystem.spacingSM : DesignSystem.spacingMD;
+                  final titleSize = isNarrow ? 10.0 : 11.0;
+                  final valueSize = isNarrow ? 20.0 : 24.0;
+                  
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: GlassCard(
+                          padding: EdgeInsets.all(cardPadding),
+                          borderRadius: DesignSystem.radiusCard,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                context.tr('stats.metric.todayJaps'),
+                                style: TextStyle(
+                                  fontSize: titleSize,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF666666),
+                                  letterSpacing: 0.2,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: DesignSystem.spacingSM),
-                  Expanded(
-                    child: GlassCard(
-                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
-                      borderRadius: DesignSystem.radiusCard,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            context.tr('stats.metric.todayMalas'),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF666666),
-                              letterSpacing: 0.2,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              todayMalasFromCounter.toString(),
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1A1A1A),
-                                letterSpacing: -0.5,
+                              SizedBox(height: isNarrow ? 6 : 8),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  todayJapsFromCounter.toString(),
+                                  style: TextStyle(
+                                    fontSize: valueSize,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF1A1A1A),
+                                    letterSpacing: -0.5,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: DesignSystem.spacingSM),
-                  Expanded(
-                    child: GlassCard(
-                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
-                      borderRadius: DesignSystem.radiusCard,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            context.tr('stats.metric.lifetimeMalas'),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF666666),
-                              letterSpacing: 0.2,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              lifetimeMalasFromCounter.toString(),
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1A1A1A),
-                                letterSpacing: -0.5,
+                      SizedBox(width: cardSpacing),
+                      Expanded(
+                        child: GlassCard(
+                          padding: EdgeInsets.all(cardPadding),
+                          borderRadius: DesignSystem.radiusCard,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                context.tr('stats.metric.todayMalas'),
+                                style: TextStyle(
+                                  fontSize: titleSize,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF666666),
+                                  letterSpacing: 0.2,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
+                              SizedBox(height: isNarrow ? 6 : 8),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  todayMalasFromCounter.toString(),
+                                  style: TextStyle(
+                                    fontSize: valueSize,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF1A1A1A),
+                                    letterSpacing: -0.5,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ],
+                      SizedBox(width: cardSpacing),
+                      Expanded(
+                        child: GlassCard(
+                          padding: EdgeInsets.all(cardPadding),
+                          borderRadius: DesignSystem.radiusCard,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                context.tr('stats.metric.lifetimeMalas'),
+                                style: TextStyle(
+                                  fontSize: titleSize,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF666666),
+                                  letterSpacing: 0.2,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              SizedBox(height: isNarrow ? 6 : 8),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  lifetimeMalasFromCounter.toString(),
+                                  style: TextStyle(
+                                    fontSize: valueSize,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF1A1A1A),
+                                    letterSpacing: -0.5,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: GlassCard(
-                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
-                      borderRadius: DesignSystem.radiusCard,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            context.tr('stats.metric.todayMeditation'),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF666666),
-                              letterSpacing: 0.2,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          ValueListenableBuilder<int>(
-                            valueListenable: _todayMinNotifier,
-                            builder: (_, todayMin, __) => FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                todayMin.toString(),
-                                style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1A1A1A),
-                                  letterSpacing: -0.5,
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 360;
+                  final cardSpacing = isNarrow ? DesignSystem.spacingXS : DesignSystem.spacingSM;
+                  final cardPadding = isNarrow ? DesignSystem.spacingSM : DesignSystem.spacingMD;
+                  final titleSize = isNarrow ? 10.0 : 11.0;
+                  final valueSize = isNarrow ? 20.0 : 24.0;
+                  
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: GlassCard(
+                          padding: EdgeInsets.all(cardPadding),
+                          borderRadius: DesignSystem.radiusCard,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                context.tr('stats.metric.todayMeditation'),
+                                style: TextStyle(
+                                  fontSize: titleSize,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF666666),
+                                  letterSpacing: 0.2,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              SizedBox(height: isNarrow ? 6 : 8),
+                              ValueListenableBuilder<int>(
+                                valueListenable: _todayMinNotifier,
+                                builder: (_, todayMin, __) => FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    todayMin.toString(),
+                                    style: TextStyle(
+                                      fontSize: valueSize,
+                                      fontWeight: FontWeight.bold,
+                                      color: const Color(0xFF1A1A1A),
+                                      letterSpacing: -0.5,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: DesignSystem.spacingSM),
-                  Expanded(
-                    child: GlassCard(
-                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
-                      borderRadius: DesignSystem.radiusCard,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            context.tr('stats.metric.lifetimeMeditation'),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF666666),
-                              letterSpacing: 0.2,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-                          ValueListenableBuilder<int>(
-                            valueListenable: _lifetimeMinNotifier,
-                            builder: (_, lifetimeMin, __) => FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                lifetimeMin.toString(),
-                                style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1A1A1A),
-                                  letterSpacing: -0.5,
+                      SizedBox(width: cardSpacing),
+                      Expanded(
+                        child: GlassCard(
+                          padding: EdgeInsets.all(cardPadding),
+                          borderRadius: DesignSystem.radiusCard,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                context.tr('stats.metric.lifetimeMeditation'),
+                                style: TextStyle(
+                                  fontSize: titleSize,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF666666),
+                                  letterSpacing: 0.2,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              SizedBox(height: isNarrow ? 6 : 8),
+                              ValueListenableBuilder<int>(
+                                valueListenable: _lifetimeMinNotifier,
+                                builder: (_, lifetimeMin, __) => FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    lifetimeMin.toString(),
+                                    style: TextStyle(
+                                      fontSize: valueSize,
+                                      fontWeight: FontWeight.bold,
+                                      color: const Color(0xFF1A1A1A),
+                                      letterSpacing: -0.5,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 16),
               Builder(

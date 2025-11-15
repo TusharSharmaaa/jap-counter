@@ -744,71 +744,93 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final screenHeight = constraints.maxHeight;
+                    final screenWidth = constraints.maxWidth;
                     final isSmallScreen = screenHeight < 600;
+                    final isNarrowScreen = screenWidth < 360;
+                    final isWideScreen = screenWidth > 600;
                     
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         SizedBox(height: isSmallScreen ? 8 : 16),
-                        // Stats row with Glass Cards
+                        // Stats row with Glass Cards - responsive layout
                         RepaintBoundary(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: DesignSystem.spacingMD,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isNarrowScreen ? DesignSystem.spacingSM : DesignSystem.spacingMD,
                             ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: ValueListenableBuilder<int>(
-                                    valueListenable: _todayNotifier,
-                                    builder: (_, today, __) => _StatCard(
-                                      title: context.tr('counter.stat.todayJaps'),
-                                      value: today.toString(),
+                            child: LayoutBuilder(
+                              builder: (context, cardConstraints) {
+                                // On very narrow screens, use smaller spacing
+                                final cardSpacing = isNarrowScreen ? DesignSystem.spacingXS : DesignSystem.spacingSM;
+                                
+                                return Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 1,
+                                      child: ValueListenableBuilder<int>(
+                                        valueListenable: _todayNotifier,
+                                        builder: (_, today, __) => _StatCard(
+                                          title: context.tr('counter.stat.todayJaps'),
+                                          value: today.toString(),
+                                          isCompact: isNarrowScreen,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: DesignSystem.spacingSM),
-                                Expanded(
-                                  child: ValueListenableBuilder<int>(
-                                    valueListenable: _todayNotifier,
-                                    builder: (_, today, __) => _StatCard(
-                                      title: context.tr('counter.stat.malas'),
-                                      value: (today ~/ 108).toString(),
+                                    SizedBox(width: cardSpacing),
+                                    Expanded(
+                                      flex: 1,
+                                      child: ValueListenableBuilder<int>(
+                                        valueListenable: _todayNotifier,
+                                        builder: (_, today, __) => _StatCard(
+                                          title: context.tr('counter.stat.malas'),
+                                          value: (today ~/ 108).toString(),
+                                          isCompact: isNarrowScreen,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: DesignSystem.spacingSM),
-                                Expanded(
-                                  child: ValueListenableBuilder<int>(
-                                    valueListenable: _lifetimeMalasNotifier,
-                                    builder: (_, lifetimeMalas, __) => _StatCard(
-                                      title: context.tr('counter.stat.lifetimeMalas'),
-                                      value: lifetimeMalas.toString(),
+                                    SizedBox(width: cardSpacing),
+                                    Expanded(
+                                      flex: 1,
+                                      child: ValueListenableBuilder<int>(
+                                        valueListenable: _lifetimeMalasNotifier,
+                                        builder: (_, lifetimeMalas, __) => _StatCard(
+                                          title: context.tr('counter.stat.lifetimeMalas'),
+                                          value: lifetimeMalas.toString(),
+                                          isCompact: isNarrowScreen,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ],
+                                  ],
+                                );
+                              },
                             ),
                           ),
                         ),
                         SizedBox(height: isSmallScreen ? 12 : 20),
                         // Goal summary with Progress Ring
                         RepaintBoundary(
-                          child: ValueListenableBuilder<int>(
-                            valueListenable: _todayNotifier,
-                            builder: (_, today, __) {
-                              final malas = today ~/ 108;
-                              final goalProgress = _dailyGoal <= 0 
-                                  ? 0.0 
-                                  : (malas / _dailyGoal).clamp(0, 1).toDouble();
-                              return _GoalSummary(
-                                dailyGoal: _dailyGoal,
-                                goalProgress: goalProgress,
-                                goalCompletedShown: _goalCompletedShown,
-                                malas: malas,
-                                onEditGoal: _editGoal,
-                              );
-                            },
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isNarrowScreen ? DesignSystem.spacingSM : DesignSystem.spacingMD,
+                            ),
+                            child: ValueListenableBuilder<int>(
+                              valueListenable: _todayNotifier,
+                              builder: (_, today, __) {
+                                final malas = today ~/ 108;
+                                final goalProgress = _dailyGoal <= 0 
+                                    ? 0.0 
+                                    : (malas / _dailyGoal).clamp(0, 1).toDouble();
+                                return _GoalSummary(
+                                  dailyGoal: _dailyGoal,
+                                  goalProgress: goalProgress,
+                                  goalCompletedShown: _goalCompletedShown,
+                                  malas: malas,
+                                  onEditGoal: _editGoal,
+                                  isNarrowScreen: isNarrowScreen,
+                                );
+                              },
+                            ),
                           ),
                         ),
                         // Main counter area
@@ -819,13 +841,21 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    context.tr('counter.tapToCount'),
-                                    style: TextStyle(
-                                      fontSize: isSmallScreen ? 15 : 17,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF333333),
-                                      letterSpacing: 0.3,
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: isNarrowScreen ? 8.0 : 16.0,
+                                    ),
+                                    child: Text(
+                                      context.tr('counter.tapToCount'),
+                                      style: TextStyle(
+                                        fontSize: isNarrowScreen ? 14 : (isSmallScreen ? 15 : 17),
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF333333),
+                                        letterSpacing: 0.3,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   SizedBox(height: isSmallScreen ? 16 : 24),
@@ -842,6 +872,9 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                                               currentMalaCount: currentMalaCount,
                                               malasCompleted: today ~/ 108,
                                               isSmallScreen: isSmallScreen,
+                                              isNarrowScreen: isNarrowScreen,
+                                              screenWidth: screenWidth,
+                                              screenHeight: screenHeight,
                                             );
                                           },
                                         );
@@ -890,12 +923,23 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
 class _StatCard extends StatelessWidget {
   final String title;
   final String value;
-  const _StatCard({required this.title, required this.value});
+  final bool isCompact;
+  const _StatCard({
+    required this.title, 
+    required this.value,
+    this.isCompact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final padding = isCompact 
+        ? const EdgeInsets.all(DesignSystem.spacingSM) 
+        : const EdgeInsets.all(DesignSystem.spacingMD);
+    final titleSize = isCompact ? 10.0 : 11.0;
+    final valueSize = isCompact ? 20.0 : 24.0;
+    
     return GlassCard(
-      padding: const EdgeInsets.all(DesignSystem.spacingMD),
+      padding: padding,
       borderRadius: DesignSystem.radiusCard,
       useBackdropBlur: true,
       child: Column(
@@ -904,27 +948,29 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
-              fontSize: 11,
+            style: TextStyle(
+              fontSize: titleSize,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF666666),
+              color: const Color(0xFF666666),
               letterSpacing: 0.2,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: isCompact ? 6 : 8),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: const TextStyle(
-                fontSize: 24,
+              style: TextStyle(
+                fontSize: valueSize,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A1A),
+                color: const Color(0xFF1A1A1A),
                 letterSpacing: -0.5,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -939,6 +985,9 @@ class _CounterButton extends StatelessWidget {
   final int currentMalaCount;
   final int malasCompleted;
   final bool isSmallScreen;
+  final bool isNarrowScreen;
+  final double screenWidth;
+  final double screenHeight;
 
   const _CounterButton({
     required this.today,
@@ -946,6 +995,9 @@ class _CounterButton extends StatelessWidget {
     required this.currentMalaCount,
     required this.malasCompleted,
     required this.isSmallScreen,
+    this.isNarrowScreen = false,
+    required this.screenWidth,
+    required this.screenHeight,
   });
 
   @override
@@ -961,10 +1013,18 @@ class _CounterButton extends StatelessWidget {
           curve: Curves.easeOut,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final maxSize = constraints.maxWidth < constraints.maxHeight
-                  ? constraints.maxWidth * 0.65
-                  : constraints.maxHeight * 0.45;
-              final circleSize = (maxSize.clamp(200.0, 280.0));
+              // Calculate responsive circle size based on available space
+              final availableWidth = constraints.maxWidth;
+              final availableHeight = constraints.maxHeight;
+              final minSize = isNarrowScreen ? 160.0 : 200.0;
+              final maxSize = isNarrowScreen ? 240.0 : 280.0;
+              
+              // Use the smaller dimension to ensure it fits
+              final baseSize = availableWidth < availableHeight
+                  ? availableWidth * (isNarrowScreen ? 0.7 : 0.65)
+                  : availableHeight * (isNarrowScreen ? 0.4 : 0.45);
+              
+              final circleSize = baseSize.clamp(minSize, maxSize);
               
               return Container(
                 height: circleSize,
@@ -980,7 +1040,7 @@ class _CounterButton extends StatelessWidget {
                     ProgressRing(
                       progress: malaProgress,
                       size: circleSize,
-                      strokeWidth: 6,
+                      strokeWidth: isNarrowScreen ? 5 : 6,
                       progressColor: DesignSystem.primary.withValues(alpha: 0.55), // More vibrant but not complete
                       backgroundColor: const Color(0xFFFFE4CC), // Light orange background for ring
                       backgroundFillColor: const Color(0xFFFFE4CC), // Light orange fill for whole ring area
@@ -999,7 +1059,7 @@ class _CounterButton extends StatelessWidget {
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Padding(
-                        padding: const EdgeInsets.all(24.0),
+                        padding: EdgeInsets.all(isNarrowScreen ? 16.0 : 24.0),
                         child: Text(
                           '$today',
                           style: TextStyle(
@@ -1009,6 +1069,8 @@ class _CounterButton extends StatelessWidget {
                             letterSpacing: 0,
                             height: 1.2,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
@@ -1019,9 +1081,15 @@ class _CounterButton extends StatelessWidget {
           ),
         ),
         SizedBox(height: isSmallScreen ? 16 : 24),
-        _MalaProgressDisplay(
-          currentMalaCount: currentMalaCount,
-          malasCompleted: malasCompleted,
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: isNarrowScreen ? 8.0 : 16.0,
+          ),
+          child: _MalaProgressDisplay(
+            currentMalaCount: currentMalaCount,
+            malasCompleted: malasCompleted,
+            isNarrowScreen: isNarrowScreen,
+          ),
         ),
       ],
     );
@@ -1031,40 +1099,49 @@ class _CounterButton extends StatelessWidget {
 class _MalaProgressDisplay extends StatelessWidget {
   final int currentMalaCount;
   final int malasCompleted;
+  final bool isNarrowScreen;
   const _MalaProgressDisplay({
     required this.currentMalaCount,
     required this.malasCompleted,
+    this.isNarrowScreen = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final normalized = currentMalaCount.clamp(0, 108).toInt();
 
+    final fontSize = isNarrowScreen ? 18.0 : 20.0;
+    final subtitleSize = isNarrowScreen ? 12.0 : 13.0;
+    
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           '$normalized / 108',
-          style: const TextStyle(
-            fontSize: 20,
+          style: TextStyle(
+            fontSize: fontSize,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
-            color: Color(0xFF333333),
+            color: const Color(0xFF333333),
           ),
           textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: isNarrowScreen ? 4 : 6),
         Text(
           context.tr(
             'counter.malaProgress.completed',
             args: {'count': '$malasCompleted'},
           ),
-          style: const TextStyle(
-            fontSize: 13,
+          style: TextStyle(
+            fontSize: subtitleSize,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF666666),
+            color: const Color(0xFF666666),
           ),
           textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -1077,6 +1154,7 @@ class _GoalSummary extends StatelessWidget {
   final bool goalCompletedShown;
   final int malas;
   final VoidCallback onEditGoal;
+  final bool isNarrowScreen;
 
   const _GoalSummary({
     required this.dailyGoal,
@@ -1084,6 +1162,7 @@ class _GoalSummary extends StatelessWidget {
     required this.goalCompletedShown,
     required this.malas,
     required this.onEditGoal,
+    this.isNarrowScreen = false,
   });
 
   @override
@@ -1128,13 +1207,18 @@ class _GoalSummary extends StatelessWidget {
     }
     final statusText = safeTr(statusKey, args: statusArgs);
 
+    final iconSize = isNarrowScreen ? 50.0 : 60.0;
+    final iconInnerSize = isNarrowScreen ? 22.0 : 26.0;
+    final titleSize = isNarrowScreen ? 14.0 : 16.0;
+    final subtitleSize = isNarrowScreen ? 12.0 : 13.0;
+    
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: DesignSystem.spacingMD,
+      padding: EdgeInsets.symmetric(
+        horizontal: 0,
         vertical: 8,
       ),
       child: GlassCard(
-        padding: const EdgeInsets.all(DesignSystem.spacingMD),
+        padding: EdgeInsets.all(isNarrowScreen ? DesignSystem.spacingSM : DesignSystem.spacingMD),
         borderRadius: DesignSystem.radiusCard,
         onTap: onEditGoal,
         useBackdropBlur: true,
@@ -1142,16 +1226,16 @@ class _GoalSummary extends StatelessWidget {
           children: [
             // Goal icon with progress ring
             SizedBox(
-              width: 60,
-              height: 60,
+              width: iconSize,
+              height: iconSize,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
                   if (dailyGoal > 0)
                     ProgressRing(
                       progress: goalProgress.clamp(0.0, 1.0),
-                      size: 60,
-                      strokeWidth: 4,
+                      size: iconSize,
+                      strokeWidth: isNarrowScreen ? 3 : 4,
                       progressColor: goalCompletedShown 
                           ? DesignSystem.primary // Vibrant when completed
                           : DesignSystem.primary.withValues(alpha: 0.7), // Vibrant but elegant
@@ -1160,7 +1244,7 @@ class _GoalSummary extends StatelessWidget {
                       showGlow: false, // No glow to avoid blur
                     ),
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: EdgeInsets.all(isNarrowScreen ? 8 : 10),
                     decoration: BoxDecoration(
                       color: Colors.white, // Solid white for better visibility
                       shape: BoxShape.circle,
@@ -1177,13 +1261,13 @@ class _GoalSummary extends StatelessWidget {
                       color: goalCompletedShown 
                           ? DesignSystem.primaryDark // More vibrant when completed
                           : DesignSystem.primary, // Vibrant orange
-                      size: 26,
+                      size: iconInnerSize,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: DesignSystem.spacingMD),
+            SizedBox(width: isNarrowScreen ? DesignSystem.spacingSM : DesignSystem.spacingMD),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1191,21 +1275,21 @@ class _GoalSummary extends StatelessWidget {
                 children: [
                   Text(
                     goalLabel,
-                    style: const TextStyle(
-                      fontSize: 16,
+                    style: TextStyle(
+                      fontSize: titleSize,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A1A),
+                      color: const Color(0xFF1A1A1A),
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: isNarrowScreen ? 2 : 4),
                   Text(
                     statusText,
-                    style: const TextStyle(
-                      fontSize: 13,
+                    style: TextStyle(
+                      fontSize: subtitleSize,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF666666),
+                      color: const Color(0xFF666666),
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -1213,11 +1297,11 @@ class _GoalSummary extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: isNarrowScreen ? 4 : 8),
             Icon(
               Icons.edit_outlined,
               color: const Color(0xFF999999),
-              size: 22,
+              size: isNarrowScreen ? 18 : 22,
             ),
           ],
         ),
