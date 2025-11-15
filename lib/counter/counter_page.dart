@@ -33,21 +33,29 @@ class CounterPage extends StatefulWidget {
 class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   CounterStore? _store;
   bool _loading = true;
-  int _today = 0;
   int _lifetime = 0;
-  int _lifetimeMalas = 0; // Store lifetime malas separately (calculated from completed malas)
   bool _pulse = false;
   int _dailyGoal = 0;
   bool _goalCompletedShown = false;
   late final ConfettiController _confettiController;
   bool _confettiShownRecently = false;
   bool _glowActive = false;
-  int _currentMalaCountDisplay = 0;
   Timer? _malaResetTimer;
+  
+  // Performance optimization: Use ValueNotifier for frequently updated values
+  // This avoids rebuilding the entire widget tree on every tap
+  late final ValueNotifier<int> _todayNotifier;
+  late final ValueNotifier<int> _lifetimeMalasNotifier;
+  late final ValueNotifier<int> _currentMalaCountNotifier;
 
   @override
   void initState() {
     super.initState();
+    // Initialize ValueNotifiers for performance optimization
+    _todayNotifier = ValueNotifier<int>(0);
+    _lifetimeMalasNotifier = ValueNotifier<int>(0);
+    _currentMalaCountNotifier = ValueNotifier<int>(0);
+    
     // Listen for app going to background
     WidgetsBinding.instance.addObserver(this);
     _confettiController = ConfettiController(
@@ -81,14 +89,16 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     final congratulatedToday =
         goalStore.lastCongratsDate == GoalStore.todayKey();
 
+    // Update ValueNotifiers instead of setState for frequently changing values
+    _todayNotifier.value = store.todayJaps;
+    _lifetimeMalasNotifier.value = store.lifetimeMalas;
+    _currentMalaCountNotifier.value = _calculateCurrentMalaDisplay(store.todayJaps);
+    
     setState(() {
       _store = store;
-      _today = store.todayJaps;
       _lifetime = store.lifetimeJaps;
-      _lifetimeMalas = store.lifetimeMalas; // Use lifetime malas from store (calculated from completed malas)
       _dailyGoal = goalStore.dailyMalasGoal;
       _goalCompletedShown = congratulatedToday;
-      _currentMalaCountDisplay = _calculateCurrentMalaDisplay(store.todayJaps);
       _loading = false;
     });
   }
@@ -118,8 +128,8 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     if (store == null) return;
 
     _cancelMalaResetTimer();
-    final wasZero = _today == 0;
-    final willBe = _today + 1;
+    final wasZero = _todayNotifier.value == 0;
+    final willBe = _todayNotifier.value + 1;
     
     // Critical: Update counter immediately
     await store.increment();
@@ -127,18 +137,23 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     // Invalidate chart cache when counter increments
     unawaited(_invalidateChartCache());
 
-    // Update UI immediately for responsiveness
+    // Update UI immediately for responsiveness using ValueNotifiers
+    // This avoids rebuilding the entire widget tree
     final updatedToday = store.todayJaps;
     final remainder = updatedToday % 108;
     final malaCompleted = remainder == 0 && updatedToday > 0;
 
-    if (!mounted) return;
-    setState(() {
-      _today = updatedToday;
-      _lifetime = store.lifetimeJaps;
-      _lifetimeMalas = store.lifetimeMalas; // Update lifetime malas from store (calculated from completed malas)
-      _currentMalaCountDisplay = malaCompleted ? 108 : remainder;
-    });
+    // Update ValueNotifiers - only rebuilds widgets listening to these values
+    _todayNotifier.value = updatedToday;
+    _lifetimeMalasNotifier.value = store.lifetimeMalas;
+    _currentMalaCountNotifier.value = malaCompleted ? 108 : remainder;
+    
+    // Only update lifetime in setState (rarely changes)
+    if (mounted && _lifetime != store.lifetimeJaps) {
+      setState(() {
+        _lifetime = store.lifetimeJaps;
+      });
+    }
 
     // Trigger feedback via controller (handles debouncing and settings)
     unawaited(TapFeedbackController.instance.handleTap(
@@ -158,9 +173,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     if (malaCompleted) {
       unawaited(store.refreshLifetimeMalas().then((_) {
         if (mounted) {
-          setState(() {
-            _lifetimeMalas = store.lifetimeMalas;
-          });
+          _lifetimeMalasNotifier.value = store.lifetimeMalas;
         }
       }));
     }
@@ -223,7 +236,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       final ns = NotificationService();
       final scope = AppLocalizationScope.maybeOf(context);
       final language = scope?.language ?? 'en';
-      await ns.scheduleDynamicJapReminder(_today, language: language);
+      await ns.scheduleDynamicJapReminder(_todayNotifier.value, language: language);
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[Counter] Notification scheduling failed: $e');
@@ -315,9 +328,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     _cancelMalaResetTimer();
     _malaResetTimer = Timer(const Duration(milliseconds: 900), () {
       if (!mounted) return;
-      setState(() {
-        _currentMalaCountDisplay = 0;
-      });
+      _currentMalaCountNotifier.value = 0;
     });
   }
 
@@ -334,7 +345,8 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     return remainder;
   }
 
-  int get _malas => _today ~/ 108;
+  // Getter for malas - uses ValueNotifier value
+  int get _malas => _todayNotifier.value ~/ 108;
   // Use stored lifetime malas (calculated from completed malas in history)
   // This ensures we only count COMPLETE malas (108 japs = 1 mala)
   double get _goalProgress {
@@ -360,7 +372,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
           if (showSnackBar) {
             // Use feedback controller for haptic/sound
             unawaited(TapFeedbackController.instance.handleTap(
-              currentCount: _today,
+              currentCount: _todayNotifier.value,
               isMalaComplete: false,
             ));
             if (mounted) {
@@ -601,23 +613,32 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: _StatCard(
-                                    title: context.tr('counter.stat.todayJaps'),
-                                    value: _today.toString(),
+                                  child: ValueListenableBuilder<int>(
+                                    valueListenable: _todayNotifier,
+                                    builder: (_, today, __) => _StatCard(
+                                      title: context.tr('counter.stat.todayJaps'),
+                                      value: today.toString(),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: DesignSystem.spacingSM),
                                 Expanded(
-                                  child: _StatCard(
-                                    title: context.tr('counter.stat.malas'),
-                                    value: _malas.toString(),
+                                  child: ValueListenableBuilder<int>(
+                                    valueListenable: _todayNotifier,
+                                    builder: (_, today, __) => _StatCard(
+                                      title: context.tr('counter.stat.malas'),
+                                      value: (today ~/ 108).toString(),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: DesignSystem.spacingSM),
                                 Expanded(
-                                  child: _StatCard(
-                                    title: context.tr('counter.stat.lifetimeMalas'),
-                                    value: _lifetimeMalas.toString(),
+                                  child: ValueListenableBuilder<int>(
+                                    valueListenable: _lifetimeMalasNotifier,
+                                    builder: (_, lifetimeMalas, __) => _StatCard(
+                                      title: context.tr('counter.stat.lifetimeMalas'),
+                                      value: lifetimeMalas.toString(),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -627,12 +648,21 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                         SizedBox(height: isSmallScreen ? 12 : 20),
                         // Goal summary with Progress Ring
                         RepaintBoundary(
-                          child: _GoalSummary(
-                            dailyGoal: _dailyGoal,
-                            goalProgress: _goalProgress,
-                            goalCompletedShown: _goalCompletedShown,
-                            malas: _malas,
-                            onEditGoal: _editGoal,
+                          child: ValueListenableBuilder<int>(
+                            valueListenable: _todayNotifier,
+                            builder: (_, today, __) {
+                              final malas = today ~/ 108;
+                              final goalProgress = _dailyGoal <= 0 
+                                  ? 0.0 
+                                  : (malas / _dailyGoal).clamp(0, 1).toDouble();
+                              return _GoalSummary(
+                                dailyGoal: _dailyGoal,
+                                goalProgress: goalProgress,
+                                goalCompletedShown: _goalCompletedShown,
+                                malas: malas,
+                                onEditGoal: _editGoal,
+                              );
+                            },
                           ),
                         ),
                         // Main counter area
@@ -654,12 +684,22 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                                   ),
                                   SizedBox(height: isSmallScreen ? 16 : 24),
                                   RepaintBoundary(
-                                    child: _CounterButton(
-                                      today: _today,
-                                      pulse: _pulse,
-                                      currentMalaCount: _currentMalaCountDisplay,
-                                      malasCompleted: _malas,
-                                      isSmallScreen: isSmallScreen,
+                                    child: ValueListenableBuilder<int>(
+                                      valueListenable: _todayNotifier,
+                                      builder: (_, today, __) {
+                                        return ValueListenableBuilder<int>(
+                                          valueListenable: _currentMalaCountNotifier,
+                                          builder: (_, currentMalaCount, ___) {
+                                            return _CounterButton(
+                                              today: today,
+                                              pulse: _pulse,
+                                              currentMalaCount: currentMalaCount,
+                                              malasCompleted: today ~/ 108,
+                                              isSmallScreen: isSmallScreen,
+                                            );
+                                          },
+                                        );
+                                      },
                                     ),
                                   ),
                                   SizedBox(
@@ -685,6 +725,10 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // Dispose ValueNotifiers
+    _todayNotifier.dispose();
+    _lifetimeMalasNotifier.dispose();
+    _currentMalaCountNotifier.dispose();
     // Force sync before disposal
     _store?.forceSyncNow();
     // Flush any pending daily summary writes

@@ -383,17 +383,23 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
 
   CounterStore? _store;
   bool _loading = true;
-  int _today = 0;
   int _lifetime = 0;
-  int _todayMin = 0;
-  int _lifetimeMin = 0;
   // NEW: user's dedication text (persisted via DedicationStore)
   String _dedication = '';
   static const _ambienceKey = 'stats.ambience.enabled';
   bool _ambienceEnabled = false;
 
+  // Performance optimization: Use ValueNotifier for frequently updated values
+  // This avoids rebuilding the entire widget tree when stats update
+  late final ValueNotifier<int> _todayNotifier;
+  late final ValueNotifier<int> _todayMinNotifier;
+  late final ValueNotifier<int> _lifetimeMinNotifier;
+
   // Load all stats in one batch to avoid multiple FutureBuilders
   Future<Map<String, dynamic>>? _allStatsFuture;
+  
+  // Cache last loaded stats to show immediately while loading new data
+  Map<String, dynamic>? _cachedStats;
 
   @override
   bool get wantKeepAlive => true; // Preserve state when hidden
@@ -401,6 +407,11 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
   @override
   void initState() {
     super.initState();
+    // Initialize ValueNotifiers for performance optimization
+    _todayNotifier = ValueNotifier<int>(0);
+    _todayMinNotifier = ValueNotifier<int>(0);
+    _lifetimeMinNotifier = ValueNotifier<int>(0);
+    
     _confetti = ConfettiController(duration: const Duration(seconds: 3));
     _init();
     unawaited(AdManager.instance.preloadPlacement('stats.share_rewarded'));
@@ -552,6 +563,10 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
   
   @override
   void dispose() {
+    // Dispose ValueNotifiers
+    _todayNotifier.dispose();
+    _todayMinNotifier.dispose();
+    _lifetimeMinNotifier.dispose();
     _confetti.dispose();
     StatsAmbience.instance.stop();
     super.dispose();
@@ -607,11 +622,15 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     final locale = language == 'hi' ? 'hi' : 'en';
     _allStatsFuture = _loadAllStats(locale: locale);
     
-    // Update local state with latest counter data
-    setState(() {
-      _today = s.todayJaps;
-      _lifetime = s.lifetimeJaps;
-    });
+    // Update ValueNotifiers - only rebuilds widgets listening to these values
+    _todayNotifier.value = s.todayJaps;
+    
+    // Only update lifetime in setState (rarely changes)
+    if (mounted && _lifetime != s.lifetimeJaps) {
+      setState(() {
+        _lifetime = s.lifetimeJaps;
+      });
+    }
     
     // Ensure today is marked active if user has japs today
     if (s.todayJaps > 0) {
@@ -639,12 +658,14 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     final locale = language == 'hi' ? 'hi' : 'en';
     _allStatsFuture = _loadAllStats(locale: locale);
     
+    // Update ValueNotifiers - only rebuilds widgets listening to these values
+    _todayNotifier.value = s.todayJaps;
+    _todayMinNotifier.value = mstore.todayMinutes;
+    _lifetimeMinNotifier.value = mstore.lifetimeMinutes;
+    
+    // Only update rarely changing values in setState
     setState(() {
-      _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
-
-      _todayMin = mstore.todayMinutes;
-      _lifetimeMin = mstore.lifetimeMinutes;
       _dedication = dstore.note;
     });
     // Also ensure today is marked active on manual refresh
@@ -660,15 +681,25 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     final mstore = await MeditationStore.create();
     final dstore = await DedicationStore.create();
     await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
+    
+    // Update ValueNotifiers instead of setState for frequently changing values
+    _todayNotifier.value = s.todayJaps;
+    _todayMinNotifier.value = mstore.todayMinutes;
+    _lifetimeMinNotifier.value = mstore.lifetimeMinutes;
+    
     setState(() {
-      _today = s.todayJaps;
       _lifetime = s.lifetimeJaps;
       _loading = false;
-
-      _todayMin = mstore.todayMinutes;
-      _lifetimeMin = mstore.lifetimeMinutes;
       _dedication = dstore.note;
     });
+    
+    // Populate cache with initial data for instant display
+    _allStatsFuture?.then((stats) {
+      if (mounted) {
+        _cachedStats = stats;
+      }
+    });
+    
     // Ensure today is recorded as active if user already has japs today
     if (s.todayJaps > 0) {
       await ActivityStore.markTodayActive();
@@ -688,7 +719,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
       );
     }
 
-    final todayMalas = _today ~/ 108;
+    // Calculate malas from ValueNotifier (used as fallback, FutureBuilder provides main data)
+    final todayMalas = _todayNotifier.value ~/ 108;
     final lifetimeMalas = _lifetime ~/ 108;
     // Load goal (synchronously via FutureBuilder below to avoid blocking build)
 
@@ -763,11 +795,28 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     return FutureBuilder<Map<String, dynamic>>(
       future: _allStatsFuture,
       builder: (context, statsSnapshot) {
-        if (!statsSnapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+        // Show cached data immediately while loading new data (UX optimization)
+        // This makes the app feel instant even when refreshing
+        final stats = statsSnapshot.hasData 
+            ? statsSnapshot.data! 
+            : (_cachedStats ?? {
+                'counter': {'today': _todayNotifier.value, 'lifetime': _lifetime, 'todayMalas': 0, 'lifetimeMalas': 0},
+                'activity': {'streak': 0, 'activeDays': 0},
+                'goal': 0,
+                'badges': <String>{},
+                'dedication': '',
+                'chart': <Map<String, dynamic>>[],
+              });
+        
+        // Update cache when new data arrives
+        if (statsSnapshot.hasData) {
+          _cachedStats = statsSnapshot.data;
         }
         
-        final stats = statsSnapshot.data!;
+        // Show loading indicator only if we have no cached data at all
+        if (!statsSnapshot.hasData && _cachedStats == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
         final counter = stats['counter'] as Map<String, int>;
         final activity = stats['activity'] as Map<String, int>;
         final goal = stats['goal'] as int;
@@ -777,7 +826,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
         
         // Use counter data from FutureBuilder for real-time accuracy
         // This ensures stats always reflect the latest counter values
-        final todayJapsFromCounter = counter['today'] ?? _today;
+        final todayJapsFromCounter = counter['today'] ?? _todayNotifier.value;
         final lifetimeJapsFromCounter = counter['lifetime'] ?? _lifetime;
         
         // Use malas directly from CounterStore (calculated from completed malas in history)
@@ -1037,16 +1086,19 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 8),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              _todayMin.toString(),
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1A1A1A),
-                                letterSpacing: -0.5,
+                          ValueListenableBuilder<int>(
+                            valueListenable: _todayMinNotifier,
+                            builder: (_, todayMin, __) => FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                todayMin.toString(),
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1A1A1A),
+                                  letterSpacing: -0.5,
+                                ),
                               ),
                             ),
                           ),
@@ -1075,16 +1127,19 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 8),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              _lifetimeMin.toString(),
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1A1A1A),
-                                letterSpacing: -0.5,
+                          ValueListenableBuilder<int>(
+                            valueListenable: _lifetimeMinNotifier,
+                            builder: (_, lifetimeMin, __) => FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                lifetimeMin.toString(),
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1A1A1A),
+                                  letterSpacing: -0.5,
+                                ),
                               ),
                             ),
                           ),
@@ -1164,9 +1219,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   mainAxisSize: MainAxisSize.max,
-                                  children: chart.asMap().entries.map((entry) {
-                                    final index = entry.key;
-                                    final e = entry.value;
+                                  children: List.generate(chart.length, (index) {
+                                    final e = chart[index];
                                     final val = e['value'] as int? ?? 0;
                                     final dayLabel = e['day'] as String? ?? '';
                                     final dateLabel = e['dateLabel'] as String? ?? '';
@@ -1260,7 +1314,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                     ),
                                   ),
                                 );
-                              }).toList(),
+                              }),
                             ),
                           );
                             },
@@ -1414,7 +1468,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                 ),
               ),
               const SizedBox(height: 6),
-              _ActivityCalendar(todayJaps: _today, todayMalas: todayMalas),
+              _ActivityCalendar(todayJaps: _todayNotifier.value, todayMalas: todayMalas),
             ]),
           ),
         ),
@@ -1802,6 +1856,7 @@ class _CalendarCell extends StatelessWidget {
   final VoidCallback? onTap;
 
   const _CalendarCell({
+    super.key,
     required this.date,
     required this.entry,
     required this.now,
@@ -1866,7 +1921,7 @@ class _LegendSwatch extends StatelessWidget {
   final Color color;
   final String label;
 
-  const _LegendSwatch({required this.color, required this.label});
+  const _LegendSwatch({super.key, required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1905,3 +1960,4 @@ class _GitaTab extends StatelessWidget {
 }
 
 // Legacy settings classes removed. Latest settings UI lives in lib/settings/settings_page.dart
+
