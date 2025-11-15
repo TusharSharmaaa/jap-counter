@@ -63,8 +63,9 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      // App going to background - force sync
+      // App going to background - force sync and flush pending writes
       _store?.forceSyncNow();
+      unawaited(ActivityStore.flushPendingWrites());
     }
   }
 
@@ -148,19 +149,21 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     // Non-critical operations: Fire and forget
     unawaited(_recordInsight(willBe));
     
-    // Record daily summary after every increment to keep stats page in real-time sync
-    // This ensures the stats page always shows accurate data
+    // Record daily summary - batched/deferred for performance
+    // OPTIMIZATION: This now batches writes instead of writing on every tap
     unawaited(ActivityStore.recordDailySummary(updatedToday, updatedToday ~/ 108));
     
-    // Refresh lifetime malas calculation from history after recording summary
-    // This ensures lifetime malas reflects the latest completed malas from history
-    unawaited(store.refreshLifetimeMalas().then((_) {
-      if (mounted) {
-        setState(() {
-          _lifetimeMalas = store.lifetimeMalas;
-        });
-      }
-    }));
+    // OPTIMIZATION: Don't refresh lifetime malas on every tap - it's cached and updated automatically
+    // Only refresh when a mala is completed (when lifetime malas might change)
+    if (malaCompleted) {
+      unawaited(store.refreshLifetimeMalas().then((_) {
+        if (mounted) {
+          setState(() {
+            _lifetimeMalas = store.lifetimeMalas;
+          });
+        }
+      }));
+    }
     
     if (wasZero) {
       unawaited(ActivityStore.markTodayActive());
@@ -554,26 +557,27 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                 ),
               ),
             ),
-            // Confetti overlay
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConfettiWidget(
-                confettiController: _confettiController,
-                blastDirectionality: BlastDirectionality.explosive,
-                particleDrag: 0.05,
-                emissionFrequency: 0.05,
-                numberOfParticles: 15,
-                maxBlastForce: 10,
-                minBlastForce: 5,
-                gravity: 0.3,
-                shouldLoop: false,
-                colors: const [
-                  DesignSystem.primary,
-                  DesignSystem.accentGlow,
-                  DesignSystem.primaryDark,
-                ],
+            // Confetti overlay - only render when confetti is active (performance optimization)
+            if (_confettiShownRecently)
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: _confettiController,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  particleDrag: 0.05,
+                  emissionFrequency: 0.05,
+                  numberOfParticles: 15,
+                  maxBlastForce: 10,
+                  minBlastForce: 5,
+                  gravity: 0.3,
+                  shouldLoop: false,
+                  colors: const [
+                    DesignSystem.primary,
+                    DesignSystem.accentGlow,
+                    DesignSystem.primaryDark,
+                  ],
+                ),
               ),
-            ),
             // Main content
             GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -683,6 +687,8 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     // Force sync before disposal
     _store?.forceSyncNow();
+    // Flush any pending daily summary writes
+    unawaited(ActivityStore.flushPendingWrites());
     // Resume ad preloading when counter session ends
     AdManager.instance.onCounterSessionEnd();
     _confettiController.dispose();

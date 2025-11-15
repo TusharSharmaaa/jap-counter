@@ -1,7 +1,9 @@
+import 'dart:async' show Completer, Timer;
 import 'dart:convert';
 
 import '../core/prefs_manager.dart';
 import 'streak_store.dart';
+import 'counter_store.dart';
 
 /// Local date helper (YYYY-MM-DD) used by ActivityStore.
 String _yyyymmdd(DateTime d) {
@@ -138,31 +140,102 @@ class ActivityStore {
 
   static Future<int> currentStreakDays() => currentStreak();
 
+  // OPTIMIZATION: Batch/defer writes to reduce SharedPreferences I/O
+  static int? _pendingJaps;
+  static int? _pendingMalas;
+  static Timer? _batchWriteTimer;
+  static Completer<void>? _pendingWriteCompleter;
+
+  /// Record daily summary with batching for performance.
+  /// Writes are batched and deferred to reduce SharedPreferences I/O on every tap.
+  /// PERF: This was called on every tap before - now batches writes every 2 seconds or on flush.
   static Future<void> recordDailySummary(int japs, int malas) async {
     // Validate inputs to prevent negative values
     final validJaps = japs < 0 ? 0 : japs;
     final validMalas = malas < 0 ? 0 : malas;
     
-    final prefs = await PrefsManager.instance;
-    final raw = prefs.getString(_kDailyHistory);
-    Map<String, dynamic> history;
-    try {
-      history = raw == null
-          ? <String, dynamic>{}
-          : Map<String, dynamic>.from(jsonDecode(raw));
-    } catch (e) {
-      // Handle corrupted JSON data
-      history = <String, dynamic>{};
+    // Update pending values
+    _pendingJaps = validJaps;
+    _pendingMalas = validMalas;
+    
+    // Cancel existing timer
+    _batchWriteTimer?.cancel();
+    
+    // Create new completer if needed
+    _pendingWriteCompleter ??= Completer<void>();
+    final completer = _pendingWriteCompleter!;
+    
+    // Schedule batched write after 2 seconds of inactivity
+    _batchWriteTimer = Timer(const Duration(seconds: 2), () async {
+      await _flushDailySummary();
+    });
+    
+    // Also flush immediately every 10 taps (every 10th call)
+    // This ensures data is persisted frequently enough
+    if ((validJaps % 10) == 0) {
+      await _flushDailySummary();
     }
-    final key = _yyyymmdd(DateTime.now());
-    history[key] = {
-      'japs': validJaps,
-      'malas': validMalas,
-    };
-    await prefs.setString(_kDailyHistory, jsonEncode(history));
-    // Invalidate history cache
-    _cachedHistory = null;
-    _cachedHistoryDate = null;
+    
+    // Return the completer's future so callers can await if needed
+    return completer.future;
+  }
+  
+  /// Flush pending daily summary write to disk immediately.
+  /// Called on app background, every 10 taps, or after 2 seconds of inactivity.
+  static Future<void> _flushDailySummary() async {
+    if (_pendingJaps == null || _pendingMalas == null) {
+      return;
+    }
+    
+    final japs = _pendingJaps!;
+    final malas = _pendingMalas!;
+    
+    // Clear pending values
+    _pendingJaps = null;
+    _pendingMalas = null;
+    _batchWriteTimer?.cancel();
+    _batchWriteTimer = null;
+    
+    final completer = _pendingWriteCompleter;
+    _pendingWriteCompleter = null;
+    
+    try {
+      final prefs = await PrefsManager.instance;
+      final raw = prefs.getString(_kDailyHistory);
+      Map<String, dynamic> history;
+      try {
+        history = raw == null
+            ? <String, dynamic>{}
+            : Map<String, dynamic>.from(jsonDecode(raw));
+      } catch (e) {
+        // Handle corrupted JSON data
+        history = <String, dynamic>{};
+      }
+      final key = _yyyymmdd(DateTime.now());
+      history[key] = {
+        'japs': japs,
+        'malas': malas,
+      };
+      await prefs.setString(_kDailyHistory, jsonEncode(history));
+      
+      // Invalidate history cache
+      _cachedHistory = null;
+      _cachedHistoryDate = null;
+      
+      // Invalidate lifetime malas cache since history changed
+      CounterStore.invalidateLifetimeMalasCache();
+      
+      // Complete the completer to notify awaiting callers
+      completer?.complete();
+    } catch (e) {
+      // If write fails, complete with error
+      completer?.completeError(e);
+    }
+  }
+  
+  /// Force immediate flush of pending writes (called on app background/close).
+  static Future<void> flushPendingWrites() async {
+    await _flushDailySummary();
   }
 
   // Cache for daily history to improve performance

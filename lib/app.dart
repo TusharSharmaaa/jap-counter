@@ -62,9 +62,13 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       unawaited(SyncService.syncToday());
+      // Flush pending writes when app goes to background
+      unawaited(ActivityStore.flushPendingWrites());
     } else if (state == AppLifecycleState.detached) {
       // App is being closed - mark it so timer resets on next open
       unawaited(_timerService.markAppClosed());
+      // Flush pending writes before app closes
+      unawaited(ActivityStore.flushPendingWrites());
     } else if (state == AppLifecycleState.resumed) {
       unawaited(_timerService.load());
     }
