@@ -122,6 +122,26 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     if (!mounted) return;
     await initializeDateFormatting(language == 'hi' ? 'hi' : 'en');
     setState(() => _language = language);
+    
+    // Reschedule notifications with new language
+    unawaited(_rescheduleNotificationsForLanguage(language));
+  }
+  
+  Future<void> _rescheduleNotificationsForLanguage(String language) async {
+    try {
+      final ns = NotificationService();
+      await ns.init();
+      final allowed = await ns.areNotificationsAllowed();
+      if (allowed) {
+        // Reschedule all notifications with the new language
+        await ns.scheduleDefaults(language: language);
+        await ns.scheduleDailyMotivation(language: language);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[App] Failed to reschedule notifications for language change: $e');
+      }
+    }
   }
 
   String _translate(String key, {Map<String, String>? args}) {
