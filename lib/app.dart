@@ -261,16 +261,19 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                   final fontSize = isNarrow ? 9.0 : 10.0;
                   final horizontalPadding = isNarrow ? 4.0 : 8.0;
                   final verticalPadding = isNarrow ? 4.0 : 6.0;
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
                   
                   return Padding(
                     padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 12, vertical: 8),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
+                        color: isDark 
+                            ? Theme.of(context).colorScheme.surface
+                            : Colors.white.withValues(alpha: 0.95),
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
+                            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
                             blurRadius: 24,
                             offset: const Offset(0, -4),
                           ),
