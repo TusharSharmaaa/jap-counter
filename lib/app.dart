@@ -77,11 +77,12 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   int _index = 0;
   final GlobalKey<_StatsPageState> _statsKey = GlobalKey<_StatsPageState>();
+  final GlobalKey<CounterPageState> _counterKey = GlobalKey<CounterPageState>();
   ThemeMode _themeMode = ThemeMode.system;
   String _language = 'en';
 
   late final List<Widget> _pages = [
-    const CounterPage(),
+    CounterPage(key: _counterKey),
     _StatsPage(key: _statsKey),
     const _GitaTab(),
     TimerPage(
@@ -337,6 +338,14 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     if (leavingTimer) {
       unawaited(_pauseTimerForNav());
     }
+    
+    // Refresh counter page goal when navigating to counter tab
+    // This ensures goal is always in sync, especially when coming from settings
+    if (index == 0) {
+      // Navigating to counter page - refresh goal to sync with any changes
+      _counterKey.currentState?.refreshGoalFromSettings();
+    }
+    
     if (index == 1) {
       _statsKey.currentState?.onBecameVisible();
     } else if (_index == 1) {

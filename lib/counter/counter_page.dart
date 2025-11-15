@@ -27,10 +27,10 @@ class CounterPage extends StatefulWidget {
   const CounterPage({super.key});
 
   @override
-  State<CounterPage> createState() => _CounterPageState();
+  State<CounterPage> createState() => CounterPageState();
 }
 
-class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
+class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   CounterStore? _store;
   bool _loading = true;
   int _lifetime = 0;
@@ -41,6 +41,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   bool _confettiShownRecently = false;
   bool _glowActive = false;
   Timer? _malaResetTimer;
+  DateTime? _lastGoalRefresh;
   
   // Performance optimization: Use ValueNotifier for frequently updated values
   // This avoids rebuilding the entire widget tree on every tap
@@ -74,6 +75,23 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       // App going to background - force sync and flush pending writes
       _store?.forceSyncNow();
       unawaited(ActivityStore.flushPendingWrites());
+    } else if (state == AppLifecycleState.resumed) {
+      // App resumed - refresh goal to sync with any changes from settings
+      unawaited(_refreshGoal());
+    }
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh goal when page becomes visible (e.g., navigating back from settings)
+    // This ensures goal is always in sync with settings
+    // Throttle refreshes to avoid excessive calls
+    final now = DateTime.now();
+    if (_lastGoalRefresh == null || 
+        now.difference(_lastGoalRefresh!) > const Duration(seconds: 1)) {
+      _lastGoalRefresh = now;
+      unawaited(_refreshGoal());
     }
   }
 
@@ -86,9 +104,6 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     final store = await CounterStore.create();
     final goalStore = await GoalStore.create();
 
-    final congratulatedToday =
-        goalStore.lastCongratsDate == GoalStore.todayKey();
-
     // Update ValueNotifiers instead of setState for frequently changing values
     _todayNotifier.value = store.todayJaps;
     _lifetimeMalasNotifier.value = store.lifetimeMalas;
@@ -98,9 +113,84 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       _store = store;
       _lifetime = store.lifetimeJaps;
       _dailyGoal = goalStore.dailyMalasGoal;
-      _goalCompletedShown = congratulatedToday;
       _loading = false;
     });
+    
+    // Recalculate goal completion status after setting goal
+    await _refreshGoalStatus();
+  }
+  
+  /// Public method to refresh goal when returning from settings
+  /// This is called from app.dart when navigating back from settings tab
+  Future<void> refreshGoalFromSettings() async {
+    // Force refresh without throttling when coming from settings
+    _lastGoalRefresh = null;
+    await _refreshGoal();
+  }
+  
+  /// Refresh goal from store and recalculate completion status
+  /// This ensures goal is always in sync with settings
+  Future<void> _refreshGoal() async {
+    if (_store == null) return;
+    
+    final goalStore = await GoalStore.create();
+    final currentGoal = goalStore.dailyMalasGoal;
+    final oldGoal = _dailyGoal;
+    
+    if (mounted && _dailyGoal != currentGoal) {
+      setState(() {
+        _dailyGoal = currentGoal;
+      });
+      
+      // If goal is increased and user hasn't met the new goal yet,
+      // clear the congrats date so status recalculates correctly
+      // This ensures "goal met" status is cleared when goal increases beyond current progress
+      if (currentGoal > oldGoal && oldGoal > 0) {
+        final currentMalas = _malas;
+        if (currentMalas < currentGoal) {
+          // User hasn't met the new goal yet, so clear congrats date
+          // This will reset the "goal met" status until they meet the new goal
+          await goalStore.clearLastCongrats();
+        }
+      }
+      
+      // Recalculate goal completion status when goal changes
+      await _refreshGoalStatus();
+    } else if (mounted) {
+      // Even if goal hasn't changed, refresh status to ensure it's accurate
+      await _refreshGoalStatus();
+    }
+  }
+  
+  /// Recalculate goal completion status based on current malas and goal
+  /// This ensures the status is accurate even when goal is updated
+  Future<void> _refreshGoalStatus() async {
+    if (_store == null) return;
+    
+    final goalStore = await GoalStore.create();
+    final currentMalas = _malas;
+    final currentGoal = _dailyGoal;
+    
+    // Check if goal was already congratulated today
+    final congratulatedToday =
+        goalStore.lastCongratsDate == GoalStore.todayKey();
+    
+    // CRITICAL: Recalculate goal completion status correctly
+    // Goal is met ONLY if:
+    // 1. Goal is set (> 0)
+    // 2. Current malas >= current goal (not the old goal)
+    // 3. We have already congratulated today (meaning we showed the dialog)
+    // 
+    // If goal is updated to a higher value and user hasn't met the new goal yet,
+    // we should NOT show "goal met" even if they met the old goal
+    final goalMet = currentGoal > 0 && currentMalas >= currentGoal;
+    final shouldShowCompleted = goalMet && congratulatedToday;
+    
+    if (mounted && _goalCompletedShown != shouldShowCompleted) {
+      setState(() {
+        _goalCompletedShown = shouldShowCompleted;
+      });
+    }
   }
 
   Future<void> _handleJapTap() async {
@@ -245,11 +335,22 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   }
 
   Future<void> _checkGoalCompletion() async {
+    // First refresh goal to ensure we have the latest value
+    await _refreshGoal();
+    
     final goalStore = await GoalStore.create();
-    if (!_goalCompletedShown && _dailyGoal > 0 && _malas >= _dailyGoal) {
-      _goalCompletedShown = true;
+    final currentMalas = _malas;
+    final currentGoal = _dailyGoal;
+    
+    // Check if goal is met and we haven't shown the dialog yet
+    if (!_goalCompletedShown && currentGoal > 0 && currentMalas >= currentGoal) {
       await goalStore.setLastCongratsToday();
       if (!mounted) return;
+      
+      setState(() {
+        _goalCompletedShown = true;
+      });
+      
       await _showGoalCompleteDialog();
     }
   }
@@ -296,17 +397,32 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
         }
         
         return AlertDialog(
-          title: Text(dialogSafeTr('counter.goal.complete.title')),
+          backgroundColor: Colors.white,
+          title: Text(
+            dialogSafeTr('counter.goal.complete.title'),
+            style: const TextStyle(
+              color: Color(0xFF1A1A1A),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           content: Text(
             dialogSafeTr(
               'counter.goal.complete.message',
               args: {'count': '$_dailyGoal', 'suffix': suffix},
             ),
+            style: const TextStyle(
+              color: Color(0xFF333333),
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text(dialogSafeTr('common.ok')),
+              child: Text(
+                dialogSafeTr('common.ok'),
+                style: const TextStyle(
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
             ),
           ],
         );
@@ -497,20 +613,50 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     );
     if (result != null) {
       final sanitized = result.clamp(0, 50);
+      final goalStore = await GoalStore.create();
+      final oldGoal = _dailyGoal;
+      final currentMalas = _malas;
+      
+      await goalStore.setDailyMalasGoal(sanitized);
+      
+      // Update local state
       setState(() {
         _dailyGoal = sanitized;
-        _goalCompletedShown = _dailyGoal > 0 && _malas >= _dailyGoal;
       });
-      final goalStore = await GoalStore.create();
-      await goalStore.setDailyMalasGoal(sanitized);
-      if (_dailyGoal == 0) {
-        await goalStore.setLastCongratsToday();
+      
+      // If goal is increased and user hasn't met the new goal yet,
+      // clear the congrats date so status recalculates correctly
+      if (sanitized > oldGoal && oldGoal > 0 && currentMalas < sanitized) {
+        await goalStore.clearLastCongrats();
       }
+      
+      // If goal is set to 0, clear congrats to reset the status
+      if (sanitized == 0) {
+        await goalStore.clearLastCongrats();
+        if (mounted) {
+          setState(() {
+            _goalCompletedShown = false;
+          });
+        }
+      }
+      
+      // Recalculate goal completion status after updating goal
+      await _refreshGoalStatus();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Refresh goal when page is built (throttled to avoid excessive calls)
+    // This ensures goal is synced when navigating back from settings
+    final now = DateTime.now();
+    if (!_loading && _store != null && 
+        (_lastGoalRefresh == null || 
+         now.difference(_lastGoalRefresh!) > const Duration(seconds: 2))) {
+      _lastGoalRefresh = now;
+      unawaited(_refreshGoal());
+    }
+    
     if (_loading) {
       return Scaffold(
         backgroundColor: DesignSystem.backgroundLight,

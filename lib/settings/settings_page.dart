@@ -7,7 +7,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/prefs_manager.dart';
 import '../notifications/notification_service.dart';
-import '../data/goal_store.dart';
 import '../data/language_store.dart';
 import '../legal/privacy_policy.dart';
 import '../legal/terms_conditions.dart';
@@ -40,7 +39,6 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _reminders = false;
   bool _remindersLocked = false;
-  int _goalMalas = 1;
   TapFeedbackSettings? _feedbackSettings;
 
   static const _keyReminders = 'notificationsEnabled';
@@ -53,7 +51,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _load() async {
     final prefs = await PrefsManager.instance;
-    final gs = await GoalStore.create();
     final ns = NotificationService();
     await ns.init();
     final allowed = await ns.areNotificationsAllowed();
@@ -68,7 +65,6 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       _remindersLocked = allowed;
       _reminders = shouldEnable;
-      _goalMalas = gs.dailyMalasGoal;
       _feedbackSettings = feedbackSettings;
     });
   }
@@ -136,112 +132,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _openGoalSheet() async {
-    var temp = _goalMalas;
-    final result = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
-          child: StatefulBuilder(
-            builder: (context, setModalState) {
-              final label = _formatGoalLabel(context, temp);
-              const quickOptions = [0, 1, 2, 3, 5, 8, 10];
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr('settings.goal.title'),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    context.tr('settings.goal.subtitle'),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: quickOptions.map((option) {
-                      final optionLabel = _formatGoalLabel(context, option);
-                      return ChoiceChip(
-                        label: Text(optionLabel),
-                        selected: temp == option,
-                        onSelected: (_) {
-                          HapticFeedback.selectionClick();
-                          setModalState(() => temp = option);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  Slider(
-                    min: 0,
-                    max: 20,
-                    divisions: 20,
-                    value: temp.toDouble(),
-                    label: '$temp',
-                    onChanged: (value) {
-                      HapticFeedback.lightImpact();
-                      setModalState(() => temp = value.round());
-                    },
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      label,
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text(context.tr('common.cancel')),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton(
-                        onPressed: () => Navigator.pop<int>(context, temp),
-                        child: Text(context.tr('common.save')),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        );
-      },
-    );
-
-    if (result == null) return;
-
-    setState(() => _goalMalas = result);
-    final gs = await GoalStore.create();
-    await gs.setDailyMalasGoal(result);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(context.tr('settings.goal.updated')),
-        duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = widget.themeMode == ThemeMode.dark;
     final language = widget.language;
-    final goalLabel = _formatGoalLabel(context, _goalMalas);
 
     return Scaffold(
       backgroundColor: DesignSystem.backgroundLight,
@@ -362,27 +256,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
             const SizedBox(height: 16),
             _SettingsSection(
-              icon: Icons.flag,
-              title: context.tr('settings.goal'),
-              children: [
-                _SettingsActionTile(
-                  icon: Icons.flag_outlined,
-                  title: context.tr('settings.goal.title'),
-                  subtitle: context.tr('settings.goal.subtitle'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _ValuePill(label: goalLabel),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.chevron_right),
-                    ],
-                  ),
-                  onTap: _openGoalSheet,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _SettingsSection(
               icon: Icons.notifications_active,
               title: context.tr('settings.notifications'),
               children: [
@@ -457,15 +330,6 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
     );
-  }
-
-  String _formatGoalLabel(BuildContext context, int value) {
-    if (value == 0) return context.tr('common.off');
-    final language = widget.language;
-    if (language == 'hi') {
-      return '$value माला${value == 1 ? '' : 'एँ'}';
-    }
-    return '$value mala${value == 1 ? '' : 's'}';
   }
 
   Widget _aboutFooter(BuildContext context) {

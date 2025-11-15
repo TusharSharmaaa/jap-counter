@@ -33,6 +33,11 @@ class GoalStore {
     final d = _formatDate(DateTime.now());
     await _prefs.setString(_kLastCongrats, d);
   }
+  
+  /// Clear the last congrats date (useful when goal is increased)
+  Future<void> clearLastCongrats() async {
+    await _prefs.remove(_kLastCongrats);
+  }
 
   static String todayKey() {
     return _formatDate(DateTime.now());
