@@ -1,30 +1,62 @@
 import 'package:flutter/material.dart';
+import 'design_system.dart';
 
 ThemeData buildTheme(Brightness b) {
+  // Create color scheme based on brand colors
+  // Use light theme for brand colors (design system is light-themed)
+  final effectiveBrightness = Brightness.light;
+  
+  final colorScheme = ColorScheme.fromSeed(
+    seedColor: DesignSystem.primary,
+    brightness: effectiveBrightness,
+    primary: DesignSystem.primary,
+    secondary: DesignSystem.accentGlow,
+    surface: DesignSystem.backgroundLight,
+    error: DesignSystem.primaryDark,
+  ).copyWith(
+    // Ensure all text colors are dark for visibility on light backgrounds
+    onSurface: const Color(0xFF1A1A1A),
+    onSurfaceVariant: const Color(0xFF666666),
+    onBackground: const Color(0xFF1A1A1A),
+    onPrimary: Colors.white, // Keep white on primary/orange buttons
+  );
+
   final base = ThemeData(
     useMaterial3: true,
-    brightness: b,
+    brightness: effectiveBrightness, // Match ColorScheme brightness
     visualDensity: VisualDensity.adaptivePlatformDensity,
-    colorSchemeSeed: Colors.pinkAccent,
+    colorScheme: colorScheme,
   );
 
   return base.copyWith(
+    scaffoldBackgroundColor: DesignSystem.backgroundLight,
     appBarTheme: AppBarTheme(
       elevation: 0,
       centerTitle: true,
-      titleTextStyle: TextStyle(
-        fontWeight: FontWeight.w600,
-        fontSize: 20,
-        color: b == Brightness.dark ? Colors.white : Colors.black,
-      ),
+      backgroundColor: Colors.transparent,
+      foregroundColor: const Color(0xFF1A1A1A), // Dark text for AppBar
+      titleTextStyle: DesignSystem.textTitle.copyWith(fontSize: 20),
     ),
-    cardTheme: const CardThemeData(
-      margin: EdgeInsets.all(8),
+    cardTheme: CardThemeData(
+      margin: const EdgeInsets.all(DesignSystem.spacingSM),
       clipBehavior: Clip.antiAliasWithSaveLayer,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(16)),
+        borderRadius: DesignSystem.borderRadiusCard,
       ),
-      elevation: 2,
+      elevation: 0,
+      color: DesignSystem.glassColor,
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: DesignSystem.primaryButton,
+    ),
+    textTheme: TextTheme(
+      titleLarge: DesignSystem.textTitle,
+      titleMedium: DesignSystem.textTitle.copyWith(fontSize: 20),
+      bodyLarge: DesignSystem.textLabel,
+      bodyMedium: DesignSystem.textLabel.copyWith(fontSize: 14),
+      bodySmall: DesignSystem.textSmall,
+      labelLarge: DesignSystem.textLabel,
+      labelSmall: DesignSystem.textSmall12,
     ),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {

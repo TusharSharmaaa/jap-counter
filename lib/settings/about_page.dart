@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../theme/design_system.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -11,22 +12,22 @@ class AboutPage extends StatelessWidget {
       builder: (context, snapshot) {
         final version = snapshot.data?.version ?? '';
         return Scaffold(
+          backgroundColor: DesignSystem.backgroundLight,
           appBar: AppBar(
             title: const Text('About App'),
             backgroundColor: Colors.transparent,
             elevation: 0,
             flexibleSpace: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                    Colors.transparent,
-                  ],
-                ),
+              decoration: const BoxDecoration(
+                color: DesignSystem.backgroundLight,
               ),
             ),
           ),
-          body: Padding(
+          body: Container(
+            decoration: const BoxDecoration(
+              color: DesignSystem.backgroundLight,
+            ),
+            child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -49,7 +50,7 @@ class AboutPage extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 22,
-                      color: Colors.white,
+                      color: Color(0xFF1A1A1A),
                     ),
                   ),
                 ),
@@ -67,6 +68,7 @@ class AboutPage extends StatelessWidget {
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
+            ),
             ),
           ),
         );

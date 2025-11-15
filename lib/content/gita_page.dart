@@ -9,6 +9,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/ad_manager.dart';
 import '../core/gita_progress_manager.dart';
 import '../utils/quote_image_generator.dart';
+import '../theme/design_system.dart';
+import '../widgets/widgets.dart';
 import 'gita_service.dart';
 import 'quote_theme.dart';
 
@@ -366,8 +368,23 @@ class _GitaPageState extends State<GitaPage> {
     return ScaffoldMessenger(
       key: _messengerKey,
       child: Scaffold(
-        appBar: AppBar(title: const Text('Gita'), centerTitle: true),
-        body: SafeArea(
+        backgroundColor: DesignSystem.backgroundLight,
+        appBar: AppBar(
+          title: const Text('Gita'),
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              color: DesignSystem.backgroundLight,
+            ),
+          ),
+        ),
+        body: Container(
+          decoration: const BoxDecoration(
+            color: DesignSystem.backgroundLight,
+          ),
+          child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
               final media = MediaQuery.of(context);
@@ -384,16 +401,19 @@ class _GitaPageState extends State<GitaPage> {
                     (theme.textTheme.headlineSmall?.fontSize ?? 24) * textScale,
                 height: 1.5,
                 fontWeight: FontWeight.w600,
+                color: const Color(0xFF1A1A1A), // Explicit dark color for Sanskrit
               );
               final translationStyle = theme.textTheme.bodyLarge?.copyWith(
                 fontSize:
                     (theme.textTheme.bodyLarge?.fontSize ?? 16) * textScale,
                 height: 1.5,
+                color: const Color(0xFF1A1A1A), // Explicit dark color for translation
               );
               final transliterationStyle = theme.textTheme.titleMedium?.copyWith(
                 fontSize:
                     (theme.textTheme.titleMedium?.fontSize ?? 18) * textScale,
                 height: 1.4,
+                color: const Color(0xFF1A1A1A), // Explicit dark color for transliteration
               );
               final double buttonHeight =
                   constraints.maxHeight < 640 ? 48 : 56;
@@ -519,6 +539,7 @@ class _GitaPageState extends State<GitaPage> {
             },
           ),
         ),
+        ),
       ),
     );
   }
@@ -548,25 +569,22 @@ class _ShlokaCard extends StatelessWidget {
         ?.copyWith(
       height: 1.6,
       fontWeight: FontWeight.w600,
+      color: const Color(0xFF1A1A1A), // Explicit dark color for Sanskrit text
     );
     final TextStyle? resolvedTranslationStyle =
         (translationStyle ?? textTheme.bodyLarge)?.copyWith(
       height: 1.6,
+      color: const Color(0xFF1A1A1A), // Explicit dark color for translation
     );
     final TextStyle? resolvedTransliterationStyle =
         (transliterationStyle ?? textTheme.titleMedium)?.copyWith(
       height: 1.5,
+      color: const Color(0xFF1A1A1A), // Explicit dark color for transliteration
     );
 
-    return Card(
-      color: theme.cardColor,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.6)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+    return GlassCard(
+      padding: const EdgeInsets.all(20),
+      borderRadius: 24,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -578,6 +596,7 @@ class _ShlokaCard extends StatelessWidget {
                     shloka.ref,
                     style: textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
+                      color: const Color(0xFF1A1A1A), // Explicit dark color
                     ),
                   ),
                 ),
@@ -615,7 +634,6 @@ class _ShlokaCard extends StatelessWidget {
             ],
           ],
         ),
-      ),
     );
   }
 }

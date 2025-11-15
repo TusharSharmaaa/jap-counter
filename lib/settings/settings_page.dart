@@ -16,6 +16,8 @@ import '../ui/glow_card.dart';
 import '../l10n/app_localizations.dart';
 import '../data/tap_feedback_settings.dart';
 import '../counter/tap_feedback_controller.dart';
+import '../theme/design_system.dart';
+import '../widgets/widgets.dart';
 
 class SettingsPage extends StatefulWidget {
   final ThemeMode themeMode;
@@ -242,8 +244,22 @@ class _SettingsPageState extends State<SettingsPage> {
     final goalLabel = _formatGoalLabel(context, _goalMalas);
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('settings.title'))),
-      body: SafeArea(
+      backgroundColor: DesignSystem.backgroundLight,
+      appBar: AppBar(
+        title: Text(context.tr('settings.title')),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            color: DesignSystem.backgroundLight,
+          ),
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          color: DesignSystem.backgroundLight,
+        ),
+        child: SafeArea(
         child: ListView(
           padding: EdgeInsets.fromLTRB(
             16,
@@ -438,6 +454,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _aboutFooter(context),
           ],
         ),
+        ),
       ),
     );
   }
@@ -488,9 +505,10 @@ class _SettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlowCard(
+    return GlassCard(
       margin: EdgeInsets.zero,
       padding: const EdgeInsets.all(18),
+      borderRadius: DesignSystem.radiusCard,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

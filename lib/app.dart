@@ -24,6 +24,7 @@ import 'data/goal_store.dart';
 import 'theme/neumorph.dart';
 import 'gamify/gamify_store.dart';
 import 'theme/theme.dart';
+import 'theme/design_system.dart';
 import 'data/language_store.dart';
 import 'l10n/app_localizations.dart';
 import 'sync/sync_service.dart';
@@ -31,6 +32,7 @@ import 'utils/weekly_chart_data.dart';
 import 'counter/counter_page.dart';
 import 'timer/timer_service.dart';
 import 'core/sound_manager.dart';
+import 'widgets/widgets.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 class App extends StatefulWidget {
@@ -229,14 +231,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        offset: const Offset(2, 2),
-                        blurRadius: 6,
-                      ),
-                      BoxShadow(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        offset: const Offset(-2, -2),
-                        blurRadius: 6,
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 24,
+                        offset: const Offset(0, -4),
                       ),
                     ],
                   ),
@@ -585,18 +582,14 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     // Load goal (synchronously via FutureBuilder below to avoid blocking build)
 
     return Scaffold(
+      backgroundColor: DesignSystem.backgroundLight,
       appBar: AppBar(
         title: Text(context.tr('stats.title')),
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                Colors.transparent,
-              ],
-            ),
+          decoration: const BoxDecoration(
+            color: DesignSystem.backgroundLight,
           ),
         ),
         actions: [
@@ -620,28 +613,32 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          RefreshIndicator(
-            onRefresh: _refresh,
-            child: _buildStatsList(context, todayMalas, lifetimeMalas),
-          ),
-          Align(
-            alignment: Alignment.topCenter,
-            child: ConfettiWidget(
-              confettiController: _confetti,
-              blastDirectionality: BlastDirectionality.explosive,
-              emissionFrequency: 0.05,
-              numberOfParticles: 20,
-              colors: const [
-                Colors.orange,
-                Colors.yellow,
-                Colors.pink,
-                Colors.white,
-              ],
+      body: Container(
+        decoration: const BoxDecoration(
+          color: DesignSystem.backgroundLight,
+        ),
+        child: Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: _refresh,
+              child: _buildStatsList(context, todayMalas, lifetimeMalas),
             ),
-          ),
-        ],
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConfettiWidget(
+                confettiController: _confetti,
+                blastDirectionality: BlastDirectionality.explosive,
+                emissionFrequency: 0.05,
+                numberOfParticles: 20,
+                colors: const [
+                  DesignSystem.primary,
+                  DesignSystem.accentGlow,
+                  DesignSystem.primaryDark,
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -693,15 +690,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  Container(
+                  GlassCard(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Theme.of(context).dividerColor),
-                    ),
+                    borderRadius: 12,
                     child: Builder(
                       builder: (context) {
                         final theme = Theme.of(context);
@@ -728,7 +719,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           children: [
                             Text(
                               context.tr('stats.currentStreak'),
-                              style: theme.textTheme.titleMedium,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: const Color(0xFF1A1A1A), // Explicit dark color
+                              ),
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -745,6 +738,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                 '🔥 $streak',
                                 style: theme.textTheme.labelLarge?.copyWith(
                                   fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF1A1A1A), // Explicit dark color
                                 ),
                               ),
                             ),
@@ -759,7 +753,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             streakMessage,
-                            style: theme.textTheme.bodySmall,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF1A1A1A), // Explicit dark color
+                            ),
                           ),
                         ),
                       ],
@@ -780,15 +776,17 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           'streak_40' => context.tr('stats.badge.streak40'),
                           _ => badge,
                         };
-                        return Container(
+                        return GlassCard(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 8,
                           ),
-                          decoration: Neo.pill(context),
+                          borderRadius: 20,
                           child: Text(
                             label,
-                            style: Theme.of(context).textTheme.labelLarge,
+                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: const Color(0xFF1A1A1A), // Explicit dark color
+                            ),
                           ),
                         );
                       }).toList(),
@@ -798,23 +796,116 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
               Row(
                 children: [
                   Expanded(
-                    child: _NeoTile(
-                      title: context.tr('stats.metric.todayJaps'),
-                      value: todayJapsFromCounter.toString(),
+                    child: GlassCard(
+                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
+                      borderRadius: DesignSystem.radiusCard,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            context.tr('stats.metric.todayJaps'),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF666666),
+                              letterSpacing: 0.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              todayJapsFromCounter.toString(),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1A1A),
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: DesignSystem.spacingSM),
                   Expanded(
-                    child: _NeoTile(
-                      title: context.tr('stats.metric.todayMalas'),
-                      value: todayMalasFromCounter.toString(),
+                    child: GlassCard(
+                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
+                      borderRadius: DesignSystem.radiusCard,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            context.tr('stats.metric.todayMalas'),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF666666),
+                              letterSpacing: 0.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              todayMalasFromCounter.toString(),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1A1A),
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: DesignSystem.spacingSM),
                   Expanded(
-                    child: _NeoTile(
-                      title: context.tr('stats.metric.lifetimeMalas'),
-                      value: lifetimeMalasFromCounter.toString(),
+                    child: GlassCard(
+                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
+                      borderRadius: DesignSystem.radiusCard,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            context.tr('stats.metric.lifetimeMalas'),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF666666),
+                              letterSpacing: 0.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              lifetimeMalasFromCounter.toString(),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1A1A),
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -823,16 +914,78 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
               Row(
                 children: [
                   Expanded(
-                    child: _NeoTile(
-                      title: context.tr('stats.metric.todayMeditation'),
-                      value: _todayMin.toString(),
+                    child: GlassCard(
+                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
+                      borderRadius: DesignSystem.radiusCard,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            context.tr('stats.metric.todayMeditation'),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF666666),
+                              letterSpacing: 0.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _todayMin.toString(),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1A1A),
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: DesignSystem.spacingSM),
                   Expanded(
-                    child: _NeoTile(
-                      title: context.tr('stats.metric.lifetimeMeditation'),
-                      value: _lifetimeMin.toString(),
+                    child: GlassCard(
+                      padding: const EdgeInsets.all(DesignSystem.spacingMD),
+                      borderRadius: DesignSystem.radiusCard,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            context.tr('stats.metric.lifetimeMeditation'),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF666666),
+                              letterSpacing: 0.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _lifetimeMin.toString(),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1A1A1A),
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -841,13 +994,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
               Builder(
                 builder: (context) {
                   final reached = todayMalasFromCounter >= goal;
-                  return Container(
-                    margin: const EdgeInsets.only(top: 8),
+                  return GlassCard(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Theme.of(context).dividerColor),
-                    ),
+                    borderRadius: 12,
                     child: Row(
                       children: [
                         Icon(
@@ -865,7 +1014,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                   : 'stats.dailyGoal.pending',
                               args: {'todayMalas': '$todayMalasFromCounter', 'goal': '$goal'},
                             ),
-                            style: Theme.of(context).textTheme.bodyMedium,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: const Color(0xFF1A1A1A), // Explicit dark color
+                            ),
                           ),
                         ),
                       ],
@@ -883,19 +1034,17 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                   });
                   final safeMax = maxMalas == 0 ? 1 : maxMalas;
 
-                  return Container(
-                    margin: const EdgeInsets.only(top: 8),
+                  return GlassCard(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: theme.dividerColor),
-                    ),
+                    borderRadius: 12,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           context.tr('stats.progressTitle'),
-                          style: theme.textTheme.titleMedium,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: const Color(0xFF1A1A1A), // Explicit dark color
+                          ),
                         ),
                         const SizedBox(height: 8),
                         RepaintBoundary(
@@ -946,6 +1095,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                             style: theme.textTheme.labelSmall?.copyWith(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 11,
+                                              color: const Color(0xFF1A1A1A), // Explicit dark color
                                             ),
                                             textAlign: TextAlign.center,
                                           ),
@@ -990,6 +1140,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                           style: theme.textTheme.labelSmall?.copyWith(
                                             fontWeight: FontWeight.w600,
                                             fontSize: 11,
+                                            color: const Color(0xFF1A1A1A), // Explicit dark color
                                           ),
                                           textAlign: TextAlign.center,
                                         ),
@@ -997,6 +1148,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                           dateLabel,
                                           style: theme.textTheme.labelSmall?.copyWith(
                                             fontSize: 10,
+                                            color: const Color(0xFF666666), // Explicit dark color
                                           ),
                                           textAlign: TextAlign.center,
                                         ),
@@ -1062,12 +1214,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                       }
                     },
                     borderRadius: BorderRadius.circular(12),
-                    child: Container(
+                    child: GlassCard(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Theme.of(context).dividerColor),
-                      ),
+                      borderRadius: 12,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1076,7 +1225,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           Expanded(
                             child: Text(
                               dedicationText,
-                              style: Theme.of(context).textTheme.bodyMedium,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: const Color(0xFF1A1A1A), // Explicit dark color
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1147,12 +1298,16 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   context.tr('stats.daysActive', args: {'count': '$activeDays'}),
-                  style: Theme.of(context).textTheme.bodyLarge,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: const Color(0xFF1A1A1A), // Explicit dark color
+                  ),
                 ),
               ),
               Text(
                 context.tr('stats.calendar'),
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: const Color(0xFF1A1A1A), // Explicit dark color
+                ),
               ),
               const SizedBox(height: 6),
               _ActivityCalendar(todayJaps: _today, todayMalas: todayMalas),
@@ -1180,56 +1335,6 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
 }
 
 // --- Re-add missing _NeoTile widget (used in StatsPage) ---
-class _NeoTile extends StatelessWidget {
-  final String title;
-  final String value;
-  const _NeoTile({required this.title, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: theme.colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            offset: const Offset(3, 3),
-            blurRadius: 6,
-          ),
-          BoxShadow(
-            color: Colors.white.withOpacity(0.6),
-            offset: const Offset(-3, -3),
-            blurRadius: 6,
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _ActivityCalendar extends StatefulWidget {
   final int todayJaps;
@@ -1390,6 +1495,7 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
                   DateFormat('MMMM yyyy', localeCode).format(_visibleMonth),
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
+                    color: const Color(0xFF1A1A1A), // Explicit dark color
                   ),
                 ),
               ),
@@ -1556,14 +1662,21 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(titleLabel, style: theme.textTheme.titleSmall),
+                Text(
+                  titleLabel,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF1A1A1A), // Explicit dark color
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   context.tr(
                     'stats.calendar.summary',
                     args: {'malas': '${entry.malas}', 'japs': '${entry.japs}'},
                   ),
-                  style: theme.textTheme.bodySmall,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF1A1A1A), // Explicit dark color
+                  ),
                 ),
               ],
             ),
@@ -1609,8 +1722,8 @@ class _CalendarCell extends StatelessWidget {
         ? theme.colorScheme.primary
         : theme.dividerColor.withOpacity(isCurrentMonth ? 1 : 0.4);
     final textColor = isCurrentMonth
-        ? theme.colorScheme.onSurface
-        : theme.colorScheme.onSurface.withOpacity(0.4);
+        ? const Color(0xFF1A1A1A) // Explicit dark color for current month
+        : const Color(0xFF999999); // Lighter gray for other months
 
     return GestureDetector(
       onTap: onTap,
@@ -1667,7 +1780,12 @@ class _LegendSwatch extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        Text(label, style: theme.textTheme.labelSmall),
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: const Color(0xFF1A1A1A), // Explicit dark color
+          ),
+        ),
       ],
     );
   }

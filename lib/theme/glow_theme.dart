@@ -1,31 +1,25 @@
 import 'package:flutter/material.dart';
+import 'design_system.dart';
 
 class GlowTheme {
-  static BoxDecoration card(BuildContext context) => BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-            blurRadius: 15,
-            spreadRadius: 2,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      );
+  /// Glass card with glow effect
+  static BoxDecoration card(BuildContext context) => DesignSystem.cardGlass;
 
-  static ButtonStyle filledButton(BuildContext context) => FilledButton.styleFrom(
-        backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.9),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        textStyle: const TextStyle(fontWeight: FontWeight.bold),
-      );
+  /// Card with glow shadow
+  static BoxDecoration cardGlow(BuildContext context) => DesignSystem.cardGlow;
 
-  static Shader linearGradient(BuildContext context) => LinearGradient(
-        colors: [
-          Theme.of(context).colorScheme.primary,
-          Theme.of(context).colorScheme.tertiary,
-        ],
-      ).createShader(const Rect.fromLTWH(0, 0, 200, 70));
+  /// Regular card
+  static BoxDecoration cardRegular(BuildContext context) => DesignSystem.cardRegular;
+
+  /// Primary button style
+  static ButtonStyle filledButton(BuildContext context) => DesignSystem.primaryButton;
+
+  /// Primary button with glow effect
+  static ButtonStyle filledButtonGlow(BuildContext context) => DesignSystem.primaryButtonGlow;
+
+  /// Gradient shader for text
+  static Shader linearGradient(BuildContext context) => DesignSystem.glowGradient.createShader(
+        const Rect.fromLTWH(0, 0, 200, 70),
+      );
 }
 

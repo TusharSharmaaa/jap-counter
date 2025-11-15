@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../theme/design_system.dart';
 
 class SplashPage extends StatefulWidget {
   final VoidCallback onComplete;
@@ -36,8 +37,12 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      body: Center(
+      backgroundColor: DesignSystem.backgroundLight,
+      body: Container(
+        decoration: const BoxDecoration(
+          color: DesignSystem.backgroundLight,
+        ),
+        child: Center(
         child: FadeTransition(
           opacity: _fade,
           child: Column(
@@ -61,13 +66,14 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Color(0xFF1A1A1A),
                     letterSpacing: 1.2,
                   ),
                 ),
               ),
             ],
           ),
+        ),
         ),
       ),
     );

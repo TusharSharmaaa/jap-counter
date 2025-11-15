@@ -16,6 +16,8 @@ import '../core/ad_manager.dart';
 import '../core/sound_manager.dart';
 import '../data/meditation_store.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/design_system.dart';
+import '../widgets/widgets.dart';
 import 'timer_service.dart';
 
 class TimerPage extends StatefulWidget {
@@ -607,8 +609,23 @@ class _TimerPageState extends State<TimerPage>
             : () => unawaited(_reset());
 
         return Scaffold(
-          appBar: AppBar(title: Text(context.tr('nav.timer')), centerTitle: true),
-          body: SafeArea(
+          backgroundColor: DesignSystem.backgroundLight,
+          appBar: AppBar(
+            title: Text(context.tr('nav.timer')),
+            centerTitle: true,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                color: DesignSystem.backgroundLight,
+              ),
+            ),
+          ),
+          body: Container(
+            decoration: const BoxDecoration(
+              color: DesignSystem.backgroundLight,
+            ),
+            child: SafeArea(
             child: Column(
               children: [
                 Padding(
@@ -730,6 +747,7 @@ class _TimerPageState extends State<TimerPage>
                 ),
               ],
             ),
+            ),
           ),
         );
       },
@@ -752,20 +770,9 @@ class _PrimaryTimerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: theme.dividerColor.withOpacity(.35)),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      borderRadius: 20,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -774,6 +781,7 @@ class _PrimaryTimerCard extends StatelessWidget {
             style: theme.textTheme.displayMedium?.copyWith(
               fontWeight: FontWeight.w600,
               letterSpacing: 1.2,
+              color: const Color(0xFF1A1A1A), // Explicit dark color for timer display
             ),
           ),
           const SizedBox(height: 16),
@@ -808,13 +816,9 @@ class _HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withOpacity(.4)),
-      ),
+      borderRadius: 16,
       child: Row(
         children: [
           Container(
@@ -884,19 +888,16 @@ class _DurationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withOpacity(.4)),
-      ),
+      borderRadius: 16,
       child: DropdownButtonFormField<int>(
         value: selected,
         icon: const Icon(Icons.expand_more),
         isExpanded: true,
         decoration: InputDecoration(
           labelText: 'Select time',
+          labelStyle: const TextStyle(color: Color(0xFF666666)),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -914,9 +915,15 @@ class _DurationSection extends StatelessWidget {
                   child: Text(
                     '$m minutes',
                     overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF1A1A1A), // Explicit dark color for selected time
+                    ),
                   ),
                 ))
             .toList(),
+        style: const TextStyle(
+          color: Color(0xFF1A1A1A), // Explicit dark color for dropdown text
+        ),
         onChanged: !enabled
             ? null
             : (value) {
@@ -942,19 +949,16 @@ class _AmbienceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withOpacity(.4)),
-      ),
+      borderRadius: 16,
       child: DropdownButtonFormField<String>(
         value: selected,
         icon: const Icon(Icons.expand_more),
         isExpanded: true,
         decoration: InputDecoration(
           labelText: context.tr('timer.ambience.label'),
+          labelStyle: const TextStyle(color: Color(0xFF666666)),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -973,10 +977,16 @@ class _AmbienceSection extends StatelessWidget {
                 child: Text(
                   context.tr('timer.ambience.$id'),
                   overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF1A1A1A), // Explicit dark color for dropdown text
+                  ),
                 ),
               ),
             )
             .toList(),
+        style: const TextStyle(
+          color: Color(0xFF1A1A1A), // Explicit dark color for dropdown text
+        ),
         onChanged: !enabled
             ? null
             : (value) {
@@ -1003,7 +1013,7 @@ class _ShareStatTile extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: Colors.white70,
+            color: const Color(0xFF666666),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -1011,7 +1021,7 @@ class _ShareStatTile extends StatelessWidget {
         Text(
           value,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: Colors.white,
+            color: const Color(0xFF1A1A1A),
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -1036,29 +1046,12 @@ class _TimerShareCard extends StatelessWidget {
     final lifetimeLabel = context.tr('timer.share.lifetime');
     final title = context.tr('timer.share.cardTitle');
     final subtitle = context.tr('timer.share.subtitle');
-    final onPrimary = Colors.white;
-    final muted = Colors.white.withOpacity(0.72);
+    final onPrimary = const Color(0xFF1A1A1A);
+    final muted = const Color(0xFF666666);
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.colorScheme.primary.withOpacity(0.92),
-            theme.colorScheme.secondary.withOpacity(0.75),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.25),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+    return GlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      borderRadius: 24,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1213,16 +1206,8 @@ class _TimerShareSheetState extends State<_TimerShareSheet> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
-            ),
-          ],
+        decoration: const BoxDecoration(
+          color: DesignSystem.backgroundLight,
         ),
         child: SafeArea(
           child: Padding(
