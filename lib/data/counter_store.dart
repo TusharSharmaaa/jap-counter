@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited, Timer, Completer;
+import 'dart:async' show unawaited, Timer, Completer, TimeoutException;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/prefs_manager.dart';
@@ -275,35 +275,50 @@ class CounterStore {
   
   Future<void> _syncToDisk() async {
     if (!_cacheDirty) return;
+    
+    // OPTIMIZATION: Add timeout to prevent hanging on slow I/O
     try {
-      // Always write today (it might be 0 if reset)
-      await _prefs.setInt(_kTodayJaps, _cachedToday ?? 0);
-      
-      // For lifetime, ensure we never write a value less than what's already stored
-      // This prevents accidentally resetting lifetime due to initialization issues
-      if (_cachedLifetime != null) {
-        // Read existing lifetime from disk to ensure we don't overwrite with a lower value
-        final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
-        // Only write if our cached value is greater than or equal to existing
-        // This ensures lifetime always increases, never decreases
-        if (_cachedLifetime! >= existingLifetime) {
-          await _prefs.setInt(_kLifetimeJaps, _cachedLifetime!);
-        } else {
-          // If cached value is lower (shouldn't happen, but safety check),
-          // use the existing value and update cache
-          _cachedLifetime = existingLifetime;
-        }
-      } else {
-        // If cache is null, read from disk and update cache, but don't write
-        // This preserves existing lifetime value
-        final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
-        _cachedLifetime = existingLifetime;
-      }
-      _cacheDirty = false;
+      await Future.any([
+        _performSync(),
+        Future.delayed(const Duration(seconds: 2), () {
+          throw TimeoutException('Sync timeout');
+        }),
+      ]);
+    } on TimeoutException {
+      // If sync times out, mark dirty for retry but don't block
+      // This prevents UI freezing on slow storage
+      _cacheDirty = true;
     } catch (e) {
       // If sync fails, mark dirty again for retry
       _cacheDirty = true;
     }
+  }
+  
+  Future<void> _performSync() async {
+    // Always write today (it might be 0 if reset)
+    await _prefs.setInt(_kTodayJaps, _cachedToday ?? 0);
+    
+    // For lifetime, ensure we never write a value less than what's already stored
+    // This prevents accidentally resetting lifetime due to initialization issues
+    if (_cachedLifetime != null) {
+      // Read existing lifetime from disk to ensure we don't overwrite with a lower value
+      final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+      // Only write if our cached value is greater than or equal to existing
+      // This ensures lifetime always increases, never decreases
+      if (_cachedLifetime! >= existingLifetime) {
+        await _prefs.setInt(_kLifetimeJaps, _cachedLifetime!);
+      } else {
+        // If cached value is lower (shouldn't happen, but safety check),
+        // use the existing value and update cache
+        _cachedLifetime = existingLifetime;
+      }
+    } else {
+      // If cache is null, read from disk and update cache, but don't write
+      // This preserves existing lifetime value
+      final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+      _cachedLifetime = existingLifetime;
+    }
+    _cacheDirty = false;
   }
   
   Future<void> _updateXP() async {

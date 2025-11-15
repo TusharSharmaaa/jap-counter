@@ -1,5 +1,8 @@
+import 'dart:async' show TimeoutException;
 import 'dart:collection';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class GitaVerse {
@@ -47,10 +50,19 @@ class GitaService {
       return cached;
     }
 
-    // 2) Fetch from API
+    // 2) Fetch from API with timeout protection
     try {
       final url = Uri.parse('$_base/slok/$chapter/$verse');
-      final res = await http.get(url);
+      final res = await http.get(url).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          if (kDebugMode) {
+            debugPrint('[GitaService] HTTP request timeout for chapter $chapter, verse $verse');
+          }
+          throw TimeoutException('HTTP request timeout');
+        },
+      );
+      
       if (res.statusCode == 200) {
         final data = json.decode(res.body) as Map<String, dynamic>;
         final v = GitaVerse.fromJson(data);
@@ -61,21 +73,43 @@ class GitaService {
         }
         _cache[k] = v; // O(1) add to end
         return v;
+      } else {
+        if (kDebugMode) {
+          debugPrint('[GitaService] HTTP error ${res.statusCode} for chapter $chapter, verse $verse');
+        }
       }
-    } catch (_) {}
+    } on TimeoutException {
+      // Timeout is expected in poor network conditions - fail silently
+      if (kDebugMode) {
+        debugPrint('[GitaService] Request timeout - will retry on next fetch');
+      }
+    } catch (e) {
+      // Log other errors in debug mode
+      if (kDebugMode) {
+        debugPrint('[GitaService] Error fetching verse: $e');
+      }
+    }
     return null;
   }
 
   /// Prefetch next N verses in background for better performance.
   /// Non-blocking, ignores errors.
+  /// OPTIMIZATION: Limits concurrent prefetch requests to prevent overwhelming the network.
   static Future<void> prefetch(int chapter, int verse, {int count = 3}) async {
+    // Limit prefetch count to prevent excessive network requests
+    final maxPrefetch = count.clamp(1, 5);
+    
     // Prefetch next N verses in background
-    for (int i = 1; i <= count; i++) {
+    for (int i = 1; i <= maxPrefetch; i++) {
       final nextVerse = verse + i;
       // Only prefetch if not already cached
       final key = _key(chapter, nextVerse);
       if (!_cache.containsKey(key)) {
         // Fire and forget - don't await to avoid blocking
+        // Add small delay between prefetch requests to avoid overwhelming network
+        if (i > 1) {
+          await Future.delayed(Duration(milliseconds: 100 * i));
+        }
         fetchVerse(chapter, nextVerse).catchError((_) {
           // Silently ignore prefetch errors
           return null;
