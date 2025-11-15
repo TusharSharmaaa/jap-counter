@@ -314,11 +314,21 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   Widget _navIcon(IconData icon, int idx, String labelKey, {double iconSize = 22.0, double fontSize = 10.0}) {
     final active = _index == idx;
     final theme = Theme.of(context);
-    final iconColor = active
-        ? theme.colorScheme.primary
-        : theme.colorScheme.onSurfaceVariant;
-    // Text color should always be black (or inactive color), not orange when active
-    final textColor = theme.colorScheme.onSurfaceVariant;
+    final isDark = theme.brightness == Brightness.dark;
+    
+    // Light theme: use original theme colors (no changes)
+    // Dark theme: use white for all icons and text
+    final iconColor = isDark
+        ? Colors.white // Dark theme: all icons white
+        : (active 
+            ? theme.colorScheme.primary // Light theme: active = primary orange
+            : theme.colorScheme.onSurfaceVariant); // Light theme: inactive = grey
+    
+    final textColor = isDark
+        ? Colors.white // Dark theme: all text white
+        : (active 
+            ? theme.colorScheme.onSurface // Light theme: active = dark
+            : theme.colorScheme.onSurfaceVariant); // Light theme: inactive = grey
     return Expanded(
       child: GestureDetector(
         onTap: () => _handleNavTap(idx),
@@ -349,9 +359,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                 child: Text(
                   _translate(labelKey),
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: active 
-                        ? theme.colorScheme.onSurface // Proper dark/white for active
-                        : textColor,
+                    color: textColor, // Already set above with proper light/dark theme separation
                     fontWeight: active ? FontWeight.w600 : null,
                     fontSize: fontSize,
                   ),
