@@ -21,7 +21,9 @@ import '../widgets/widgets.dart';
 import 'timer_service.dart';
 
 class TimerPage extends StatefulWidget {
-  const TimerPage({super.key});
+  final VoidCallback? onMeditationUpdated;
+  
+  const TimerPage({super.key, this.onMeditationUpdated});
 
   @override
   State<TimerPage> createState() => _TimerPageState();
@@ -43,6 +45,7 @@ class _TimerPageState extends State<TimerPage>
   bool _shareBusy = false;
   int _todayMinutes = 0;
   int _lifetimeMinutes = 0;
+  Timer? _periodicCommitTimer;
 
   @override
   bool get wantKeepAlive => true;
@@ -164,6 +167,7 @@ class _TimerPageState extends State<TimerPage>
   Future<void> _pauseForInterruption() async {
     final wasRunning = _timerService.running;
     if (wasRunning) {
+      _stopPeriodicCommit();
       await _timerService.pause();
       await _safeSoundCall(() => _soundManager.pauseAmbience());
       _wasRunning = false;
@@ -179,7 +183,12 @@ class _TimerPageState extends State<TimerPage>
     final minutes = await _timerService.captureUncreditedMinutes(
       forceFull: forceFull,
     );
-    if (minutes <= 0) return;
+    if (minutes <= 0) {
+      if (kDebugMode) {
+        debugPrint('[TimerPage] No minutes to commit (minutes=$minutes, forceFull=$forceFull)');
+      }
+      return;
+    }
     final store = await MeditationStore.create();
     await store.addMinutes(minutes);
     if (!mounted) return;
@@ -187,6 +196,38 @@ class _TimerPageState extends State<TimerPage>
       _todayMinutes = store.todayMinutes;
       _lifetimeMinutes = store.lifetimeMinutes;
     });
+    // Notify stats page to refresh meditation minutes
+    widget.onMeditationUpdated?.call();
+    if (kDebugMode) {
+      debugPrint('[TimerPage] Committed $minutes minutes. Today: $_todayMinutes, Lifetime: $_lifetimeMinutes');
+    }
+  }
+
+  void _startPeriodicCommit() {
+    _stopPeriodicCommit();
+    // Commit progress every minute while timer is running
+    _periodicCommitTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
+      if (!_timerService.running) {
+        timer.cancel();
+        _periodicCommitTimer = null;
+        return;
+      }
+      // Commit any full minutes that have elapsed
+      await _commitProgress(forceFull: false);
+      // Reload meditation stats to ensure UI reflects the latest values
+      await _loadMeditationStats();
+    });
+    if (kDebugMode) {
+      debugPrint('[TimerPage] Started periodic commit timer');
+    }
+  }
+
+  void _stopPeriodicCommit() {
+    _periodicCommitTimer?.cancel();
+    _periodicCommitTimer = null;
+    if (kDebugMode) {
+      debugPrint('[TimerPage] Stopped periodic commit timer');
+    }
   }
 
   Future<void> _finalizeSessionOnExit() async {
@@ -202,6 +243,8 @@ class _TimerPageState extends State<TimerPage>
 
   @override
   void dispose() {
+    _periodicCommitTimer?.cancel();
+    _periodicCommitTimer = null;
     WidgetsBinding.instance.removeObserver(this);
     _timerServiceInstance?.removeListener(_handleServiceUpdate);
     if (!(_timerServiceInstance?.running ?? false)) {
@@ -227,6 +270,7 @@ class _TimerPageState extends State<TimerPage>
             () => _soundManager.playAmbience(forceId: _ambienceId),
           ),
         );
+        _startPeriodicCommit();
       }
       _timerService.refresh();
       unawaited(_ensureWakelockActive(_timerService.running));
@@ -264,14 +308,22 @@ class _TimerPageState extends State<TimerPage>
       unawaited(_onComplete());
     }
 
+    // Handle sound changes
     if (_ambienceId != newSound) {
       if (newSound == 'mute') {
         unawaited(_safeSoundCall(() => _soundManager.stopAmbience()));
       } else if (nowRunning) {
+        // Sound changed while running - set and play new sound
+        unawaited(
+          _safeSoundCall(
+            () => _soundManager.setAmbience(newSound, preload: true),
+          ),
+        );
         unawaited(
           _safeSoundCall(() => _soundManager.playAmbience(forceId: newSound)),
         );
       } else {
+        // Sound changed while not running - just set it
         unawaited(
           _safeSoundCall(
             () => _soundManager.setAmbience(newSound, preload: true),
@@ -279,10 +331,17 @@ class _TimerPageState extends State<TimerPage>
         );
       }
     } else if (!_wasRunning && nowRunning && newSound != 'mute') {
+      // Timer just started/resumed with same sound - ensure it plays
+      unawaited(
+        _safeSoundCall(
+          () => _soundManager.setAmbience(newSound, preload: true),
+        ),
+      );
       unawaited(
         _safeSoundCall(() => _soundManager.playAmbience(forceId: newSound)),
       );
     } else if (_wasRunning && !nowRunning && newSound != 'mute') {
+      // Timer just paused - pause the sound
       unawaited(_safeSoundCall(() => _soundManager.pauseAmbience()));
     }
 
@@ -296,8 +355,10 @@ class _TimerPageState extends State<TimerPage>
 
     if (!_wasRunning && nowRunning) {
       unawaited(_ensureWakelockActive(true));
+      _startPeriodicCommit();
     } else if (_wasRunning && !nowRunning) {
       unawaited(_ensureWakelockActive(false));
+      _stopPeriodicCommit();
     }
 
     _wasRunning = nowRunning;
@@ -361,6 +422,7 @@ class _TimerPageState extends State<TimerPage>
     }
     await _timerService.start(runId: _activeRunId);
     await _ensureWakelockActive(true);
+    _startPeriodicCommit();
     unawaited(
       AdManager.instance.preloadPlacement('timer.post_session_interstitial'),
     );
@@ -370,11 +432,14 @@ class _TimerPageState extends State<TimerPage>
   Future<void> _pause() async {
     if (!_timerService.running) return;
     HapticFeedback.selectionClick();
+    _stopPeriodicCommit();
     await _timerService.pause();
     await _safeSoundCall(() => _soundManager.pauseAmbience());
     await _ensureWakelockActive(false);
     // Commit progress when user manually pauses
     await _commitProgress();
+    // Reload meditation stats to ensure we have the latest values
+    await _loadMeditationStats();
     if (mounted) setState(() {});
   }
 
@@ -382,21 +447,33 @@ class _TimerPageState extends State<TimerPage>
     if (_timerService.running || _timerService.remaining == Duration.zero) {
       return;
     }
+    HapticFeedback.lightImpact();
     final existingRunId = _timerService.runId;
     if ((_activeRunId ?? '').isEmpty) {
       _activeRunId = existingRunId.isNotEmpty
           ? existingRunId
           : DateTime.now().microsecondsSinceEpoch.toString();
     }
+    
+    // Resume timer first
+    await _timerService.resume(runId: _activeRunId);
+    
+    // Then handle sound - ensure it plays if not muted
     if (_ambienceId != 'mute') {
+      // Set and play ambience when resuming
       await _safeSoundCall(
         () => _soundManager.setAmbience(_ambienceId, preload: true),
+      );
+      // Explicitly play the ambience after setting it
+      await _safeSoundCall(
+        () => _soundManager.playAmbience(forceId: _ambienceId),
       );
     } else {
       await _safeSoundCall(() => _soundManager.stopAmbience());
     }
-    await _timerService.resume(runId: _activeRunId);
+    
     await _ensureWakelockActive(true);
+    _startPeriodicCommit();
     unawaited(
       AdManager.instance.preloadPlacement('timer.post_session_interstitial'),
     );
@@ -405,6 +482,7 @@ class _TimerPageState extends State<TimerPage>
 
   Future<void> _reset() async {
     HapticFeedback.selectionClick();
+    _stopPeriodicCommit();
     final wasRunning = _timerService.running;
     if (wasRunning) {
       await _timerService.pause();
@@ -421,13 +499,54 @@ class _TimerPageState extends State<TimerPage>
 
   Future<void> _onComplete() async {
     HapticFeedback.mediumImpact();
+    _stopPeriodicCommit();
+    
+    // Show dialog immediately when timer completes
+    if (!mounted) return;
+    
+    // Show completion dialog immediately
+    unawaited(showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: Text(
+            'Meditation complete',
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Your session has finished.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.black87,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    ));
+    
+    // Continue with background tasks
     await _safeSoundCall(() => _soundManager.stopAmbience());
     await _safeSoundCall(() => _soundManager.playBell());
     await _ensureWakelockActive(false);
+    
+    // Always commit remaining time when timer completes
     final addedMinutes = await _timerService.captureUncreditedMinutes(
       forceFull: true,
     );
-    final targetMinutes = _timerService.target.inMinutes;
+    
+    // Always commit remaining time when timer completes
+    // This ensures any partial minutes are credited
     if (addedMinutes > 0) {
       final medStore = await MeditationStore.create();
       await medStore.addMinutes(addedMinutes);
@@ -437,30 +556,18 @@ class _TimerPageState extends State<TimerPage>
           _lifetimeMinutes = medStore.lifetimeMinutes;
         });
       }
+      if (kDebugMode) {
+        debugPrint('[TimerPage] Timer completed. Credited $addedMinutes minutes. Today: $_todayMinutes, Lifetime: $_lifetimeMinutes');
+      }
     }
+    // Reload meditation stats to ensure we have the latest values
+    await _loadMeditationStats();
+    
+    final targetMinutes = _timerService.target.inMinutes;
     await AdManager.instance.recordEvent(
       'timer.session',
       'complete',
       data: {'minutes': targetMinutes.toDouble()},
-    );
-
-    if (!mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Meditation complete'),
-          content: const Text('Your session has finished.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
     );
 
     if (!mounted) return;
@@ -839,33 +946,33 @@ class _HeaderCard extends StatelessWidget {
                 Text(
                   'Meditation Timer',
                   style: theme.textTheme.titleMedium,
+                  softWrap: true,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 2),
                 Text(
                   'भक्ति में ध्यान, ध्यान में शांति।',
                   style: theme.textTheme.bodySmall,
-                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
                   maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          Flexible(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.graphic_eq, size: 18),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    soundLabel,
-                    style: theme.textTheme.labelLarge,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.graphic_eq, size: 18),
+              const SizedBox(width: 4),
+              Text(
+                soundLabel,
+                style: theme.textTheme.labelLarge,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ],
       ),

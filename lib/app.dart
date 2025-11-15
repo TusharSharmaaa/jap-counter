@@ -1,5 +1,6 @@
 import 'dart:async' show unawaited;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:confetti/confetti.dart';
 import 'package:intl/intl.dart';
@@ -83,7 +84,12 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     const CounterPage(),
     _StatsPage(key: _statsKey),
     const _GitaTab(),
-    TimerPage(),
+    TimerPage(
+      onMeditationUpdated: () {
+        // Refresh meditation stats when timer updates meditation minutes
+        _statsKey.currentState?.refreshMeditationStats();
+      },
+    ),
   ];
 
   Future<void> _loadThemeMode() async {
@@ -610,6 +616,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
   Future<void> _refreshStatsData() async {
     // Record current daily summary to ensure stats are up to date
     final s = await CounterStore.create();
+    final mstore = await MeditationStore.create();
     await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
     
     if (!mounted) return;
@@ -624,6 +631,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     
     // Update ValueNotifiers - only rebuilds widgets listening to these values
     _todayNotifier.value = s.todayJaps;
+    _todayMinNotifier.value = mstore.todayMinutes;
+    _lifetimeMinNotifier.value = mstore.lifetimeMinutes;
     
     // Only update lifetime in setState (rarely changes)
     if (mounted && _lifetime != s.lifetimeJaps) {
@@ -674,6 +683,17 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     }
 
     // Stats celebration will be checked automatically when stats are reloaded
+  }
+  
+  /// Refresh meditation minutes in stats (called from timer page via callback)
+  Future<void> refreshMeditationStats() async {
+    final mstore = await MeditationStore.create();
+    if (!mounted) return;
+    _todayMinNotifier.value = mstore.todayMinutes;
+    _lifetimeMinNotifier.value = mstore.lifetimeMinutes;
+    if (kDebugMode) {
+      debugPrint('[StatsPage] Refreshed meditation stats: Today=${mstore.todayMinutes}, Lifetime=${mstore.lifetimeMinutes}');
+    }
   }
 
   Future<void> _init() async {
