@@ -99,6 +99,12 @@ class AppStrings {
       'stats.badge.streak7': '🔥 7-day Streak',
       'stats.badge.streak21': '🔥 21-day Streak',
       'stats.badge.streak40': '🔥 40-day Streak',
+      'stats.celebration.7.title': '🎉 Congratulations!',
+      'stats.celebration.7.message': 'You have completed 7 days of Sadhna! Your dedication and discipline are truly inspiring. Keep up the amazing work! 🙏',
+      'stats.celebration.21.title': '🎉 Amazing Achievement!',
+      'stats.celebration.21.message': '21 days of continuous Sadhna! Your devotion and commitment are remarkable. You are building a beautiful practice! 🌸',
+      'stats.celebration.40.title': '🎉 Extraordinary Dedication!',
+      'stats.celebration.40.message': '40 days of Tapasya! This is a rare and beautiful achievement. Your spiritual practice is truly inspiring! 🌼',
 
       // Settings page
       'settings.title': 'Settings',
@@ -328,6 +334,12 @@ class AppStrings {
       'stats.badge.streak7': '🔥 7-दिन की श्रंखला',
       'stats.badge.streak21': '🔥 21-दिन की श्रंखला',
       'stats.badge.streak40': '🔥 40-दिन की श्रंखला',
+      'stats.celebration.7.title': '🎉 बधाई हो!',
+      'stats.celebration.7.message': 'आपने 7 दिन की साधना पूरी की है! आपका समर्पण और अनुशासन वास्तव में प्रेरणादायक है। अद्भुत कार्य जारी रखें! 🙏',
+      'stats.celebration.21.title': '🎉 अद्भुत उपलब्धि!',
+      'stats.celebration.21.message': '21 दिन की निरंतर साधना! आपकी भक्ति और प्रतिबद्धता उल्लेखनीय है। आप एक सुंदर अभ्यास बना रहे हैं! 🌸',
+      'stats.celebration.40.title': '🎉 असाधारण समर्पण!',
+      'stats.celebration.40.message': '40 दिन की तपस्या! यह एक दुर्लभ और सुंदर उपलब्धि है। आपकी आध्यात्मिक साधना वास्तव में प्रेरणादायक है! 🌼',
 
       // Settings page
       'settings.title': 'सेटिंग्स',

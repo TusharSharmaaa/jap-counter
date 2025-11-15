@@ -270,9 +270,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   Widget _navIcon(IconData icon, int idx, String labelKey) {
     final active = _index == idx;
     final theme = Theme.of(context);
-    final color = active
+    final iconColor = active
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurfaceVariant;
+    // Text color should always be black (or inactive color), not orange when active
+    final textColor = theme.colorScheme.onSurfaceVariant;
     return Expanded(
       child: GestureDetector(
         onTap: () => _handleNavTap(idx),
@@ -297,13 +299,13 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: color, size: 22),
+              Icon(icon, color: iconColor, size: 22),
               const SizedBox(height: 2),
               Flexible(
                 child: Text(
                   _translate(labelKey),
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: color,
+                    color: textColor,
                     fontWeight: active ? FontWeight.w600 : null,
                     fontSize: 10,
                   ),
@@ -405,6 +407,104 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     _allStatsFuture = _loadAllStats();
   }
   
+  /// Check if a milestone celebration has been shown
+  Future<bool> _hasShownCelebration(int streakDays) async {
+    final prefs = await PrefsManager.instance;
+    return prefs.getBool('streak_${streakDays}_celebration_shown') ?? false;
+  }
+  
+  /// Mark a milestone celebration as shown
+  Future<void> _markCelebrationShown(int streakDays) async {
+    final prefs = await PrefsManager.instance;
+    await prefs.setBool('streak_${streakDays}_celebration_shown', true);
+  }
+  
+  /// Show celebration dialog for milestone streaks
+  Future<void> _showCelebrationDialog(int streakDays) async {
+    if (!mounted) return;
+    
+    // Wait for the next frame to ensure widget tree is ready
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
+    
+    // Check if AppLocalizationScope is available
+    final scope = AppLocalizationScope.maybeOf(context);
+    if (scope == null) {
+      // If scope is not available, try again after a short delay
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
+      final retryScope = AppLocalizationScope.maybeOf(context);
+      if (retryScope == null) {
+        // Still not available, skip showing dialog
+        return;
+      }
+    }
+    
+    String titleKey;
+    String messageKey;
+    
+    switch (streakDays) {
+      case 7:
+        titleKey = 'stats.celebration.7.title';
+        messageKey = 'stats.celebration.7.message';
+        break;
+      case 21:
+        titleKey = 'stats.celebration.21.title';
+        messageKey = 'stats.celebration.21.message';
+        break;
+      case 40:
+        titleKey = 'stats.celebration.40.title';
+        messageKey = 'stats.celebration.40.message';
+        break;
+      default:
+        return; // Only show for milestone streaks
+    }
+    
+    // Play confetti
+    _confetti.play();
+    
+    // Show dialog using post-frame callback to ensure context is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final dialogContext = context;
+      final dialogScope = AppLocalizationScope.maybeOf(dialogContext);
+      if (dialogScope == null) return;
+      
+      await showDialog(
+        context: dialogContext,
+        barrierDismissible: true,
+        builder: (ctx) {
+          final lang = dialogScope.language;
+          final title = AppStrings.resolve(lang, titleKey);
+          final message = AppStrings.resolve(lang, messageKey);
+          final okText = AppStrings.resolve(lang, 'common.ok');
+          
+          return AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(okText),
+              ),
+            ],
+          );
+        },
+      );
+    });
+  }
+  
+  /// Check and show celebration for milestone streaks (only once)
+  Future<void> _checkAndShowCelebration(int streak) async {
+    if (streak != 7 && streak != 21 && streak != 40) return;
+    
+    final hasShown = await _hasShownCelebration(streak);
+    if (!hasShown) {
+      await _markCelebrationShown(streak);
+      await _showCelebrationDialog(streak);
+    }
+  }
+  
   /// Load all stats data in parallel for better performance
   Future<Map<String, dynamic>> _loadAllStats({String? locale}) async {
     final chartLocale = locale ?? 'en';
@@ -434,7 +534,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
       WeeklyChartData.build(locale: chartLocale),
     ]);
     
-    return {
+    final stats = {
       'counter': results[0] as Map<String, int>,
       'activity': results[1] as Map<String, int>,
       'goal': results[2] as int,
@@ -442,6 +542,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
       'dedication': results[4] as String,
       'chart': results[5] as List<Map<String, dynamic>>,
     };
+    
+    return stats;
   }
   
   @override
@@ -468,6 +570,21 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     }
     // Refresh stats data when page becomes visible to show real-time updates
     unawaited(_refreshStatsData());
+    // Check for milestone celebrations when page becomes visible
+    unawaited(_checkCelebrationOnVisible());
+  }
+  
+  /// Check for milestone celebrations when page becomes visible
+  Future<void> _checkCelebrationOnVisible() async {
+    // Wait a bit to ensure widget tree is ready
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+    
+    // Load stats to get current streak
+    final stats = await _loadAllStats();
+    final activity = stats['activity'] as Map<String, int>;
+    final streak = activity['streak'] ?? 0;
+    await _checkAndShowCelebration(streak);
   }
   
   /// Refresh stats data without full refresh animation (called on visibility)
@@ -531,15 +648,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
       await ActivityStore.markTodayActive();
     }
 
-    // Reload stats and check for milestone streaks
-    final reloadedStats = await _allStatsFuture;
-    if (reloadedStats != null) {
-      final activity = reloadedStats['activity'] as Map<String, int>;
-      final streak = activity['streak'] ?? 0;
-      if ([7, 21, 40].contains(streak)) {
-        _confetti.play();
-      }
-    }
+    // Stats celebration will be checked automatically when stats are reloaded
   }
 
   Future<void> _init() async {
@@ -562,9 +671,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     }
 
     final streak = await ActivityStore.currentStreak();
-    if ([7, 21, 40].contains(streak)) {
-      _confetti.play();
-    }
+    await _checkAndShowCelebration(streak);
   }
 
   @override
@@ -676,13 +783,6 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
         
         final streak = activity['streak'] ?? 0;
         final activeDays = activity['activeDays'] ?? 0;
-        
-        // Trigger confetti for milestone streaks
-        if (streak == 7 || streak == 21 || streak == 40) {
-          if (_confetti.state != ConfettiControllerState.playing) {
-            _confetti.play();
-          }
-        }
         
         return CustomScrollView(
           slivers: [
