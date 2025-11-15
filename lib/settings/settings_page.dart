@@ -137,20 +137,20 @@ class _SettingsPageState extends State<SettingsPage> {
     final language = widget.language;
 
     return Scaffold(
-      backgroundColor: DesignSystem.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(context.tr('settings.title')),
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            color: DesignSystem.backgroundLight,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
           ),
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          color: DesignSystem.backgroundLight,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: SafeArea(
         child: LayoutBuilder(

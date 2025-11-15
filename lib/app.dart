@@ -346,7 +346,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                 child: Text(
                   _translate(labelKey),
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: textColor,
+                    color: active 
+                        ? theme.colorScheme.onSurface // Proper dark/white for active
+                        : textColor,
                     fontWeight: active ? FontWeight.w600 : null,
                     fontSize: fontSize,
                   ),
@@ -784,14 +786,14 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     // Load goal (synchronously via FutureBuilder below to avoid blocking build)
 
     return Scaffold(
-      backgroundColor: DesignSystem.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(context.tr('stats.title')),
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            color: DesignSystem.backgroundLight,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
           ),
         ),
         actions: [
@@ -816,8 +818,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          color: DesignSystem.backgroundLight,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: Stack(
           children: [
@@ -931,9 +933,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           children: [
                             Text(
                               context.tr('stats.currentStreak'),
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: const Color(0xFF1A1A1A), // Explicit dark color
-                              ),
+                              style: theme.textTheme.titleMedium,
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -950,7 +950,6 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                 '🔥 $streak',
                                 style: theme.textTheme.labelLarge?.copyWith(
                                   fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF1A1A1A), // Explicit dark color
                                 ),
                               ),
                             ),
@@ -965,9 +964,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             streakMessage,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFF1A1A1A), // Explicit dark color
-                            ),
+                            style: theme.textTheme.bodySmall,
                           ),
                         ),
                       ],
@@ -996,9 +993,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           borderRadius: 20,
                           child: Text(
                             label,
-                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: const Color(0xFF1A1A1A), // Explicit dark color
-                            ),
+                            style: Theme.of(context).textTheme.labelLarge,
                           ),
                         );
                       }).toList(),
@@ -1028,7 +1023,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                 style: TextStyle(
                                   fontSize: titleSize,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF666666),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   letterSpacing: 0.2,
                                 ),
                                 maxLines: 2,
@@ -1043,7 +1038,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                   style: TextStyle(
                                     fontSize: valueSize,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF1A1A1A),
+                                    color: Theme.of(context).colorScheme.onSurface,
                                     letterSpacing: -0.5,
                                   ),
                                   maxLines: 1,
@@ -1068,7 +1063,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                 style: TextStyle(
                                   fontSize: titleSize,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF666666),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   letterSpacing: 0.2,
                                 ),
                                 maxLines: 2,
@@ -1083,7 +1078,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                   style: TextStyle(
                                     fontSize: valueSize,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF1A1A1A),
+                                    color: Theme.of(context).colorScheme.onSurface,
                                     letterSpacing: -0.5,
                                   ),
                                   maxLines: 1,
@@ -1108,7 +1103,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                 style: TextStyle(
                                   fontSize: titleSize,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF666666),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   letterSpacing: 0.2,
                                 ),
                                 maxLines: 2,
@@ -1123,7 +1118,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                   style: TextStyle(
                                     fontSize: valueSize,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF1A1A1A),
+                                    color: Theme.of(context).colorScheme.onSurface,
                                     letterSpacing: -0.5,
                                   ),
                                   maxLines: 1,
@@ -1162,7 +1157,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                 style: TextStyle(
                                   fontSize: titleSize,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF666666),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   letterSpacing: 0.2,
                                 ),
                                 maxLines: 2,
@@ -1179,7 +1174,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                     style: TextStyle(
                                       fontSize: valueSize,
                                       fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF1A1A1A),
+                                      color: Theme.of(context).colorScheme.onSurface,
                                       letterSpacing: -0.5,
                                     ),
                                     maxLines: 1,
@@ -1205,7 +1200,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                 style: TextStyle(
                                   fontSize: titleSize,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF666666),
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   letterSpacing: 0.2,
                                 ),
                                 maxLines: 2,
@@ -1222,7 +1217,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                     style: TextStyle(
                                       fontSize: valueSize,
                                       fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF1A1A1A),
+                                      color: Theme.of(context).colorScheme.onSurface,
                                       letterSpacing: -0.5,
                                     ),
                                     maxLines: 1,
@@ -1262,9 +1257,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                   : 'stats.dailyGoal.pending',
                               args: {'todayMalas': '$todayMalasFromCounter', 'goal': '$goal'},
                             ),
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: const Color(0xFF1A1A1A), // Explicit dark color
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ),
                       ],
@@ -1290,9 +1283,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                       children: [
                         Text(
                           context.tr('stats.progressTitle'),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: const Color(0xFF1A1A1A), // Explicit dark color
-                          ),
+                          style: theme.textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
                         RepaintBoundary(
@@ -1342,7 +1333,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                             style: theme.textTheme.labelSmall?.copyWith(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 11,
-                                              color: const Color(0xFF1A1A1A), // Explicit dark color
+                                              color: Theme.of(context).colorScheme.onSurface, // Explicit dark color
                                             ),
                                             textAlign: TextAlign.center,
                                           ),
@@ -1387,7 +1378,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                           style: theme.textTheme.labelSmall?.copyWith(
                                             fontWeight: FontWeight.w600,
                                             fontSize: 11,
-                                            color: const Color(0xFF1A1A1A), // Explicit dark color
+                                            color: Theme.of(context).colorScheme.onSurface, // Explicit dark color
                                           ),
                                           textAlign: TextAlign.center,
                                         ),
@@ -1472,9 +1463,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           Expanded(
                             child: Text(
                               dedicationText,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFF1A1A1A), // Explicit dark color
-                              ),
+                              style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1545,16 +1534,12 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   context.tr('stats.daysActive', args: {'count': '$activeDays'}),
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: const Color(0xFF1A1A1A), // Explicit dark color
-                  ),
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
               ),
               Text(
                 context.tr('stats.calendar'),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF1A1A1A), // Explicit dark color
-                ),
+                style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 6),
               _ActivityCalendar(todayJaps: _todayNotifier.value, todayMalas: todayMalas),
@@ -1742,7 +1727,7 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
                   DateFormat('MMMM yyyy', localeCode).format(_visibleMonth),
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF1A1A1A), // Explicit dark color
+                                              color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ),
@@ -1912,7 +1897,7 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
                 Text(
                   titleLabel,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF1A1A1A), // Explicit dark color
+                                              color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1922,7 +1907,7 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
                     args: {'malas': '${entry.malas}', 'japs': '${entry.japs}'},
                   ),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF1A1A1A), // Explicit dark color
+                                              color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ],
@@ -1969,9 +1954,13 @@ class _CalendarCell extends StatelessWidget {
     final borderColor = isSelected
         ? theme.colorScheme.primary
         : theme.dividerColor.withOpacity(isCurrentMonth ? 1 : 0.4);
-    final textColor = isCurrentMonth
-        ? const Color(0xFF1A1A1A) // Explicit dark color for current month
-        : const Color(0xFF999999); // Lighter gray for other months
+    // If malas > 0 (has color fill), use black text. Otherwise use theme color
+    final hasColorFill = malas > 0;
+    final textColor = hasColorFill
+        ? Colors.black // Black text when there's a color fill
+        : (isCurrentMonth
+            ? theme.colorScheme.onSurface
+            : theme.colorScheme.onSurfaceVariant); // Lighter color for other months
 
     return GestureDetector(
       onTap: onTap,
@@ -2031,7 +2020,7 @@ class _LegendSwatch extends StatelessWidget {
         Text(
           label,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: const Color(0xFF1A1A1A), // Explicit dark color
+                                              color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ],

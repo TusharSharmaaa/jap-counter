@@ -3,6 +3,7 @@ import 'design_system.dart';
 
 class BrandGradients {
   static BoxDecoration timerBackground(BuildContext context, {required bool isRunning}) {
+    final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
     return BoxDecoration(
       gradient: RadialGradient(
         center: const Alignment(0, -0.4),
@@ -10,11 +11,11 @@ class BrandGradients {
         colors: isRunning
             ? [
                 DesignSystem.primary.withValues(alpha: 0.15),
-                DesignSystem.backgroundLight,
+                backgroundColor,
               ]
             : [
-                DesignSystem.backgroundLight,
-                DesignSystem.backgroundLight,
+                backgroundColor,
+                backgroundColor,
               ],
       ),
     );

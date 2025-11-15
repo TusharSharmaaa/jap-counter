@@ -37,10 +37,10 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: DesignSystem.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Container(
-        decoration: const BoxDecoration(
-          color: DesignSystem.backgroundLight,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: Center(
         child: FadeTransition(
@@ -61,12 +61,12 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                     Theme.of(context).colorScheme.tertiary,
                   ],
                 ).createShader(rect),
-                child: const Text(
+                child: Text(
                   'Naam Jap Counter : Sadhna',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A1A),
+                    color: Theme.of(context).colorScheme.onSurface,
                     letterSpacing: 1.2,
                   ),
                 ),

@@ -57,7 +57,7 @@ class IconCircleButton extends StatelessWidget {
               icon,
               color: iconColor ?? (backgroundColor != null && backgroundColor == DesignSystem.primary 
                   ? Colors.white 
-                  : const Color(0xFF1A1A1A)),
+                  : Theme.of(context).colorScheme.onSurface),
               size: size * 0.5,
             ),
           ),

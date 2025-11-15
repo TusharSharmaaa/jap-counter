@@ -397,11 +397,11 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
         }
         
         return AlertDialog(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(ctx).colorScheme.surface,
           title: Text(
             dialogSafeTr('counter.goal.complete.title'),
-            style: const TextStyle(
-              color: Color(0xFF1A1A1A),
+            style: TextStyle(
+              color: Theme.of(ctx).colorScheme.onSurface,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -410,8 +410,8 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
               'counter.goal.complete.message',
               args: {'count': '$_dailyGoal', 'suffix': suffix},
             ),
-            style: const TextStyle(
-              color: Color(0xFF333333),
+            style: TextStyle(
+              color: Theme.of(ctx).colorScheme.onSurface,
             ),
           ),
           actions: [
@@ -419,8 +419,8 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
               onPressed: () => Navigator.pop(ctx),
               child: Text(
                 dialogSafeTr('common.ok'),
-                style: const TextStyle(
-                  color: Color(0xFF1A1A1A),
+                style: TextStyle(
+                  color: Theme.of(ctx).colorScheme.onSurface,
                 ),
               ),
             ),
@@ -560,7 +560,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
             return AlertDialog(
               title: Text(
                 safeTr('counter.goal.dialog.title'),
-                style: const TextStyle(color: Color(0xFF1A1A1A)), // Black text color
+                style: TextStyle(color: Theme.of(dialogContext).colorScheme.onSurface),
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -571,7 +571,6 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                     textAlign: TextAlign.center,
                     style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: const Color(0xFF1A1A1A), // Black text color
                         ),
                   ),
                   const SizedBox(height: 12),
@@ -592,7 +591,11 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                     style: Theme.of(dialogContext)
                         .textTheme
                         .bodySmall
-                        ?.copyWith(color: const Color(0xFF666666)), // Dark gray instead of hint color
+                        ?.copyWith(
+                          color: Theme.of(dialogContext).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.7) // Less white for visibility
+                              : const Color(0xFF666666),
+                        ),
                   ),
                 ],
               ),
@@ -659,10 +662,10 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     
     if (_loading) {
       return Scaffold(
-        backgroundColor: DesignSystem.backgroundLight,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Container(
-          decoration: const BoxDecoration(
-            gradient: DesignSystem.backgroundGradient,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
           ),
           child: const Center(
             child: CircularProgressIndicator(
@@ -674,10 +677,10 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     }
 
     return Scaffold(
-      backgroundColor: DesignSystem.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Container(
-        decoration: const BoxDecoration(
-          color: DesignSystem.backgroundLight, // Uniform light orange/cream color
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: Stack(
           children: [
@@ -688,7 +691,9 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                   begin: Alignment.topCenter,
                   end: Alignment.center,
                   colors: [
-                    Colors.white.withValues(alpha: 0.22),
+                    Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.white.withValues(alpha: 0.22),
                     Colors.transparent,
                   ],
                 ),
@@ -850,7 +855,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                                       style: TextStyle(
                                         fontSize: isNarrowScreen ? 14 : (isSmallScreen ? 15 : 17),
                                         fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF333333),
+                                        color: Theme.of(context).colorScheme.onSurface,
                                         letterSpacing: 0.3,
                                       ),
                                       textAlign: TextAlign.center,
@@ -951,7 +956,7 @@ class _StatCard extends StatelessWidget {
             style: TextStyle(
               fontSize: titleSize,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF666666),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               letterSpacing: 0.2,
             ),
             maxLines: 2,
@@ -966,7 +971,7 @@ class _StatCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: valueSize,
                 fontWeight: FontWeight.bold,
-                color: const Color(0xFF1A1A1A),
+                color: Theme.of(context).colorScheme.onSurface,
                 letterSpacing: -0.5,
               ),
               maxLines: 1,
@@ -1042,16 +1047,22 @@ class _CounterButton extends StatelessWidget {
                       size: circleSize,
                       strokeWidth: isNarrowScreen ? 5 : 6,
                       progressColor: DesignSystem.primary.withValues(alpha: 0.55), // More vibrant but not complete
-                      backgroundColor: const Color(0xFFFFE4CC), // Light orange background for ring
-                      backgroundFillColor: const Color(0xFFFFE4CC), // Light orange fill for whole ring area
+                      backgroundColor: Theme.of(context).brightness == Brightness.dark 
+                          ? const Color(0xFF2C2C2C) 
+                          : const Color(0xFFFFE4CC), // Theme-aware background
+                      backgroundFillColor: Theme.of(context).brightness == Brightness.dark 
+                          ? const Color(0xFF2C2C2C) 
+                          : const Color(0xFFFFE4CC), // Theme-aware fill
                       showGlow: false, // No glow to avoid blur
                     ),
-                    // Inner filled circle - light orange uniform color
+                    // Inner filled circle - theme-aware color
                     Container(
                       width: circleSize * 0.68,
                       height: circleSize * 0.68,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFE4CC), // Light orange uniform color
+                        color: Theme.of(context).brightness == Brightness.dark 
+                            ? const Color(0xFF2C2C2C) 
+                            : const Color(0xFFFFE4CC), // Theme-aware color
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -1065,7 +1076,7 @@ class _CounterButton extends StatelessWidget {
                           style: TextStyle(
                             fontSize: circleSize * 0.28,
                             fontWeight: FontWeight.w600,
-                            color: const Color(0xFF666666), // Less vibrant gray
+                            color: Theme.of(context).colorScheme.onSurface, // Theme-aware color
                             letterSpacing: 0,
                             height: 1.2,
                           ),
@@ -1122,7 +1133,7 @@ class _MalaProgressDisplay extends StatelessWidget {
             fontSize: fontSize,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
-            color: const Color(0xFF333333),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
           textAlign: TextAlign.center,
           maxLines: 1,
@@ -1137,7 +1148,7 @@ class _MalaProgressDisplay extends StatelessWidget {
           style: TextStyle(
             fontSize: subtitleSize,
             fontWeight: FontWeight.w500,
-            color: const Color(0xFF666666),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           textAlign: TextAlign.center,
           maxLines: 2,
@@ -1239,14 +1250,32 @@ class _GoalSummary extends StatelessWidget {
                       progressColor: goalCompletedShown 
                           ? DesignSystem.primary // Vibrant when completed
                           : DesignSystem.primary.withValues(alpha: 0.7), // Vibrant but elegant
-                      backgroundColor: const Color(0xFFFFE4CC), // Clear light orange background - no blur
-                      backgroundFillColor: const Color(0xFFFFE4CC), // Light orange fill
+                      backgroundColor: Theme.of(context).brightness == Brightness.dark 
+                          ? const Color(0xFF2C2C2C) 
+                          : const Color(0xFFFFE4CC), // Theme-aware background
+                      backgroundFillColor: Theme.of(context).brightness == Brightness.dark 
+                          ? const Color(0xFF2C2C2C) 
+                          : const Color(0xFFFFE4CC), // Theme-aware fill
                       showGlow: false, // No glow to avoid blur
                     ),
+                  // Thin white circle outside the flag
+                  Container(
+                    width: iconSize * 0.9,
+                    height: iconSize * 0.9,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withValues(alpha: 0.3)
+                            : Colors.white.withValues(alpha: 0.5),
+                        width: 1.0, // Very thin
+                      ),
+                    ),
+                  ),
                   Container(
                     padding: EdgeInsets.all(isNarrowScreen ? 8 : 10),
                     decoration: BoxDecoration(
-                      color: Colors.white, // Solid white for better visibility
+                      color: Theme.of(context).colorScheme.surface, // Theme-aware color
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
@@ -1278,7 +1307,7 @@ class _GoalSummary extends StatelessWidget {
                     style: TextStyle(
                       fontSize: titleSize,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF1A1A1A),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -1289,7 +1318,9 @@ class _GoalSummary extends StatelessWidget {
                     style: TextStyle(
                       fontSize: subtitleSize,
                       fontWeight: FontWeight.w500,
-                      color: const Color(0xFF666666),
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white.withValues(alpha: 0.7) // Less white for visibility
+                          : const Color(0xFF666666),
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,

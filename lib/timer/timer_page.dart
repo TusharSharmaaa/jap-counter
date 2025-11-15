@@ -511,19 +511,16 @@ class _TimerPageState extends State<TimerPage>
       builder: (ctx) {
         final theme = Theme.of(ctx);
         return AlertDialog(
-          backgroundColor: Colors.white,
+          backgroundColor: theme.colorScheme.surface,
           title: Text(
             'Meditation complete',
             style: theme.textTheme.titleLarge?.copyWith(
-              color: Colors.black,
               fontWeight: FontWeight.bold,
             ),
           ),
           content: Text(
             'Your session has finished.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.black87,
-            ),
+            style: theme.textTheme.bodyMedium,
           ),
           actions: [
             TextButton(
@@ -716,21 +713,21 @@ class _TimerPageState extends State<TimerPage>
             : () => unawaited(_reset());
 
         return Scaffold(
-          backgroundColor: DesignSystem.backgroundLight,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(
             title: Text(context.tr('nav.timer')),
             centerTitle: true,
             backgroundColor: Colors.transparent,
             elevation: 0,
             flexibleSpace: Container(
-              decoration: const BoxDecoration(
-                color: DesignSystem.backgroundLight,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
               ),
             ),
           ),
           body: Container(
-            decoration: const BoxDecoration(
-              color: DesignSystem.backgroundLight,
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
             ),
             child: SafeArea(
             child: Column(
@@ -924,7 +921,6 @@ class _PrimaryTimerCard extends StatelessWidget {
             style: theme.textTheme.displayMedium?.copyWith(
               fontWeight: FontWeight.w600,
               letterSpacing: 1.2,
-              color: const Color(0xFF1A1A1A), // Explicit dark color for timer display
             ),
           ),
           const SizedBox(height: 16),
@@ -1040,7 +1036,7 @@ class _DurationSection extends StatelessWidget {
         isExpanded: true,
         decoration: InputDecoration(
           labelText: 'Select time',
-          labelStyle: const TextStyle(color: Color(0xFF666666)),
+          labelStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -1058,14 +1054,14 @@ class _DurationSection extends StatelessWidget {
                   child: Text(
                     '$m minutes',
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF1A1A1A), // Explicit dark color for selected time
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface,
                     ),
                   ),
                 ))
             .toList(),
-        style: const TextStyle(
-          color: Color(0xFF1A1A1A), // Explicit dark color for dropdown text
+        style: TextStyle(
+          color: theme.colorScheme.onSurface,
         ),
         onChanged: !enabled
             ? null
@@ -1101,7 +1097,7 @@ class _AmbienceSection extends StatelessWidget {
         isExpanded: true,
         decoration: InputDecoration(
           labelText: context.tr('timer.ambience.label'),
-          labelStyle: const TextStyle(color: Color(0xFF666666)),
+          labelStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -1120,15 +1116,15 @@ class _AmbienceSection extends StatelessWidget {
                 child: Text(
                   context.tr('timer.ambience.$id'),
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF1A1A1A), // Explicit dark color for dropdown text
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
               ),
             )
             .toList(),
-        style: const TextStyle(
-          color: Color(0xFF1A1A1A), // Explicit dark color for dropdown text
+        style: TextStyle(
+          color: theme.colorScheme.onSurface,
         ),
         onChanged: !enabled
             ? null
@@ -1156,7 +1152,7 @@ class _ShareStatTile extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: const Color(0xFF666666),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -1164,7 +1160,7 @@ class _ShareStatTile extends StatelessWidget {
         Text(
           value,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: const Color(0xFF1A1A1A),
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -1189,8 +1185,8 @@ class _TimerShareCard extends StatelessWidget {
     final lifetimeLabel = context.tr('timer.share.lifetime');
     final title = context.tr('timer.share.cardTitle');
     final subtitle = context.tr('timer.share.subtitle');
-    final onPrimary = const Color(0xFF1A1A1A);
-    final muted = const Color(0xFF666666);
+    final onPrimary = theme.colorScheme.onSurface;
+    final muted = theme.colorScheme.onSurfaceVariant;
 
     return GlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),

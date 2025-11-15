@@ -35,12 +35,19 @@ class GlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = borderRadius ?? DesignSystem.radiusCard;
     final cardPadding = padding ?? const EdgeInsets.all(DesignSystem.spacingMD);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     
-    // Use solid white background for better visibility
-    final cardColor = backgroundColor ?? Colors.white.withValues(alpha: 0.95);
+    // Use theme-aware colors
+    final cardColor = backgroundColor ?? 
+        (isDark 
+            ? theme.colorScheme.surface 
+            : Colors.white.withValues(alpha: 0.95));
     final borderColor = backgroundColor != null 
         ? DesignSystem.glassBorder 
-        : Colors.white.withValues(alpha: 0.4);
+        : (isDark 
+            ? Colors.white.withValues(alpha: 0.1) 
+            : Colors.white.withValues(alpha: 0.4));
 
     Widget content = Container(
       padding: cardPadding,

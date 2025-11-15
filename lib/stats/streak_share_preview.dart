@@ -458,7 +458,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                         ),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: Colors.deepOrangeAccent,
+                          backgroundColor: const Color(0xFFD97757), // Eye-friendly softer orange
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -507,6 +507,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
               fontSize: 17,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.2,
+              color: Colors.black, // Black color for visibility
             ),
           ),
         ],

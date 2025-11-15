@@ -19,6 +19,9 @@ class DesignSystem {
   static const Color primary = Color(0xFFFF8A3D);
   static const Color primaryDark = Color(0xFFFF5722);
   static const Color accentGlow = Color(0xFFFF7043);
+  
+  /// Eye-friendly button color - softer, muted orange
+  static const Color buttonPrimary = Color(0xFFD97757); // Softer, more muted orange
 
   /// Text Colors (dark for light theme)
   static const Color textWhite = Color(0xFF1A1A1A); // Dark text instead of white
@@ -150,10 +153,10 @@ class DesignSystem {
   // BUTTON STYLES
   // ============================================================================
 
-  /// Primary button style with brand colors
+  /// Primary button style with eye-friendly colors
   static ButtonStyle get primaryButton => FilledButton.styleFrom(
-        backgroundColor: primary,
-        foregroundColor: Colors.white, // Keep white on orange buttons
+        backgroundColor: buttonPrimary, // Softer, eye-friendly color
+        foregroundColor: Colors.white, // Keep white text on buttons
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusButton),
         ),

@@ -147,7 +147,7 @@ class _SplashScaffoldState extends State<SplashScaffold> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -156,10 +156,7 @@ class _SplashScaffoldState extends State<SplashScaffold> {
             const SizedBox(height: 16),
             Text(
               'Starting...',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Colors.black87),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
         ),
