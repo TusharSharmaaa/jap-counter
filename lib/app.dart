@@ -834,10 +834,10 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                 blastDirectionality: BlastDirectionality.explosive,
                 emissionFrequency: 0.05,
                 numberOfParticles: 20,
-                colors: const [
-                  DesignSystem.primary,
-                  DesignSystem.accentGlow,
-                  DesignSystem.primaryDark,
+                colors: [
+                  DesignSystem.buttonPrimary,
+                  DesignSystem.buttonPrimary.withValues(alpha: 0.8),
+                  DesignSystem.buttonPrimary.withValues(alpha: 0.6),
                 ],
               ),
             ),
@@ -1826,7 +1826,7 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
   static Color _colorForMalas(int malas, ThemeData theme, bool isCurrentMonth) {
     Color base;
     if (malas >= 15) {
-      base = Colors.deepOrange.shade200;
+      base = DesignSystem.buttonPrimary.withValues(alpha: 0.5); // Soothing color
     } else if (malas >= 8) {
       base = Colors.teal.shade200;
     } else if (malas >= 5) {

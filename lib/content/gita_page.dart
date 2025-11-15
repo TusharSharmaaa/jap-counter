@@ -491,6 +491,10 @@ class _GitaPageState extends State<GitaPage> {
                                         onPressed: _hasPreviousVerse
                                             ? () => _prevVerse()
                                             : null,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: DesignSystem.buttonPrimary,
+                                          side: BorderSide(color: DesignSystem.buttonPrimary),
+                                        ),
                                         child: const Text(
                                           'Prev',
                                           maxLines: 1,
@@ -537,6 +541,10 @@ class _GitaPageState extends State<GitaPage> {
                                         onPressed: _hasNextVerse
                                             ? () => _nextVerse()
                                             : null,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: DesignSystem.buttonPrimary,
+                                          side: BorderSide(color: DesignSystem.buttonPrimary),
+                                        ),
                                         child: const Text(
                                           'Next',
                                           maxLines: 1,

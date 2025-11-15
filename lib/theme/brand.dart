@@ -10,7 +10,7 @@ class BrandGradients {
         radius: 1.2,
         colors: isRunning
             ? [
-                DesignSystem.primary.withValues(alpha: 0.15),
+                DesignSystem.buttonPrimary.withValues(alpha: 0.15),
                 backgroundColor,
               ]
             : [

@@ -13,6 +13,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/ad_manager.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/design_system.dart';
 import 'dedication_store.dart';
 
 String _toHindiDigits(int number) {
@@ -203,12 +204,8 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
         centerTitle: true,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFFFE0B2), Color(0xFFFFF3E0)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: SafeArea(
           child: Column(
@@ -371,7 +368,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                                           .textTheme
                                           .bodyLarge
                                           ?.copyWith(
-                                            color: Colors.deepOrange.shade900,
+                                            color: DesignSystem.buttonPrimary,
                                             fontStyle: FontStyle.italic,
                                           ),
                                     ),

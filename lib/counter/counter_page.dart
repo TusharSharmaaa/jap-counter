@@ -669,7 +669,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
           ),
           child: const Center(
             child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(DesignSystem.primary),
+              valueColor: AlwaysStoppedAnimation<Color>(DesignSystem.buttonPrimary),
             ),
           ),
         ),
@@ -712,7 +712,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                       style: TextStyle(
                         fontSize: 120,
                         fontWeight: FontWeight.w800,
-                        color: DesignSystem.primary.withValues(alpha: 0.04),
+                        color: DesignSystem.buttonPrimary.withValues(alpha: 0.04),
                         fontFamily: 'Noto Sans Devanagari',
                       ),
                     ),
@@ -734,10 +734,10 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                   minBlastForce: 5,
                   gravity: 0.3,
                   shouldLoop: false,
-                  colors: const [
-                    DesignSystem.primary,
-                    DesignSystem.accentGlow,
-                    DesignSystem.primaryDark,
+                  colors: [
+                    DesignSystem.buttonPrimary,
+                    DesignSystem.buttonPrimary.withValues(alpha: 0.8),
+                    DesignSystem.buttonPrimary.withValues(alpha: 0.6),
                   ],
                 ),
               ),
@@ -1046,7 +1046,7 @@ class _CounterButton extends StatelessWidget {
                       progress: malaProgress,
                       size: circleSize,
                       strokeWidth: isNarrowScreen ? 5 : 6,
-                      progressColor: DesignSystem.primary.withValues(alpha: 0.55), // More vibrant but not complete
+                      progressColor: DesignSystem.buttonPrimary.withValues(alpha: 0.55), // Soothing color
                       backgroundColor: Theme.of(context).brightness == Brightness.dark 
                           ? const Color(0xFF2C2C2C) 
                           : const Color(0xFFFFE4CC), // Theme-aware background
@@ -1248,8 +1248,8 @@ class _GoalSummary extends StatelessWidget {
                       size: iconSize,
                       strokeWidth: isNarrowScreen ? 3 : 4,
                       progressColor: goalCompletedShown 
-                          ? DesignSystem.primary // Vibrant when completed
-                          : DesignSystem.primary.withValues(alpha: 0.7), // Vibrant but elegant
+                          ? DesignSystem.buttonPrimary // Soothing color when completed
+                          : DesignSystem.buttonPrimary.withValues(alpha: 0.7), // Soothing color
                       backgroundColor: Theme.of(context).brightness == Brightness.dark 
                           ? const Color(0xFF2C2C2C) 
                           : const Color(0xFFFFE4CC), // Theme-aware background
@@ -1288,8 +1288,8 @@ class _GoalSummary extends StatelessWidget {
                     child: Icon(
                       Icons.flag_rounded,
                       color: goalCompletedShown 
-                          ? DesignSystem.primaryDark // More vibrant when completed
-                          : DesignSystem.primary, // Vibrant orange
+                          ? DesignSystem.buttonPrimary // Soothing color when completed
+                          : DesignSystem.buttonPrimary, // Soothing color
                       size: iconInnerSize,
                     ),
                   ),

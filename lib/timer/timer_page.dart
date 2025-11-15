@@ -836,6 +836,10 @@ class _TimerPageState extends State<TimerPage>
                                       height: buttonHeight,
                                       child: OutlinedButton(
                                         onPressed: resetAction,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: DesignSystem.buttonPrimary,
+                                          side: BorderSide(color: DesignSystem.buttonPrimary),
+                                        ),
                                         child: Text(
                                           context.tr('timer.action.reset'),
                                           maxLines: 1,
@@ -1345,8 +1349,8 @@ class _TimerShareSheetState extends State<_TimerShareSheet> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: DesignSystem.backgroundLight,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: SafeArea(
           child: Padding(

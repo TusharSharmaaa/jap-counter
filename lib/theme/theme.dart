@@ -100,6 +100,17 @@ ThemeData buildTheme(Brightness brightness) {
     filledButtonTheme: FilledButtonThemeData(
       style: DesignSystem.primaryButton,
     ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: DesignSystem.buttonPrimary,
+        side: BorderSide(color: DesignSystem.buttonPrimary),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: DesignSystem.buttonPrimary,
+      ),
+    ),
     textTheme: TextTheme(
       titleLarge: titleStyle,
       titleMedium: titleStyle.copyWith(fontSize: 20),
