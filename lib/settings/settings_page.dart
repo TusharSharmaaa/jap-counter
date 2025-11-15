@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/prefs_manager.dart';
 import '../notifications/notification_service.dart';
@@ -341,23 +340,15 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _aboutFooter(BuildContext context) {
     final style = Theme.of(context).textTheme.bodySmall;
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snapshot) {
-        final ver = snapshot.data?.version ?? '';
-        final build = snapshot.data?.buildNumber ?? '';
-        final versionLabel = ver.isEmpty ? '' : ' • v$ver+$build';
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 28),
-          child: Column(
-            children: [
-              Text('Naam Jap Counter : Sadhna$versionLabel', style: style),
-              const SizedBox(height: 4),
-              Text('Made with devotion in India', style: style),
-            ],
-          ),
-        );
-      },
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 28),
+      child: Column(
+        children: [
+          Text('Naam Jap Counter : Sadhna • V 1.0', style: style),
+          const SizedBox(height: 4),
+          Text('Made with devotion in India', style: style),
+        ],
+      ),
     );
   }
 }
