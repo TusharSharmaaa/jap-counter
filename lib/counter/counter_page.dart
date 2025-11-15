@@ -1076,7 +1076,9 @@ class _CounterButton extends StatelessWidget {
                           style: TextStyle(
                             fontSize: circleSize * 0.28,
                             fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onSurface, // Theme-aware color
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white.withValues(alpha: 0.85) // Softer white for dark mode
+                                : const Color(0xFF555555), // Softer gray instead of dark black
                             letterSpacing: 0,
                             height: 1.2,
                           ),
