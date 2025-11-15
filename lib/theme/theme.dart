@@ -24,7 +24,7 @@ ThemeData buildTheme(Brightness brightness) {
   // Choose colors based on theme
   final backgroundColor = isDark ? darkBackground : lightBackground;
   final surfaceColor = isDark ? darkSurface : lightSurface;
-  final surfaceVariantColor = isDark ? darkSurfaceVariant : Colors.white.withValues(alpha: 0.9);
+  final surfaceVariantColor = isDark ? darkSurfaceVariant : Colors.white.withValues(alpha: 0.5); // More subtle for cream backdrop
   final onSurfaceColor = isDark ? darkOnSurface : lightOnSurface;
   final onSurfaceVariantColor = isDark ? darkOnSurfaceVariant : lightOnSurfaceVariant;
   

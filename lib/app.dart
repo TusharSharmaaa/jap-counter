@@ -269,7 +269,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                       decoration: BoxDecoration(
                         color: isDark 
                             ? Theme.of(context).colorScheme.surface
-                            : Colors.white.withValues(alpha: 0.95),
+                            : Colors.white.withValues(alpha: 0.95), // Keep nav bar more opaque for visibility
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -958,18 +958,21 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                             ),
                           ],
                         ),
-                        if (streak >= 3)
+                        // Hide badge for 7-day streak
+                        if (streak >= 3 && streak != 7)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: StreakBadge(streakDays: streak),
                           ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            streakMessage,
-                            style: theme.textTheme.bodySmall,
+                        // Hide streak message for 7-day streak
+                        if (streak != 7)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              streakMessage,
+                              style: theme.textTheme.bodySmall,
+                            ),
                           ),
-                        ),
                       ],
                     );
                       },
@@ -981,7 +984,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                     child: Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: badges.map((badge) {
+                      children: badges
+                          .where((badge) => badge != 'streak_7') // Filter out 7-day streak badge
+                          .map((badge) {
                         final label = switch (badge) {
                           'streak_7' => context.tr('stats.badge.streak7'),
                           'streak_21' => context.tr('stats.badge.streak21'),
@@ -1268,6 +1273,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                   );
                 },
               ),
+              const SizedBox(height: 8), // Minimal spacing between daily goal and 7-day progress bars
               Builder(
                 builder: (context) {
                   if (chart.isEmpty) return const SizedBox.shrink();

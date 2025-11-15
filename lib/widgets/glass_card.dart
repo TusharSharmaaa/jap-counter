@@ -38,16 +38,16 @@ class GlassCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    // Use theme-aware colors
+    // Use theme-aware colors - more subtle for cream backdrop
     final cardColor = backgroundColor ?? 
         (isDark 
             ? theme.colorScheme.surface 
-            : Colors.white.withValues(alpha: 0.95));
+            : Colors.white.withValues(alpha: 0.5)); // Reduced from 0.95 for minimalist look
     final borderColor = backgroundColor != null 
         ? DesignSystem.glassBorder 
         : (isDark 
             ? Colors.white.withValues(alpha: 0.1) 
-            : Colors.white.withValues(alpha: 0.4));
+            : Colors.black.withValues(alpha: 0.08)); // More subtle border
 
     Widget content = Container(
       padding: cardPadding,
@@ -56,7 +56,7 @@ class GlassCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(
           color: borderColor,
-          width: 1.5,
+          width: 1.0, // Thinner border for minimalist look
         ),
         boxShadow: DesignSystem.shadowSoft,
       ),

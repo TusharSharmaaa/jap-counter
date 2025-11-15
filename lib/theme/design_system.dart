@@ -179,16 +179,16 @@ class DesignSystem {
   /// Glass card style
   static BoxDecoration get cardGlass => glassCard;
 
-  /// Regular card style with shadow
+  /// Regular card style with shadow - subtle for cream backdrop
   static BoxDecoration get cardRegular => BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
+        color: Colors.white.withValues(alpha: 0.5), // Reduced from 0.9
         borderRadius: BorderRadius.circular(radiusCard),
         boxShadow: shadowSoft,
       );
 
-  /// Card with glow effect
+  /// Card with glow effect - subtle for cream backdrop
   static BoxDecoration get cardGlow => BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
+        color: Colors.white.withValues(alpha: 0.5), // Reduced from 0.9
         borderRadius: BorderRadius.circular(radiusCard),
         boxShadow: shadowGlow,
       );
