@@ -1,4 +1,5 @@
 import 'dart:async' show unawaited, Timer;
+import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:confetti/confetti.dart';
@@ -16,8 +17,9 @@ import '../data/session_store.dart';
 import '../gamify/gamify_store.dart';
 import '../l10n/app_localizations.dart';
 import '../notifications/notification_service.dart';
-import '../theme/glow_theme.dart';
+import '../theme/design_system.dart';
 import '../utils/weekly_chart_data.dart';
+import '../widgets/widgets.dart';
 import 'tap_feedback_controller.dart';
 import '../data/tap_feedback_settings.dart';
 
@@ -425,7 +427,10 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                 : safeTr('counter.goal.dialog.goalText', args: {'count': '$sliderValue', 'suffix': suffix});
             
             return AlertDialog(
-              title: Text(safeTr('counter.goal.dialog.title')),
+              title: Text(
+                safeTr('counter.goal.dialog.title'),
+                style: const TextStyle(color: Color(0xFF1A1A1A)), // Black text color
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -435,6 +440,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                     textAlign: TextAlign.center,
                     style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
+                          color: const Color(0xFF1A1A1A), // Black text color
                         ),
                   ),
                   const SizedBox(height: 12),
@@ -455,7 +461,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                     style: Theme.of(dialogContext)
                         .textTheme
                         .bodySmall
-                        ?.copyWith(color: Theme.of(dialogContext).hintColor),
+                        ?.copyWith(color: const Color(0xFF666666)), // Dark gray instead of hint color
                   ),
                 ],
               ),
@@ -492,70 +498,55 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Counter'),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          flexibleSpace: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                  Colors.transparent,
-                ],
-              ),
+        backgroundColor: DesignSystem.backgroundLight,
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: DesignSystem.backgroundGradient,
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(DesignSystem.primary),
             ),
           ),
         ),
-        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    final theme = Theme.of(context);
-    final isLight = theme.brightness == Brightness.light;
-    final gradientColors = isLight
-        ? [Colors.pink.shade50, Colors.white]
-        : [Colors.deepPurple.shade900, Colors.amber.shade100];
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Counter'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                theme.colorScheme.primary.withOpacity(0.3),
-                Colors.transparent,
-              ],
-            ),
-          ),
-        ),
-      ),
+      backgroundColor: DesignSystem.backgroundLight,
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: gradientColors,
-          ),
+        decoration: const BoxDecoration(
+          color: DesignSystem.backgroundLight, // Uniform light orange/cream color
         ),
         child: Stack(
           children: [
+            // Subtle top highlight for premium feel
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.center,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.22),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+            // Background decorative text - reduced opacity for clarity
             Positioned.fill(
               child: IgnorePointer(
                 child: Center(
                   child: AnimatedOpacity(
                     duration: const Duration(milliseconds: 400),
-                    opacity: _glowActive ? 0.1 : 0.05,
+                    opacity: _glowActive ? 0.03 : 0.02,
                     child: Text(
                       'राधे राधे',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 120,
                         fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.primary.withOpacity(0.06),
+                        color: DesignSystem.primary.withValues(alpha: 0.04),
                         fontFamily: 'Noto Sans Devanagari',
                       ),
                     ),
@@ -563,6 +554,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                 ),
               ),
             ),
+            // Confetti overlay
             Align(
               alignment: Alignment.topCenter,
               child: ConfettiWidget(
@@ -576,12 +568,13 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                 gravity: 0.3,
                 shouldLoop: false,
                 colors: const [
-                  Colors.orange,
-                  Colors.pink,
-                  Colors.purple,
+                  DesignSystem.primary,
+                  DesignSystem.accentGlow,
+                  DesignSystem.primaryDark,
                 ],
               ),
             ),
+            // Main content
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _handleJapTap,
@@ -594,28 +587,31 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const SizedBox(height: 16),
+                        SizedBox(height: isSmallScreen ? 8 : 16),
+                        // Stats row with Glass Cards
                         RepaintBoundary(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: DesignSystem.spacingMD,
+                            ),
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: _StatTile(
+                                  child: _StatCard(
                                     title: context.tr('counter.stat.todayJaps'),
                                     value: _today.toString(),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: DesignSystem.spacingSM),
                                 Expanded(
-                                  child: _StatTile(
+                                  child: _StatCard(
                                     title: context.tr('counter.stat.malas'),
                                     value: _malas.toString(),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: DesignSystem.spacingSM),
                                 Expanded(
-                                  child: _StatTile(
+                                  child: _StatCard(
                                     title: context.tr('counter.stat.lifetimeMalas'),
                                     value: _lifetimeMalas.toString(),
                                   ),
@@ -624,7 +620,8 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                             ),
                           ),
                         ),
-                        SizedBox(height: isSmallScreen ? 12 : 24),
+                        SizedBox(height: isSmallScreen ? 12 : 20),
+                        // Goal summary with Progress Ring
                         RepaintBoundary(
                           child: _GoalSummary(
                             dailyGoal: _dailyGoal,
@@ -634,6 +631,7 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                             onEditGoal: _editGoal,
                           ),
                         ),
+                        // Main counter area
                         Expanded(
                           child: Center(
                             child: SingleChildScrollView(
@@ -643,9 +641,14 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                                 children: [
                                   Text(
                                     context.tr('counter.tapToCount'),
-                                    style: const TextStyle(fontSize: 18),
+                                    style: TextStyle(
+                                      fontSize: isSmallScreen ? 15 : 17,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF333333),
+                                      letterSpacing: 0.3,
+                                    ),
                                   ),
-                                  SizedBox(height: isSmallScreen ? 12 : 16), // Cannot be const due to conditional
+                                  SizedBox(height: isSmallScreen ? 16 : 24),
                                   RepaintBoundary(
                                     child: _CounterButton(
                                       today: _today,
@@ -655,7 +658,9 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                                       isSmallScreen: isSmallScreen,
                                     ),
                                   ),
-                                  SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+                                  SizedBox(
+                                    height: MediaQuery.of(context).padding.bottom + 16,
+                                  ),
                                 ],
                               ),
                             ),
@@ -686,42 +691,43 @@ class _CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   }
 }
 
-class _StatTile extends StatelessWidget {
+class _StatCard extends StatelessWidget {
   final String title;
   final String value;
-  const _StatTile({required this.title, required this.value});
+  const _StatCard({required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 60, maxHeight: 68),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+    return GlassCard(
+      padding: const EdgeInsets.all(DesignSystem.spacingMD),
+      borderRadius: DesignSystem.radiusCard,
+      useBackdropBlur: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Flexible(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontSize: 10,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF666666),
+              letterSpacing: 0.2,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          const Spacer(),
+          const SizedBox(height: 8),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              style: const TextStyle(
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A1A),
+                letterSpacing: -0.5,
               ),
             ),
           ),
@@ -748,7 +754,8 @@ class _CounterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final malaProgress = (currentMalaCount / 108).clamp(0.0, 1.0);
+    
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -759,51 +766,63 @@ class _CounterButton extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final maxSize = constraints.maxWidth < constraints.maxHeight
-                  ? constraints.maxWidth * 0.6
-                  : constraints.maxHeight * 0.4;
-              final circleSize = (maxSize.clamp(180.0, 240.0));
+                  ? constraints.maxWidth * 0.65
+                  : constraints.maxHeight * 0.45;
+              final circleSize = (maxSize.clamp(200.0, 280.0));
               
               return Container(
                 height: circleSize,
                 width: circleSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      theme.colorScheme.primary.withOpacity(0.25),
-                      theme.colorScheme.surface,
-                    ],
-                    radius: 0.85,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.colorScheme.primary.withOpacity(0.3),
-                      blurRadius: 30,
-                      spreadRadius: 2,
-                    ),
-                  ],
+                  color: Colors.transparent,
                 ),
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        '$today',
-                        style: theme.textTheme.displayLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          foreground: Paint()
-                            ..shader = GlowTheme.linearGradient(context),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Progress ring for mala progress - more vibrant
+                    ProgressRing(
+                      progress: malaProgress,
+                      size: circleSize,
+                      strokeWidth: 6,
+                      progressColor: DesignSystem.primary.withValues(alpha: 0.55), // More vibrant but not complete
+                      backgroundColor: const Color(0xFFFFE4CC), // Light orange background for ring
+                      backgroundFillColor: const Color(0xFFFFE4CC), // Light orange fill for whole ring area
+                      showGlow: false, // No glow to avoid blur
+                    ),
+                    // Inner filled circle - light orange uniform color
+                    Container(
+                      width: circleSize * 0.68,
+                      height: circleSize * 0.68,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE4CC), // Light orange uniform color
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    // Main counter number - less vibrant and smaller
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Text(
+                          '$today',
+                          style: TextStyle(
+                            fontSize: circleSize * 0.28,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF666666), // Less vibrant gray
+                            letterSpacing: 0,
+                            height: 1.2,
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               );
             },
           ),
         ),
-        SizedBox(height: isSmallScreen ? 12 : 20), // Cannot be const due to conditional
+        SizedBox(height: isSmallScreen ? 16 : 24),
         _MalaProgressDisplay(
           currentMalaCount: currentMalaCount,
           malasCompleted: malasCompleted,
@@ -823,31 +842,32 @@ class _MalaProgressDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final normalized = currentMalaCount.clamp(0, 108).toInt();
-    final primaryLabelStyle = theme.textTheme.titleSmall?.copyWith(
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0.2,
-    );
-    final captionStyle = theme.textTheme.bodySmall?.copyWith(
-      color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
-    );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           '$normalized / 108',
-          style: primaryLabelStyle,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+            color: Color(0xFF333333),
+          ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(
           context.tr(
             'counter.malaProgress.completed',
             args: {'count': '$malasCompleted'},
           ),
-          style: captionStyle ?? theme.textTheme.bodySmall,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF666666),
+          ),
           textAlign: TextAlign.center,
         ),
       ],
@@ -872,7 +892,6 @@ class _GoalSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final scope = AppLocalizationScope.maybeOf(context);
     // Use default language if scope is not available (shouldn't happen normally)
     final language = scope?.language ?? 'en';
@@ -914,77 +933,97 @@ class _GoalSummary extends StatelessWidget {
     final statusText = safeTr(statusKey, args: statusArgs);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Material(
-        color: theme.colorScheme.surface.withOpacity(0.95),
-        elevation: 1,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onEditGoal,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.flag_rounded,
-                    color: theme.colorScheme.primary,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          goalLabel,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+      padding: const EdgeInsets.symmetric(
+        horizontal: DesignSystem.spacingMD,
+        vertical: 8,
+      ),
+      child: GlassCard(
+        padding: const EdgeInsets.all(DesignSystem.spacingMD),
+        borderRadius: DesignSystem.radiusCard,
+        onTap: onEditGoal,
+        useBackdropBlur: true,
+        child: Row(
+          children: [
+            // Goal icon with progress ring
+            SizedBox(
+              width: 60,
+              height: 60,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (dailyGoal > 0)
+                    ProgressRing(
+                      progress: goalProgress.clamp(0.0, 1.0),
+                      size: 60,
+                      strokeWidth: 4,
+                      progressColor: goalCompletedShown 
+                          ? DesignSystem.primary // Vibrant when completed
+                          : DesignSystem.primary.withValues(alpha: 0.7), // Vibrant but elegant
+                      backgroundColor: const Color(0xFFFFE4CC), // Clear light orange background - no blur
+                      backgroundFillColor: const Color(0xFFFFE4CC), // Light orange fill
+                      showGlow: false, // No glow to avoid blur
+                    ),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white, // Solid white for better visibility
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 2, // Subtle shadow, no blur
+                          offset: const Offset(0, 1),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Flexible(
-                        child: Text(
-                          statusText,
-                          style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: goalProgress,
-                          minHeight: 5,
-                          backgroundColor: theme.colorScheme.primary
-                              .withOpacity(0.08),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.flag_rounded,
+                      color: goalCompletedShown 
+                          ? DesignSystem.primaryDark // More vibrant when completed
+                          : DesignSystem.primary, // Vibrant orange
+                      size: 26,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.edit_outlined,
-                  color: theme.colorScheme.primary,
-                  size: 18,
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+            const SizedBox(width: DesignSystem.spacingMD),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    goalLabel,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    statusText,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF666666),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.edit_outlined,
+              color: const Color(0xFF999999),
+              size: 22,
+            ),
+          ],
         ),
       ),
     );
