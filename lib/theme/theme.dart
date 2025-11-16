@@ -28,20 +28,22 @@ ThemeData buildTheme(Brightness brightness) {
   final onSurfaceColor = isDark ? darkOnSurface : lightOnSurface;
   final onSurfaceVariantColor = isDark ? darkOnSurfaceVariant : lightOnSurfaceVariant;
   
-  final colorScheme = ColorScheme.fromSeed(
+  final baseScheme = ColorScheme.fromSeed(
     seedColor: DesignSystem.primary,
     brightness: brightness,
     primary: DesignSystem.buttonPrimary, // Use eye-friendly button color
     secondary: DesignSystem.accentGlow,
     surface: surfaceColor,
-    surfaceVariant: surfaceVariantColor,
-    background: backgroundColor,
+    surfaceContainerHighest: surfaceVariantColor,
     error: DesignSystem.primaryDark,
-  ).copyWith(
+  );
+
+  final colorScheme = baseScheme.copyWith(
+    // Map deprecated fields onto their modern equivalents
+    surfaceContainerHighest: surfaceVariantColor,
     // Text colors based on theme
     onSurface: onSurfaceColor,
     onSurfaceVariant: onSurfaceVariantColor,
-    onBackground: onSurfaceColor,
     onPrimary: Colors.white, // White text on primary/orange buttons
     onSecondary: Colors.white, // White text on secondary buttons
   );

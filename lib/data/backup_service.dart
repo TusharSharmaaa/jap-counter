@@ -45,11 +45,17 @@ class BackupService {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/radha_jap_backup.json');
       await file.writeAsString(encoded);
-      await Share.shareXFiles([XFile(file.path)], text: '🌸 Radha Jap Backup');
-    } catch (e) {
-      // Handle errors gracefully - could show user notification
-      // For now, silently fail to prevent crashes
-      rethrow; // Re-throw to let caller handle if needed
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: '🌸 Radha Jap Backup',
+      );
+    } catch (e, stackTrace) {
+      // Handle errors gracefully - log in debug, avoid crashing on bad storage/network conditions
+      if (kDebugMode) {
+        // ignore: avoid_print
+        print('[BackupService] exportToJson failed: $e\n$stackTrace');
+      }
+      // Intentionally do NOT rethrow here so the app never crashes during backup export.
     }
   }
 }

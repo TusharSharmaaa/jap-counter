@@ -498,7 +498,7 @@ class _SettingsIconCircle extends StatelessWidget {
       height: 40,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
       ),
       child: Icon(icon, color: color),
     );
@@ -516,7 +516,7 @@ class _ValuePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: cs.primary.withOpacity(0.12),
+        color: cs.primary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(

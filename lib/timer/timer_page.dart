@@ -967,7 +967,7 @@ class _HeaderCard extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: theme.colorScheme.primary.withOpacity(.12),
+              color: theme.colorScheme.primary.withValues(alpha: 0.12),
             ),
             child: const Icon(Icons.spa),
           ),
@@ -1044,7 +1044,9 @@ class _DurationSection extends StatelessWidget {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
+            borderSide: BorderSide(
+              color: theme.dividerColor.withValues(alpha: 0.6),
+            ),
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 12,
@@ -1112,7 +1114,9 @@ class _AmbienceSection extends StatelessWidget {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
+            borderSide: BorderSide(
+              color: theme.dividerColor.withValues(alpha: 0.6),
+            ),
           ),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 12,
@@ -1237,7 +1241,10 @@ class _TimerShareCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          Divider(color: onPrimary.withOpacity(0.25), thickness: 1),
+          Divider(
+            color: onPrimary.withValues(alpha: 0.25),
+            thickness: 1,
+          ),
           const SizedBox(height: 12),
           Text(
             'Naam Jap Counter : Sadhna',

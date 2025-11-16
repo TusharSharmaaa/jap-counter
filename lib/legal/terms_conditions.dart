@@ -128,7 +128,7 @@ class TermsConditionsPage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: colorScheme.primary.withOpacity(0.1),
+              color: colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -164,7 +164,7 @@ class TermsConditionsPage extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.15),
+            color: theme.colorScheme.primary.withValues(alpha: 0.15),
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,

@@ -22,7 +22,6 @@ import 'core/prefs_manager.dart';
 import 'data/activity_store.dart';
 import 'data/counter_store.dart';
 import 'data/goal_store.dart';
-import 'theme/neumorph.dart';
 import 'gamify/gamify_store.dart';
 import 'theme/theme.dart';
 import 'theme/design_system.dart';
@@ -231,8 +230,14 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Theme.of(context).colorScheme.surface.withOpacity(0.95),
-                Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                Theme.of(context)
+                    .colorScheme
+                    .surface
+                    .withValues(alpha: 0.95),
+                Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.05),
               ],
             ),
           ),
@@ -445,11 +450,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
   bool _shareBusy = false;
   late ConfettiController _confetti;
 
-  CounterStore? _store;
   bool _loading = true;
   int _lifetime = 0;
-  // NEW: user's dedication text (persisted via DedicationStore)
-  String _dedication = '';
   static const _ambienceKey = 'stats.ambience.enabled';
   bool _ambienceEnabled = false;
 
@@ -627,7 +629,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
   
   @override
   void dispose() {
-    // Dispose ValueNotifiers
+    // Dispose ValueNotifiers and controllers
     _todayNotifier.dispose();
     _todayMinNotifier.dispose();
     _lifetimeMinNotifier.dispose();
@@ -733,7 +735,6 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     // Only update rarely changing values in setState
     setState(() {
       _lifetime = s.lifetimeJaps;
-      _dedication = dstore.note;
     });
     // Also ensure today is marked active on manual refresh
     if (s.todayJaps > 0) {
@@ -768,7 +769,6 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     setState(() {
       _lifetime = s.lifetimeJaps;
       _loading = false;
-      _dedication = dstore.note;
     });
     
     // Populate cache with initial data for instant display
@@ -1347,9 +1347,11 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: theme.colorScheme.surfaceVariant
-                                                .withOpacity(0.7),
-                                            borderRadius: BorderRadius.circular(8),
+                                            color: theme.colorScheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.7),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
                                           ),
                                           child: Text(
                                             '$val',
@@ -1575,21 +1577,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     );
   }
 
-  Widget _metricTile(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
-        Text(label, style: const TextStyle(fontSize: 13)),
-      ],
-    );
-  }
 }
-
-// --- Re-add missing _NeoTile widget (used in StatsPage) ---
 
 class _ActivityCalendar extends StatefulWidget {
   final int todayJaps;
@@ -1861,7 +1849,9 @@ class _ActivityCalendarState extends State<_ActivityCalendar> {
           ? theme.colorScheme.surface
           : Colors.white;
     }
-    return isCurrentMonth ? base : base.withOpacity(0.45);
+    return isCurrentMonth
+        ? base
+        : base.withValues(alpha: 0.45);
   }
 
   Widget _buildLegend(BuildContext context) {
@@ -1976,7 +1966,9 @@ class _CalendarCell extends StatelessWidget {
     final fill = _ActivityCalendarState._colorForMalas(malas, theme, isCurrentMonth);
     final borderColor = isSelected
         ? theme.colorScheme.primary
-        : theme.dividerColor.withOpacity(isCurrentMonth ? 1 : 0.4);
+        : theme.dividerColor.withValues(
+            alpha: isCurrentMonth ? 1 : 0.4,
+          );
     // If malas > 0 (has color fill), use black text. Otherwise use theme color
     final hasColorFill = malas > 0;
     final textColor = hasColorFill

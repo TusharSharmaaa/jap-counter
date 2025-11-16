@@ -51,7 +51,10 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
               Icon(
                 Icons.self_improvement,
                 size: 96,
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.8),
               ),
               const SizedBox(height: 20),
               ShaderMask(

@@ -1,13 +1,9 @@
 import 'dart:async' show unawaited, Timer;
-import 'dart:ui' as ui;
-
-import 'package:audioplayers/audioplayers.dart';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/ad_manager.dart';
-import '../core/prefs_manager.dart';
 import '../data/activity_store.dart';
 import '../data/counter_store.dart';
 import '../data/dedication_store.dart';

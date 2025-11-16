@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -40,12 +39,12 @@ class QuoteImageGenerator {
       const Radius.circular(48),
     );
     final innerPaint = Paint()
-      ..color = Colors.white.withOpacity(0.12)
+      ..color = Colors.white.withValues(alpha: 0.12)
       ..style = PaintingStyle.fill;
     canvas.drawRRect(innerRRect, innerPaint);
 
     final accentPaint = Paint()
-      ..color = selectedTheme.badgeColor.withOpacity(0.35);
+      ..color = selectedTheme.badgeColor.withValues(alpha: 0.35);
     canvas.drawCircle(
       Offset(innerRect.left + 140, innerRect.top + 160),
       120,
@@ -54,7 +53,9 @@ class QuoteImageGenerator {
     canvas.drawCircle(
       Offset(innerRect.right - 100, innerRect.bottom - 180),
       90,
-      accentPaint..color = selectedTheme.accentColor.withOpacity(0.25),
+      accentPaint
+        ..color =
+            selectedTheme.accentColor.withValues(alpha: 0.25),
     );
 
     final titleStyle = TextStyle(
@@ -64,18 +65,18 @@ class QuoteImageGenerator {
     );
     final bodyStyle = TextStyle(
       fontSize: 46,
-      color: selectedTheme.textColor.withOpacity(0.92),
+      color: selectedTheme.textColor.withValues(alpha: 0.92),
       fontWeight: FontWeight.w500,
       height: 1.4,
     );
     final noteStyle = TextStyle(
       fontSize: 36,
-      color: selectedTheme.textColor.withOpacity(0.75),
+      color: selectedTheme.textColor.withValues(alpha: 0.75),
       fontStyle: FontStyle.italic,
     );
     final footerStyle = TextStyle(
       fontSize: 34,
-      color: selectedTheme.textColor.withOpacity(0.7),
+      color: selectedTheme.textColor.withValues(alpha: 0.7),
       fontWeight: FontWeight.w600,
     );
 
@@ -120,7 +121,7 @@ class QuoteImageGenerator {
         style: bodyStyle.copyWith(
           fontSize: 32,
           fontWeight: FontWeight.w500,
-          color: selectedTheme.textColor.withOpacity(0.85),
+          color: selectedTheme.textColor.withValues(alpha: 0.85),
         ),
         maxWidth: innerRect.width - 60,
         startX: innerRect.left + 30,
@@ -159,7 +160,7 @@ class QuoteImageGenerator {
         style: footerStyle.copyWith(
           fontSize: 30,
           fontWeight: FontWeight.w500,
-          color: selectedTheme.textColor.withOpacity(0.6),
+          color: selectedTheme.textColor.withValues(alpha: 0.6),
         ),
         maxWidth: innerRect.width,
         startX: innerRect.left + 20,
