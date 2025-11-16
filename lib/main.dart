@@ -125,11 +125,30 @@ class _SplashScaffoldState extends State<SplashScaffold> {
     try {
       await NotificationService.initialize()
           .timeout(const Duration(seconds: 2));
-      final language = await LanguageStore.current();
-      await NotificationService()
-          .scheduleDailyMotivation(language: language)
+
+      final service = NotificationService();
+
+      // Request runtime permission on Android 13+ (no-op elsewhere)
+      final granted = await service.requestPermission()
           .timeout(const Duration(seconds: 2));
-      debugPrint('$_bootLog notifications primed');
+
+      if (granted) {
+        final language = await LanguageStore.current();
+
+        // 3 fixed-time daily reminders with app icon
+        await service
+            .scheduleDefaults(language: language)
+            .timeout(const Duration(seconds: 2));
+
+        // Additional motivational notification once a day
+        await service
+            .scheduleDailyMotivation(language: language)
+            .timeout(const Duration(seconds: 2));
+
+        debugPrint('$_bootLog notifications primed (daily x3 + motivation)');
+      } else {
+        debugPrint('$_bootLog notifications permission denied');
+      }
     } on TimeoutException {
       debugPrint('$_bootLog notifications prep timeout');
     } catch (error, stackTrace) {
