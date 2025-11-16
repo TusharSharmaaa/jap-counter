@@ -121,12 +121,14 @@ class TimerService extends ChangeNotifier {
         
         // Check if timer has completed while app was closed
         if (remaining <= Duration.zero) {
-          // Timer completed while app was closed
+          // Timer completed while app was closed.
+          // Mark as completed, but DO NOT touch _recordedSeconds here.
+          // Any remaining minutes will be credited later via
+          // captureUncreditedMinutes(forceFull: true) invoked from the UI.
           _running = false;
           _startedAt = null;
           _accumulated = _target;
           _completedThisRun = true;
-          _recordedSeconds = _target.inSeconds;
           _stopTicker();
           needsPersist = true;
         } else {
@@ -412,7 +414,10 @@ class TimerService extends ChangeNotifier {
     _accumulated = _target;
     _running = false;
     _startedAt = null;
-    _recordedSeconds = _target.inSeconds;
+  // IMPORTANT: Do NOT mutate _recordedSeconds here.
+  // It tracks how many seconds have already been credited to MeditationStore.
+  // The UI layer will call captureUncreditedMinutes(forceFull: true) on completion,
+  // which uses _recordedSeconds to compute the remaining minutes to credit.
     _stopTicker();
     
     // Update display to show completed state (00:00)

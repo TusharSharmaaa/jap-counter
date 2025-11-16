@@ -504,28 +504,34 @@ class _TimerPageState extends State<TimerPage>
     // Show dialog immediately when timer completes
     if (!mounted) return;
     
-    // Show completion dialog immediately
+    // Show completion dialog immediately, with creamy background + dark text
     unawaited(showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
-        final theme = Theme.of(ctx);
         return AlertDialog(
-          backgroundColor: theme.colorScheme.surface,
-          title: Text(
+          // Use the app's light background color so it matches the main cream
+          backgroundColor: DesignSystem.backgroundLight,
+          title: const Text(
             'Meditation complete',
-            style: theme.textTheme.titleLarge?.copyWith(
+            style: TextStyle(
               fontWeight: FontWeight.bold,
+              color: Colors.black,
             ),
           ),
-          content: Text(
+          content: const Text(
             'Your session has finished.',
-            style: theme.textTheme.bodyMedium,
+            style: TextStyle(
+              color: Colors.black,
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('OK'),
+              child: const Text(
+                'OK',
+                style: TextStyle(color: Colors.black),
+              ),
             ),
           ],
         );
@@ -1019,6 +1025,8 @@ class _DurationSection extends StatelessWidget {
         value: selected,
         icon: const Icon(Icons.expand_more),
         isExpanded: true,
+        // Use the app's light background (cream) for dropdown menu
+        dropdownColor: DesignSystem.backgroundLight,
         decoration: InputDecoration(
           labelText: 'Select time',
           labelStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
@@ -1039,15 +1047,15 @@ class _DurationSection extends StatelessWidget {
                   child: Text(
                     '$m minutes',
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: theme.colorScheme.onSurface,
+                    // Force black text so it's visible on white dropdown
+                    style: const TextStyle(
+                      color: Colors.black,
                     ),
                   ),
                 ))
             .toList(),
-        style: TextStyle(
-          color: theme.colorScheme.onSurface,
-        ),
+        // Keep field text dark as well for readability on creamy background
+        style: const TextStyle(color: Colors.black),
         onChanged: !enabled
             ? null
             : (value) {
@@ -1080,6 +1088,8 @@ class _AmbienceSection extends StatelessWidget {
         value: selected,
         icon: const Icon(Icons.expand_more),
         isExpanded: true,
+        // Use the app's light background (cream) for dropdown menu
+        dropdownColor: DesignSystem.backgroundLight,
         decoration: InputDecoration(
           labelText: context.tr('timer.ambience.label'),
           labelStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
@@ -1101,16 +1111,16 @@ class _AmbienceSection extends StatelessWidget {
                 child: Text(
                   context.tr('timer.ambience.$id'),
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: theme.colorScheme.onSurface,
+                  // Force black text so it's visible on white dropdown
+                  style: const TextStyle(
+                    color: Colors.black,
                   ),
                 ),
               ),
             )
             .toList(),
-        style: TextStyle(
-          color: theme.colorScheme.onSurface,
-        ),
+        // Keep field text dark as well for readability on creamy background
+        style: const TextStyle(color: Colors.black),
         onChanged: !enabled
             ? null
             : (value) {
