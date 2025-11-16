@@ -1042,20 +1042,22 @@ class _DurationSection extends StatelessWidget {
           isDense: true,
         ),
         items: presets
-            .map((m) => DropdownMenuItem(
-                  value: m,
-                  child: Text(
-                    '$m minutes',
-                    overflow: TextOverflow.ellipsis,
-                    // Force black text so it's visible on white dropdown
-                    style: const TextStyle(
-                      color: Colors.black,
-                    ),
+            .map(
+              (m) => DropdownMenuItem(
+                value: m,
+                child: Text(
+                  '$m minutes',
+                  overflow: TextOverflow.ellipsis,
+                  // Theme-aware text so it's visible in both light & dark
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface,
                   ),
-                ))
+                ),
+              ),
+            )
             .toList(),
-        // Keep field text dark as well for readability on creamy background
-        style: const TextStyle(color: Colors.black),
+        // Selected value text: white on dark, dark on light
+        style: TextStyle(color: theme.colorScheme.onSurface),
         onChanged: !enabled
             ? null
             : (value) {
@@ -1111,16 +1113,16 @@ class _AmbienceSection extends StatelessWidget {
                 child: Text(
                   context.tr('timer.ambience.$id'),
                   overflow: TextOverflow.ellipsis,
-                  // Force black text so it's visible on white dropdown
-                  style: const TextStyle(
-                    color: Colors.black,
+                  // Theme-aware text so it's visible in both light & dark
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
               ),
             )
             .toList(),
-        // Keep field text dark as well for readability on creamy background
-        style: const TextStyle(color: Colors.black),
+        // Selected value text: white on dark, dark on light
+        style: TextStyle(color: theme.colorScheme.onSurface),
         onChanged: !enabled
             ? null
             : (value) {
