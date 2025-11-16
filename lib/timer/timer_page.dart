@@ -536,29 +536,10 @@ class _TimerPageState extends State<TimerPage>
     await _safeSoundCall(() => _soundManager.stopAmbience());
     await _safeSoundCall(() => _soundManager.playBell());
     await _ensureWakelockActive(false);
-    
-    // Always commit remaining time when timer completes
-    final addedMinutes = await _timerService.captureUncreditedMinutes(
-      forceFull: true,
-    );
-    
-    // Always commit remaining time when timer completes
-    // This ensures any partial minutes are credited
-    if (addedMinutes > 0) {
-      final medStore = await MeditationStore.create();
-      await medStore.addMinutes(addedMinutes);
-      if (mounted) {
-        setState(() {
-          _todayMinutes = medStore.todayMinutes;
-          _lifetimeMinutes = medStore.lifetimeMinutes;
-        });
-      }
-      if (kDebugMode) {
-        debugPrint('[TimerPage] Timer completed. Credited $addedMinutes minutes. Today: $_todayMinutes, Lifetime: $_lifetimeMinutes');
-      }
-    }
-    // Reload meditation stats to ensure we have the latest values
-    await _loadMeditationStats();
+  
+  // Commit *all* remaining time when timer completes via shared path
+  // This ensures stats page and timer share card both update in real time.
+  await _commitProgress(forceFull: true);
     
     final targetMinutes = _timerService.target.inMinutes;
     await AdManager.instance.recordEvent(
