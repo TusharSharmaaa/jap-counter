@@ -509,28 +509,39 @@ class _TimerPageState extends State<TimerPage>
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final isDark = theme.brightness == Brightness.dark;
+        final dialogBackground =
+            isDark ? theme.colorScheme.surface : DesignSystem.backgroundLight;
+        final dialogTextColor =
+            isDark ? theme.colorScheme.onSurface : Colors.black;
+
+        final minutes = _timerService.target.inMinutes;
+
         return AlertDialog(
-          // Use the app's light background color so it matches the main cream
-          backgroundColor: DesignSystem.backgroundLight,
-          title: const Text(
-            'Meditation complete',
+          backgroundColor: dialogBackground,
+          title: Text(
+            ctx.tr('timer.complete.title'),
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: Colors.black,
+              color: dialogTextColor,
             ),
           ),
-          content: const Text(
-            'Your session has finished.',
+          content: Text(
+            ctx.tr(
+              'timer.complete.message',
+              args: {'minutes': '$minutes'},
+            ),
             style: TextStyle(
-              color: Colors.black,
+              color: dialogTextColor,
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text(
-                'OK',
-                style: TextStyle(color: Colors.black),
+              child: Text(
+                ctx.tr('common.ok'),
+                style: TextStyle(color: dialogTextColor),
               ),
             ),
           ],
@@ -967,7 +978,7 @@ class _HeaderCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Meditation Timer',
+                  context.tr('timer.header.title'),
                   style: theme.textTheme.titleMedium,
                   softWrap: true,
                   maxLines: 1,
@@ -1028,7 +1039,7 @@ class _DurationSection extends StatelessWidget {
         // Use the app's light background (cream) for dropdown menu
         dropdownColor: DesignSystem.backgroundLight,
         decoration: InputDecoration(
-          labelText: 'Select time',
+          labelText: context.tr('timer.duration.label'),
           labelStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           enabledBorder: OutlineInputBorder(
@@ -1046,7 +1057,10 @@ class _DurationSection extends StatelessWidget {
               (m) => DropdownMenuItem(
                 value: m,
                 child: Text(
-                  '$m minutes',
+                  context.tr(
+                    'timer.duration.optionMinutes',
+                    args: {'minutes': '$m'},
+                  ),
                   overflow: TextOverflow.ellipsis,
                   // Theme-aware text so it's visible in both light & dark
                   style: TextStyle(
@@ -1398,3 +1412,4 @@ class _TimerShareSheetState extends State<_TimerShareSheet> {
     return '$mins m';
   }
 }
+
