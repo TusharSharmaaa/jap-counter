@@ -44,13 +44,15 @@ class SplashApp extends StatelessWidget {
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: initialThemeMode,
-      home: const SplashScaffold(),
+      home: SplashScaffold(initialThemeMode: initialThemeMode),
     );
   }
 }
 
 class SplashScaffold extends StatefulWidget {
-  const SplashScaffold({super.key});
+  final ThemeMode initialThemeMode;
+
+  const SplashScaffold({super.key, required this.initialThemeMode});
 
   @override
   State<SplashScaffold> createState() => _SplashScaffoldState();
@@ -140,7 +142,11 @@ class _SplashScaffoldState extends State<SplashScaffold> {
     if (!mounted || _navigated) return;
     _navigated = true;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const RootScaffold()),
+      MaterialPageRoute(
+        builder: (_) => RootScaffold(
+          initialThemeMode: widget.initialThemeMode,
+        ),
+      ),
     );
   }
 
@@ -166,10 +172,12 @@ class _SplashScaffoldState extends State<SplashScaffold> {
 }
 
 class RootScaffold extends StatelessWidget {
-  const RootScaffold({super.key});
+  final ThemeMode initialThemeMode;
+
+  const RootScaffold({super.key, required this.initialThemeMode});
 
   @override
   Widget build(BuildContext context) {
-    return const App();
+    return App(initialThemeMode: initialThemeMode);
   }
 }

@@ -37,7 +37,9 @@ import 'widgets/widgets.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 class App extends StatefulWidget {
-  const App({super.key});
+  final ThemeMode initialThemeMode;
+
+  const App({super.key, required this.initialThemeMode});
   @override
   State<App> createState() => _AppState();
 }
@@ -53,6 +55,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     _timerService = TimerService();
     unawaited(_timerService.load());
 
+    // Start with the theme passed from splash so we don't flash the system theme
+    _themeMode = widget.initialThemeMode;
     _loadThemeMode();
     _loadLanguage();
     _initNotifications(); // fire-and-forget
@@ -78,7 +82,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   int _index = 0;
   final GlobalKey<_StatsPageState> _statsKey = GlobalKey<_StatsPageState>();
   final GlobalKey<CounterPageState> _counterKey = GlobalKey<CounterPageState>();
-  ThemeMode _themeMode = ThemeMode.system;
+  late ThemeMode _themeMode;
   String _language = 'en';
 
   late final List<Widget> _pages = [
@@ -267,9 +271,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                     padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 12, vertical: 8),
                     child: Container(
                       decoration: BoxDecoration(
+                        // Light theme: pure white bar
+                        // Dark theme: pure black bar
                         color: isDark 
-                            ? Theme.of(context).colorScheme.surface
-                            : Colors.white.withValues(alpha: 0.95), // Keep nav bar more opaque for visibility
+                            ? Colors.black
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
