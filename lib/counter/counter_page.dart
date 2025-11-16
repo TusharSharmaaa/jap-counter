@@ -396,12 +396,20 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
           return value;
         }
         
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final dialogBackground = isDark
+            ? Theme.of(ctx).colorScheme.surface
+            : const Color(0xFFFFF4E4); // same soft cream as app background
+        final dialogTextColor = isDark
+            ? Theme.of(ctx).colorScheme.onSurface
+            : Colors.black; // explicit black text in light mode
+
         return AlertDialog(
-          backgroundColor: Theme.of(ctx).colorScheme.surface,
+          backgroundColor: dialogBackground,
           title: Text(
             dialogSafeTr('counter.goal.complete.title'),
             style: TextStyle(
-              color: Theme.of(ctx).colorScheme.onSurface,
+              color: dialogTextColor,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -411,7 +419,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
               args: {'count': '$_dailyGoal', 'suffix': suffix},
             ),
             style: TextStyle(
-              color: Theme.of(ctx).colorScheme.onSurface,
+              color: dialogTextColor,
             ),
           ),
           actions: [
@@ -420,7 +428,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
               child: Text(
                 dialogSafeTr('common.ok'),
                 style: TextStyle(
-                  color: Theme.of(ctx).colorScheme.onSurface,
+                  color: dialogTextColor,
                 ),
               ),
             ),
@@ -1012,11 +1020,16 @@ class _CounterButton extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        AnimatedScale(
-          scale: pulse ? 1.08 : 1.0,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-          child: LayoutBuilder(
+        // IMPORTANT:
+        // We intentionally avoid scaling animations here on tap because on some
+        // Android devices (reported especially on a few Samsung models) the
+        // engine briefly rasterizes the scaled layer with a non‑square bound,
+        // which makes the circle look squashed horizontally for a frame.
+        //
+        // Keeping a stable, non‑animated size for the circle guarantees that
+        // it always stays perfectly round, independent of screen size,
+        // refresh rate, or OEM animation quirks.
+        LayoutBuilder(
             builder: (context, constraints) {
               // Calculate responsive circle size based on available space
               final availableWidth = constraints.maxWidth;
@@ -1034,7 +1047,7 @@ class _CounterButton extends StatelessWidget {
               return Container(
                 height: circleSize,
                 width: circleSize,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.transparent,
                 ),
@@ -1092,7 +1105,6 @@ class _CounterButton extends StatelessWidget {
               );
             },
           ),
-        ),
         SizedBox(height: isSmallScreen ? 16 : 24),
         Padding(
           padding: EdgeInsets.symmetric(
