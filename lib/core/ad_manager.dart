@@ -139,6 +139,7 @@ class AdManager {
   int _gitaShlokasRead = 0;
   DateTime? _lastRewardedShownTime;
   DateTime? _lastInterstitialShownTime;
+  final Map<String, DateTime> _lastPlacementShown = {};
 
   // Debug/testing overrides.
   bool _testMode = false;
@@ -767,7 +768,13 @@ class AdManager {
     final minCooldownSeconds =
         (globalConfig['min_cooldown_seconds'] as num?)?.toInt() ?? 0;
     if (minCooldownSeconds > 0) {
-      final lastGlobal = await _getTimestamp('ad.$type.lastShown');
+      DateTime? lastGlobal = await _getTimestamp('ad.$type.lastShown');
+      // Prefer in-memory timestamps for the current session (helps tests + live sessions)
+      if (type == 'interstitial' && _lastInterstitialShownTime != null) {
+        lastGlobal = _coalesceLatest(lastGlobal, _lastInterstitialShownTime);
+      } else if (type == 'rewarded' && _lastRewardedShownTime != null) {
+        lastGlobal = _coalesceLatest(lastGlobal, _lastRewardedShownTime);
+      }
       final seconds = lastGlobal == null
           ? null
           : now.difference(lastGlobal).inSeconds;
@@ -777,12 +784,16 @@ class AdManager {
       }
     }
 
-    final placementCooldown = (placementCaps['min_cooldown_seconds'] as num?)
-        ?.toInt();
+    final placementCooldown =
+        (placementCaps['min_cooldown_seconds'] as num?)?.toInt();
     if (placementCooldown != null && placementCooldown > 0) {
-      final lastPlacement = await _getTimestamp(
+      DateTime? lastPlacement = await _getTimestamp(
         'ad.$type.$placementId.lastShown',
       );
+      final override = _lastPlacementShown['$type.$placementId'];
+      if (override != null) {
+        lastPlacement = _coalesceLatest(lastPlacement, override);
+      }
       final seconds = lastPlacement == null
           ? null
           : now.difference(lastPlacement).inSeconds;
@@ -892,16 +903,18 @@ class AdManager {
   }
 
   Future<void> _markServed(String type, String placementId) async {
+    final nowTs = DateTime.now();
     await _incrementToday('ad.$type.count');
     await _incrementToday('ad.$type.$placementId.count');
-    await _setTimestamp('ad.$type.lastShown', DateTime.now());
-    await _setTimestamp('ad.$type.$placementId.lastShown', DateTime.now());
+    await _setTimestamp('ad.$type.lastShown', nowTs);
+    await _setTimestamp('ad.$type.$placementId.lastShown', nowTs);
+    _lastPlacementShown['$type.$placementId'] = nowTs;
 
     if (type == 'rewarded') {
-      _lastRewardedShownTime = DateTime.now();
+      _lastRewardedShownTime = nowTs;
     } else if (type == 'interstitial') {
-      _lastInterstitialShownTime = DateTime.now();
-      await _setTimestamp('timer.lastInterstitialAt', DateTime.now());
+      _lastInterstitialShownTime = nowTs;
+      await _setTimestamp('timer.lastInterstitialAt', nowTs);
     }
   }
 
@@ -1208,6 +1221,12 @@ class AdManager {
     _logInfo(message);
   }
 
+  DateTime? _coalesceLatest(DateTime? a, DateTime? b) {
+    if (a == null) return b;
+    if (b == null) return a;
+    return a.isAfter(b) ? a : b;
+  }
+
   void _logInfo(String message) {
     if (kDebugMode) {
       debugPrint('$_logTag $message');
@@ -1303,6 +1322,7 @@ class AdManager {
     await _prefs?.clear();
     _lastRewardedShownTime = null;
     _lastInterstitialShownTime = null;
+    _lastPlacementShown.clear();
     _gitaSessionStart = null;
     _gitaShlokasRead = 0;
   }
@@ -1330,8 +1350,35 @@ class AdManager {
   }
 
   @visibleForTesting
-  void debugSetLastInterstitialShown(DateTime? when) {
+  Future<void> debugSetLastInterstitialShown(DateTime? when) async {
     _lastInterstitialShownTime = when;
+    await _ensurePrefs();
+    if (when == null) {
+      await _prefs?.remove('ad.interstitial.lastShown');
+    } else {
+      await _prefs?.setInt(
+        'ad.interstitial.lastShown',
+        when.millisecondsSinceEpoch,
+      );
+    }
+  }
+
+  @visibleForTesting
+  Future<void> debugSetPlacementLastShown(
+    String type,
+    String placementId,
+    DateTime? when,
+  ) async {
+    await _ensurePrefs();
+    final key = 'ad.$type.$placementId.lastShown';
+    final mapKey = '$type.$placementId';
+    if (when == null) {
+      _lastPlacementShown.remove(mapKey);
+      await _prefs?.remove(key);
+    } else {
+      _lastPlacementShown[mapKey] = when;
+      await _prefs?.setInt(key, when.millisecondsSinceEpoch);
+    }
   }
 
   /// Dispose method to clean up resources and prevent memory leaks

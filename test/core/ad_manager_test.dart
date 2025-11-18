@@ -34,21 +34,17 @@ void main() {
   }
 
   Future<void> advanceInterstitialCooldown() async {
-    final prefs = await SharedPreferences.getInstance();
-    final past = DateTime.now()
-        .subtract(const Duration(minutes: 15))
-        .millisecondsSinceEpoch;
-    await prefs.setInt('ad.interstitial.lastShown', past);
-    await prefs.setInt(
-      'ad.interstitial.gita.long_session_interstitial.lastShown',
+    final past = DateTime.now().subtract(const Duration(minutes: 15));
+    await AdManager.instance.debugSetLastInterstitialShown(past);
+    await AdManager.instance.debugSetPlacementLastShown(
+      'interstitial',
+      'gita.long_session_interstitial',
       past,
     );
-    await prefs.setInt(
-      'ad.interstitial.timer.post_session_interstitial.lastShown',
+    await AdManager.instance.debugSetPlacementLastShown(
+      'interstitial',
+      'timer.post_session_interstitial',
       past,
-    );
-    AdManager.instance.debugSetLastInterstitialShown(
-      DateTime.now().subtract(const Duration(minutes: 15)),
     );
   }
 
