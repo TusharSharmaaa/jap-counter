@@ -12,6 +12,7 @@ import 'data/streak_store.dart';
 import 'firebase_options.dart';
 import 'notifications/notification_service.dart';
 import 'theme/theme.dart';
+import 'l10n/app_localizations.dart';
 
 const _bootLog = '[BOOT]';
 
@@ -180,7 +181,7 @@ class _SplashScaffoldState extends State<SplashScaffold> {
             const CircularProgressIndicator(),
             const SizedBox(height: 16),
             Text(
-              'Starting...',
+              'Starting...', // Localized in app.dart welcome snackbar
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],

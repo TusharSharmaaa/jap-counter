@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import '../core/app_constants.dart';
 import '../data/activity_store.dart';
 import '../data/counter_store.dart';
 
@@ -15,6 +17,9 @@ class WeeklyChartData {
   static DateFormat? _dayFormat;
   static DateFormat? _dateLabelFormat;
   static String? _lastLocale;
+  
+  // Debounce timer for cache invalidation to avoid excessive invalidations
+  static Timer? _invalidationTimer;
 
   // Initialize date formats with locale
   static Future<void> _initializeFormats(String locale) async {
@@ -51,7 +56,7 @@ class WeeklyChartData {
     
     final counter = await CounterStore.create();
     final todayJaps = counter.todayJaps;
-    final todayMalasLive = todayJaps ~/ 108;
+    final todayMalasLive = todayJaps ~/ AppConstants.japsPerMala;
     
     // Check cache - invalidate if day changed, counter changed, or locale changed
     // Compare dates by day/month/year directly instead of using DateFormat to avoid locale issues
@@ -105,12 +110,33 @@ class WeeklyChartData {
     return out;
   }
   
-  /// Invalidate chart cache (call when counter increments or day changes)
+  /// Invalidate chart cache (call when counter increments or day changes).
+  /// Uses debouncing to avoid excessive invalidations on rapid taps.
   static void invalidateCache() {
+    // Cancel existing timer
+    _invalidationTimer?.cancel();
+    
+    // Schedule invalidation after debounce delay
+    _invalidationTimer = Timer(
+      const Duration(milliseconds: AppConstants.chartCacheDebounceMs),
+      () {
+        _cachedChartData = null;
+        _cachedChartDate = null;
+        _cachedTodayJaps = null;
+        // Keep format instances but reset locale tracking
+        _lastLocale = null;
+      },
+    );
+  }
+  
+  /// Force immediate cache invalidation (no debouncing).
+  /// Use when day changes or explicit refresh is needed.
+  static void invalidateCacheImmediate() {
+    _invalidationTimer?.cancel();
+    _invalidationTimer = null;
     _cachedChartData = null;
     _cachedChartDate = null;
     _cachedTodayJaps = null;
-    // Keep format instances but reset locale tracking
     _lastLocale = null;
   }
 }

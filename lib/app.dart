@@ -59,22 +59,48 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     _loadThemeMode();
     _loadLanguage();
     _initNotifications(); // fire-and-forget
-    unawaited(_showWelcomeSnackbar());
+    unawaited(_showWelcomeSnackbar().catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[App] Error showing welcome snackbar: $error\n$stackTrace');
+      }
+    }));
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      unawaited(SyncService.syncToday());
+      unawaited(SyncService.syncToday().catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[App] Error syncing today: $error\n$stackTrace');
+        }
+      }));
       // Flush pending writes when app goes to background
-      unawaited(ActivityStore.flushPendingWrites());
+      unawaited(ActivityStore.flushPendingWrites().catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[App] Error flushing pending writes: $error\n$stackTrace');
+        }
+      }));
     } else if (state == AppLifecycleState.detached) {
       // App is being closed - mark it so timer resets on next open
-      unawaited(_timerService.markAppClosed());
+      unawaited(_timerService.markAppClosed().catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[App] Error marking app closed: $error\n$stackTrace');
+        }
+      }));
       // Flush pending writes before app closes
-      unawaited(ActivityStore.flushPendingWrites());
+      unawaited(ActivityStore.flushPendingWrites().catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[App] Error flushing pending writes on close: $error\n$stackTrace');
+        }
+      }));
+      // Clean up ActivityStore resources
+      ActivityStore.cleanup();
     } else if (state == AppLifecycleState.resumed) {
-      unawaited(_timerService.load());
+      unawaited(_timerService.load().catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[App] Error loading timer service: $error\n$stackTrace');
+        }
+      }));
     }
   }
 
@@ -127,7 +153,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     setState(() => _language = language);
     
     // Reschedule notifications with new language
-    unawaited(_rescheduleNotificationsForLanguage(language));
+    unawaited(_rescheduleNotificationsForLanguage(language).catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[App] Error rescheduling notifications: $error\n$stackTrace');
+      }
+    }));
   }
   
   Future<void> _rescheduleNotificationsForLanguage(String language) async {
@@ -318,7 +348,13 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _timerService.dispose();
     // Dispose StatsAmbience singleton
-    unawaited(StatsAmbience.instance.dispose());
+    unawaited(StatsAmbience.instance.dispose().catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[App] Error disposing StatsAmbience: $error\n$stackTrace');
+      }
+    }));
+    // Dispose AdManager to clean up timers and ads
+    AdManager.instance.dispose();
     super.dispose();
   }
 
@@ -412,7 +448,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       unawaited(
         AdManager.instance.maybeShowInterstitial(
           'gita.long_session_interstitial',
-        ),
+        ).catchError((error, stackTrace) {
+          if (kDebugMode) {
+            debugPrint('[App] Error showing interstitial: $error\n$stackTrace');
+          }
+        }),
       );
       AdManager.instance.recordEvent('gita.session', 'end');
     }
@@ -423,18 +463,24 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     if (!_timerService.running) return;
     try {
       await _timerService.pause();
-    } catch (_) {
-      // ignore pause errors
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[App] Error pausing timer: $e\n$st');
+      }
     }
     try {
       await SoundManager.instance.pauseAmbience();
-    } catch (_) {
-      // ignore audio errors
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[App] Error pausing ambience: $e\n$st');
+      }
     }
     try {
       await WakelockPlus.disable();
-    } catch (_) {
-      // ignore wakelock errors
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[App] Error disabling wakelock: $e\n$st');
+      }
     }
   }
 }
@@ -480,7 +526,11 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     
     _confetti = ConfettiController(duration: const Duration(seconds: 3));
     _init();
-    unawaited(AdManager.instance.preloadPlacement('stats.share_rewarded'));
+    unawaited(AdManager.instance.preloadPlacement('stats.share_rewarded').catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[StatsPage] Error preloading ad: $error\n$stackTrace');
+      }
+    }));
 
     _loadAmbiencePref();
     
@@ -589,6 +639,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
   /// Load all stats data in parallel for better performance
   Future<Map<String, dynamic>> _loadAllStats({String? locale}) async {
     final chartLocale = locale ?? 'en';
+    // Use eagerError: false to handle individual failures gracefully
     final results = await Future.wait([
       // Counter stats - includes lifetime malas calculated from completed malas in history
       CounterStore.create().then((s) => {
@@ -613,7 +664,23 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
       DedicationStore.create().then((s) => s.note),
       // Chart data
       WeeklyChartData.build(locale: chartLocale),
-    ]);
+    ], eagerError: false).then((results) {
+      // Handle any individual failures gracefully
+      return results;
+    }).catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[StatsPage] Error loading stats: $error\n$stackTrace');
+      }
+      // Return empty stats on error
+      return <dynamic>[
+        {'today': 0, 'lifetime': 0, 'todayMalas': 0, 'lifetimeMalas': 0},
+        {'streak': 0, 'activeDays': 0},
+        0,
+        <String>{},
+        '',
+        <Map<String, dynamic>>[],
+      ];
+    });
     
     final stats = {
       'counter': results[0] as Map<String, int>,
@@ -633,7 +700,14 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     _todayNotifier.dispose();
     _todayMinNotifier.dispose();
     _lifetimeMinNotifier.dispose();
-    _confetti.dispose();
+    // Dispose confetti controller safely
+    try {
+      _confetti.dispose();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[StatsPage] Error disposing confetti: $e');
+      }
+    }
     StatsAmbience.instance.stop();
     super.dispose();
   }
@@ -654,9 +728,17 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
       StatsAmbience.instance.start();
     }
     // Refresh stats data when page becomes visible to show real-time updates
-    unawaited(_refreshStatsData());
+    unawaited(_refreshStatsData().catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[StatsPage] Error refreshing stats: $error\n$stackTrace');
+      }
+    }));
     // Check for milestone celebrations when page becomes visible
-    unawaited(_checkCelebrationOnVisible());
+    unawaited(_checkCelebrationOnVisible().catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[StatsPage] Error checking celebration: $error\n$stackTrace');
+      }
+    }));
   }
   
   /// Check for milestone celebrations when page becomes visible
@@ -677,7 +759,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     // Record current daily summary to ensure stats are up to date
     final s = await CounterStore.create();
     final mstore = await MeditationStore.create();
-    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
+    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108); // TODO: Replace 108 with AppConstants.japsPerMala
     
     if (!mounted) return;
     
@@ -715,7 +797,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     final s = await CounterStore.create();
     final mstore = await MeditationStore.create();
     final dstore = await DedicationStore.create();
-    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
+    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108); // TODO: Replace 108 with AppConstants.japsPerMala
 
     if (!mounted) return;
     
@@ -759,7 +841,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     final s = await CounterStore.create(); // uses same prefs + new-day reset
     final mstore = await MeditationStore.create();
     final dstore = await DedicationStore.create();
-    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108);
+    await ActivityStore.recordDailySummary(s.todayJaps, s.todayJaps ~/ 108); // TODO: Replace 108 with AppConstants.japsPerMala
     
     // Update ValueNotifiers instead of setState for frequently changing values
     _todayNotifier.value = s.todayJaps;
@@ -798,8 +880,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
     }
 
     // Calculate malas from ValueNotifier (used as fallback, FutureBuilder provides main data)
-    final todayMalas = _todayNotifier.value ~/ 108;
-    final lifetimeMalas = _lifetime ~/ 108;
+    final todayMalas = _todayNotifier.value ~/ 108; // TODO: Replace with AppConstants.japsPerMala
+    final lifetimeMalas = _lifetime ~/ 108; // TODO: Replace with AppConstants.japsPerMala
     // Load goal (synchronously via FutureBuilder below to avoid blocking build)
 
     return Scaffold(
@@ -909,8 +991,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
         
         // Use malas directly from CounterStore (calculated from completed malas in history)
         // This ensures we only count COMPLETE malas (108 japs = 1 mala)
-        final todayMalasFromCounter = counter['todayMalas'] ?? (todayJapsFromCounter ~/ 108);
-        final lifetimeMalasFromCounter = counter['lifetimeMalas'] ?? (lifetimeJapsFromCounter ~/ 108);
+        final todayMalasFromCounter = counter['todayMalas'] ?? (todayJapsFromCounter ~/ 108); // TODO: Replace 108 with AppConstants.japsPerMala
+        final lifetimeMalasFromCounter = counter['lifetimeMalas'] ?? (lifetimeJapsFromCounter ~/ 108); // TODO: Replace 108 with AppConstants.japsPerMala
         
         final streak = activity['streak'] ?? 0;
         final activeDays = activity['activeDays'] ?? 0;

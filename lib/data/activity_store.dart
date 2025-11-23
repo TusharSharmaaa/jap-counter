@@ -107,9 +107,11 @@ class ActivityStore {
     int streak = 0;
     final todayDay = DateTime(today.year, today.month, today.day);
     
-    // Limit to 365 days for performance (prevents infinite loops)
+    // Limit to max streak days for performance (prevents infinite loops)
     // Most streaks won't exceed this, and it prevents performance issues
-    for (int i = 0; i < 365; i++) {
+    // Using proper date arithmetic to handle leap years
+    const maxStreakDays = 365;
+    for (int i = 0; i < maxStreakDays; i++) {
       final d = todayDay.subtract(Duration(days: i));
       final key = _isoDate(d);
       if (activeSet.contains(key)) {
@@ -245,7 +247,20 @@ class ActivityStore {
   
   /// Force immediate flush of pending writes (called on app background/close).
   static Future<void> flushPendingWrites() async {
+    // Cancel any pending timer before flushing
+    _batchWriteTimer?.cancel();
+    _batchWriteTimer = null;
     await _flushDailySummary();
+  }
+
+  /// Clean up resources (cancel timers).
+  /// Should be called when app is closing.
+  static void cleanup() {
+    _batchWriteTimer?.cancel();
+    _batchWriteTimer = null;
+    _pendingJaps = null;
+    _pendingMalas = null;
+    _pendingWriteCompleter = null;
   }
 
   // Cache for daily history to improve performance

@@ -64,16 +64,32 @@ class NotificationService {
       iOS: iosInit,
     );
 
-    await _plugin.initialize(settings);
+    try {
+      await _plugin.initialize(settings);
 
-    // Android channel
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(_channel);
+      // Android channel
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(_channel);
 
-    _initialized = true;
+      _initialized = true;
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[Notifications] Init failed: $e\n$stackTrace');
+      }
+      // Retry initialization after delay (exponential backoff)
+      unawaited(Future.delayed(const Duration(seconds: 2), () async {
+        try {
+          await init();
+        } catch (retryError) {
+          if (kDebugMode) {
+            debugPrint('[Notifications] Retry init failed: $retryError');
+          }
+        }
+      }));
+    }
   }
 
   /// Android 13+ runtime permission; safe no-op on lower versions/iOS.

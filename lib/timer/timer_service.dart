@@ -240,10 +240,21 @@ class TimerService extends ChangeNotifier {
       final currentSeconds = remaining.inSeconds;
       if (_lastDisplayedSeconds != currentSeconds) {
         _lastDisplayedSeconds = currentSeconds;
-        // Update display notifier for selective listening
+        // Update display notifier for selective listening (check if not disposed)
+        if (!displayNotifier.hasListeners) {
+          // Notifier may be disposed, skip update
+          return;
+        }
         final minutes = currentSeconds ~/ 60;
         final secs = currentSeconds % 60;
-        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+        try {
+          displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+        } catch (e) {
+          // Notifier may be disposed, ignore
+          if (kDebugMode) {
+            debugPrint('[TimerService] Error updating display notifier: $e');
+          }
+        }
         // Notify listeners for state changes
         notifyListeners();
       }
@@ -251,12 +262,21 @@ class TimerService extends ChangeNotifier {
     if (kDebugMode) {
       debugPrint('[TimerService] _startTicker -> tickerCreated, running=$_running');
     }
-    // Initialize display immediately
-    final initialSeconds = remaining.inSeconds;
-    _lastDisplayedSeconds = initialSeconds;
-    final minutes = initialSeconds ~/ 60;
-    final secs = initialSeconds % 60;
-    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    // Initialize display immediately (check if notifier is still valid)
+    if (displayNotifier.hasListeners) {
+      final initialSeconds = remaining.inSeconds;
+      _lastDisplayedSeconds = initialSeconds;
+      final minutes = initialSeconds ~/ 60;
+      final secs = initialSeconds % 60;
+      try {
+        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+      } catch (e) {
+        // Notifier may be disposed, ignore
+        if (kDebugMode) {
+          debugPrint('[TimerService] Error initializing display notifier: $e');
+        }
+      }
+    }
     notifyListeners();
   }
 

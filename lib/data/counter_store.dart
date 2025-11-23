@@ -1,4 +1,5 @@
 import 'dart:async' show unawaited, Timer, Completer, TimeoutException;
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/prefs_manager.dart';
@@ -142,7 +143,7 @@ class CounterStore {
   int get todayJaps => _cachedToday ?? _prefs.getInt(_kTodayJaps) ?? 0;
   int get lifetimeJaps => _cachedLifetime ?? _prefs.getInt(_kLifetimeJaps) ?? 0;
 
-  int get todayMalas => todayJaps ~/ 108;
+  int get todayMalas => todayJaps ~/ 108; // TODO: Replace with AppConstants.japsPerMala
   
   /// Get lifetime malas - calculated from completed malas in history, not from japs
   /// This ensures we only count complete malas (108 japs = 1 mala)
@@ -153,7 +154,7 @@ class CounterStore {
       return _cachedLifetimeMalas!;
     }
     // Fallback: calculate from japs (should only happen if cache is not initialized)
-    return lifetimeJaps ~/ 108;
+    return lifetimeJaps ~/ 108; // TODO: Replace with AppConstants.japsPerMala
   }
   
   // Cache for lifetime malas calculated from history
@@ -165,7 +166,7 @@ class CounterStore {
   Future<void> refreshLifetimeMalas() async {
     final todayKey = _yyyymmdd(DateTime.now());
     final todayJaps = _cachedToday ?? _prefs.getInt(_kTodayJaps) ?? 0;
-    final todayCompletedMalas = todayJaps ~/ 108;
+    final todayCompletedMalas = todayJaps ~/ 108; // TODO: Replace with AppConstants.japsPerMala
     
     // Use cached previous days' malas if available and date matches
     if (_cachedLifetimeMalasDate == todayKey && _cachedLifetimeMalasGlobal != null) {
@@ -248,8 +249,13 @@ class CounterStore {
         _scheduleSync();
       }
       
-      // Update XP asynchronously (non-blocking)
-      unawaited(_updateXP());
+      // Update XP asynchronously (non-blocking) with error handling
+      unawaited(_updateXP().catchError((error, stackTrace) {
+        // Silently ignore XP update errors - not critical
+        if (kDebugMode) {
+          debugPrint('[CounterStore] XP update failed: $error');
+        }
+      }));
     } finally {
       // Clear the lock
       _currentIncrement = null;

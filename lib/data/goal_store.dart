@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/app_constants.dart';
 import '../core/prefs_manager.dart';
 
 /// Stores user's daily mala goal (e.g., 1–10 malas).
@@ -17,8 +18,11 @@ class GoalStore {
 
   int get dailyMalasGoal => _prefs.getInt(_kDailyMalasGoal) ?? 0;
 
-  Future<void> setDailyMalasGoal(int malas) async =>
-      _prefs.setInt(_kDailyMalasGoal, malas.clamp(0, 50));
+  Future<void> setDailyMalasGoal(int malas) async {
+    // Validate and clamp goal value
+    final validated = malas.clamp(AppConstants.minGoalValue, AppConstants.maxGoalValue);
+    await _prefs.setInt(_kDailyMalasGoal, validated);
+  }
 
   String? get lastCongratsDate => _prefs.getString(_kLastCongrats);
 

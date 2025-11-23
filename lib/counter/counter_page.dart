@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/ad_manager.dart';
+import '../core/app_constants.dart';
 import '../data/activity_store.dart';
 import '../data/counter_store.dart';
 import '../data/dedication_store.dart';
@@ -226,7 +227,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     // Update UI immediately for responsiveness using ValueNotifiers
     // This avoids rebuilding the entire widget tree
     final updatedToday = store.todayJaps;
-    final remainder = updatedToday % 108;
+    final remainder = updatedToday % AppConstants.japsPerMala;
     final malaCompleted = remainder == 0 && updatedToday > 0;
 
     // Update ValueNotifiers - only rebuilds widgets listening to these values
@@ -247,12 +248,20 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       isMalaComplete: malaCompleted,
     ));
 
-    // Non-critical operations: Fire and forget
-    unawaited(_recordInsight(willBe));
+    // Non-critical operations: Fire and forget with error handling
+    unawaited(_recordInsight(willBe).catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[Counter] Error recording insight: $error\n$stackTrace');
+      }
+    }));
     
     // Record daily summary - batched/deferred for performance
     // OPTIMIZATION: This now batches writes instead of writing on every tap
-    unawaited(ActivityStore.recordDailySummary(updatedToday, updatedToday ~/ 108));
+    unawaited(ActivityStore.recordDailySummary(updatedToday, updatedToday ~/ AppConstants.japsPerMala).catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[Counter] Error recording daily summary: $error\n$stackTrace');
+      }
+    }));
     
     // OPTIMIZATION: Don't refresh lifetime malas on every tap - it's cached and updated automatically
     // Only refresh when a mala is completed (when lifetime malas might change)
@@ -261,18 +270,34 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
         if (mounted) {
           _lifetimeMalasNotifier.value = store.lifetimeMalas;
         }
+      }).catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[Counter] Error refreshing lifetime malas: $error\n$stackTrace');
+        }
       }));
     }
     
     if (wasZero) {
-      unawaited(ActivityStore.markTodayActive());
-      unawaited(_handleStreakMilestones(context, showSnackBar: true));
+      unawaited(ActivityStore.markTodayActive().catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[Counter] Error marking today active: $error\n$stackTrace');
+        }
+      }));
+      unawaited(_handleStreakMilestones(context, showSnackBar: true).catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[Counter] Error handling streak milestones: $error\n$stackTrace');
+        }
+      }));
     }
 
     if (malaCompleted) {
       _scheduleMalaReset();
       // Check for streak milestones when completing a mala
-      unawaited(_handleStreakMilestones(context, showSnackBar: false));
+      unawaited(_handleStreakMilestones(context, showSnackBar: false).catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[Counter] Error handling streak milestones on mala: $error\n$stackTrace');
+        }
+      }));
       _triggerPulse();
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -286,27 +311,42 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
           );
       }
       _triggerConfetti();
-      unawaited(_recordSession(willBe));
+      unawaited(_recordSession(willBe).catchError((error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint('[Counter] Error recording session: $error\n$stackTrace');
+        }
+      }));
     }
 
     // Check goal completion (can be async but should complete)
-    unawaited(_checkGoalCompletion());
+    unawaited(_checkGoalCompletion().catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[Counter] Error checking goal completion: $error\n$stackTrace');
+      }
+    }));
 
     // Schedule notification reminder (non-blocking)
-    unawaited(_scheduleNotification());
+    unawaited(_scheduleNotification().catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[Counter] Error scheduling notification: $error\n$stackTrace');
+      }
+    }));
   }
   
   Future<void> _invalidateChartCache() async {
-    // Invalidate chart cache when counter increments
+    // Invalidate chart cache when counter increments (debounced)
+    // This avoids excessive invalidations on rapid taps
     WeeklyChartData.invalidateCache();
   }
 
   Future<void> _recordInsight(int willBe) async {
     try {
       final insights = await InsightStore.create();
-      await insights.recordJap(count: 1, malas: willBe % 108 == 0 ? 1 : 0);
+      await insights.recordJap(count: 1, malas: willBe % AppConstants.japsPerMala == 0 ? 1 : 0);
     } catch (e) {
-      debugPrint('[Insights] Record failed: $e');
+      if (kDebugMode) {
+        debugPrint('[Insights] Record failed: $e');
+      }
     }
   }
 
@@ -458,7 +498,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   }
 
   int _calculateCurrentMalaDisplay(int todayJaps) {
-    final remainder = todayJaps % 108;
+    final remainder = todayJaps % AppConstants.japsPerMala;
     if (remainder == 0 && todayJaps > 0) {
       return 0;
     }
@@ -466,7 +506,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
   }
 
   // Getter for malas - uses ValueNotifier value
-  int get _malas => _todayNotifier.value ~/ 108;
+  int get _malas => _todayNotifier.value ~/ AppConstants.japsPerMala;
   // Use stored lifetime malas (calculated from completed malas in history)
   // This ensures we only count COMPLETE malas (108 japs = 1 mala)
   double get _goalProgress {
@@ -533,7 +573,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     final result = await showDialog<int>(
       context: context,
       builder: (ctx) {
-        int sliderValue = _dailyGoal.clamp(0, 50);
+        int sliderValue = _dailyGoal.clamp(AppConstants.minGoalValue, AppConstants.maxGoalValue);
         return StatefulBuilder(
           builder: (dialogContext, setLocalState) {
             // Use outer context's language or fallback
@@ -580,9 +620,9 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                   const SizedBox(height: 12),
                   Slider(
                     value: sliderValue.toDouble(),
-                    min: 0,
-                    max: 50,
-                    divisions: 50,
+                    min: AppConstants.minGoalValue.toDouble(),
+                    max: AppConstants.maxGoalValue.toDouble(),
+                    divisions: AppConstants.maxGoalValue,
                     label: sliderValue.toString(),
                     onChanged: (value) {
                       setLocalState(() => sliderValue = value.round());
@@ -619,7 +659,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
       },
     );
     if (result != null) {
-      final sanitized = result.clamp(0, 50);
+      final sanitized = result.clamp(AppConstants.minGoalValue, AppConstants.maxGoalValue);
       final goalStore = await GoalStore.create();
       final oldGoal = _dailyGoal;
       final currentMalas = _malas;
@@ -793,7 +833,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                                         valueListenable: _todayNotifier,
                                         builder: (_, today, __) => _StatCard(
                                           title: context.tr('counter.stat.malas'),
-                                          value: (today ~/ 108).toString(),
+                                          value: (today ~/ AppConstants.japsPerMala).toString(),
                                           isCompact: isNarrowScreen,
                                         ),
                                       ),
@@ -826,7 +866,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                             child: ValueListenableBuilder<int>(
                               valueListenable: _todayNotifier,
                               builder: (_, today, __) {
-                                final malas = today ~/ 108;
+                                final malas = today ~/ AppConstants.japsPerMala;
                                 final goalProgress = _dailyGoal <= 0 
                                     ? 0.0 
                                     : (malas / _dailyGoal).clamp(0, 1).toDouble();
@@ -879,7 +919,7 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                                               today: today,
                                               pulse: _pulse,
                                               currentMalaCount: currentMalaCount,
-                                              malasCompleted: today ~/ 108,
+                                              malasCompleted: today ~/ AppConstants.japsPerMala,
                                               isSmallScreen: isSmallScreen,
                                               isNarrowScreen: isNarrowScreen,
                                               screenWidth: screenWidth,
@@ -920,10 +960,21 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     // Force sync before disposal
     _store?.forceSyncNow();
     // Flush any pending daily summary writes
-    unawaited(ActivityStore.flushPendingWrites());
+    unawaited(ActivityStore.flushPendingWrites().catchError((error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[Counter] Error flushing writes on dispose: $error\n$stackTrace');
+      }
+    }));
     // Resume ad preloading when counter session ends
     AdManager.instance.onCounterSessionEnd();
-    _confettiController.dispose();
+    // Dispose confetti controller safely
+    try {
+      _confettiController.dispose();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[Counter] Error disposing confetti: $e');
+      }
+    }
     _cancelMalaResetTimer();
     super.dispose();
   }
@@ -1011,7 +1062,7 @@ class _CounterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final malaProgress = (currentMalaCount / 108).clamp(0.0, 1.0);
+    final malaProgress = (currentMalaCount / AppConstants.japsPerMala).clamp(0.0, 1.0);
     
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1129,7 +1180,7 @@ class _MalaProgressDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final normalized = currentMalaCount.clamp(0, 108).toInt();
+    final normalized = currentMalaCount.clamp(0, AppConstants.japsPerMala).toInt();
 
     final fontSize = isNarrowScreen ? 18.0 : 20.0;
     final subtitleSize = isNarrowScreen ? 12.0 : 13.0;
@@ -1138,7 +1189,7 @@ class _MalaProgressDisplay extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          '$normalized / 108',
+          '$normalized / ${AppConstants.japsPerMala}',
           style: TextStyle(
             fontSize: fontSize,
             fontWeight: FontWeight.bold,
