@@ -64,24 +64,28 @@ class GlassCard extends StatelessWidget {
     );
 
     if (useBackdropBlur && backgroundColor == null) {
-      content = ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: 10,
-            sigmaY: 10,
-          ),
-          child: Container(
-            padding: cardPadding,
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: borderColor,
-                width: 1.5,
-              ),
+      // Performance optimization: Use RepaintBoundary to isolate blur rendering
+      // Reduced blur sigma from 10 to 8 for better performance without noticeable visual difference
+      content = RepaintBoundary(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: 8, // Reduced from 10 for better performance
+              sigmaY: 8, // Reduced from 10 for better performance
             ),
-            child: child,
+            child: Container(
+              padding: cardPadding,
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(radius),
+                border: Border.all(
+                  color: borderColor,
+                  width: 1.5,
+                ),
+              ),
+              child: child,
+            ),
           ),
         ),
       );

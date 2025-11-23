@@ -808,6 +808,9 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
               child: SafeArea(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
+                    // Performance optimization: Cache theme to avoid multiple lookups
+                    final theme = Theme.of(context);
+                    final colorScheme = theme.colorScheme;
                     final screenHeight = constraints.maxHeight;
                     final screenWidth = constraints.maxWidth;
                     final isSmallScreen = screenHeight < 600;
@@ -833,36 +836,42 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                                   children: [
                                     Expanded(
                                       flex: 1,
-                                      child: ValueListenableBuilder<int>(
-                                        valueListenable: _todayNotifier,
-                                        builder: (_, today, __) => _StatCard(
-                                          title: context.tr('counter.stat.todayJaps'),
-                                          value: today.toString(),
-                                          isCompact: isNarrowScreen,
+                                      child: RepaintBoundary(
+                                        child: ValueListenableBuilder<int>(
+                                          valueListenable: _todayNotifier,
+                                          builder: (_, today, __) => _StatCard(
+                                            title: context.tr('counter.stat.todayJaps'),
+                                            value: today.toString(),
+                                            isCompact: isNarrowScreen,
+                                          ),
                                         ),
                                       ),
                                     ),
                                     SizedBox(width: cardSpacing),
                                     Expanded(
                                       flex: 1,
-                                      child: ValueListenableBuilder<int>(
-                                        valueListenable: _todayNotifier,
-                                        builder: (_, today, __) => _StatCard(
-                                          title: context.tr('counter.stat.malas'),
-                                          value: (today ~/ AppConstants.japsPerMala).toString(),
-                                          isCompact: isNarrowScreen,
+                                      child: RepaintBoundary(
+                                        child: ValueListenableBuilder<int>(
+                                          valueListenable: _todayNotifier,
+                                          builder: (_, today, __) => _StatCard(
+                                            title: context.tr('counter.stat.malas'),
+                                            value: (today ~/ AppConstants.japsPerMala).toString(),
+                                            isCompact: isNarrowScreen,
+                                          ),
                                         ),
                                       ),
                                     ),
                                     SizedBox(width: cardSpacing),
                                     Expanded(
                                       flex: 1,
-                                      child: ValueListenableBuilder<int>(
-                                        valueListenable: _lifetimeMalasNotifier,
-                                        builder: (_, lifetimeMalas, __) => _StatCard(
-                                          title: context.tr('counter.stat.lifetimeMalas'),
-                                          value: lifetimeMalas.toString(),
-                                          isCompact: isNarrowScreen,
+                                      child: RepaintBoundary(
+                                        child: ValueListenableBuilder<int>(
+                                          valueListenable: _lifetimeMalasNotifier,
+                                          builder: (_, lifetimeMalas, __) => _StatCard(
+                                            title: context.tr('counter.stat.lifetimeMalas'),
+                                            value: lifetimeMalas.toString(),
+                                            isCompact: isNarrowScreen,
+                                          ),
                                         ),
                                       ),
                                     ),

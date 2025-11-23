@@ -313,12 +313,14 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             bottomNavigationBar: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
+                  // Performance optimization: Cache theme to avoid multiple lookups
+                  final theme = Theme.of(context);
                   final isNarrow = constraints.maxWidth < 360;
                   final iconSize = isNarrow ? 20.0 : 22.0;
                   final fontSize = isNarrow ? 9.0 : 10.0;
                   final horizontalPadding = isNarrow ? 4.0 : 8.0;
                   final verticalPadding = isNarrow ? 4.0 : 6.0;
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  final isDark = theme.brightness == Brightness.dark;
                   
                   return Padding(
                     padding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 12, vertical: 8),
@@ -333,7 +335,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.1),
-                            blurRadius: 24,
+                            blurRadius: 20, // Reduced from 24 for better performance
                             offset: const Offset(0, -4),
                           ),
                         ],
@@ -1098,15 +1100,19 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           'streak_40' => context.tr('stats.badge.streak40'),
                           _ => badge,
                         };
-                        return GlassCard(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          borderRadius: 20,
-                          child: Text(
-                            label,
-                            style: Theme.of(context).textTheme.labelLarge,
+                        // Performance optimization: Add key for efficient list diffing
+                        return RepaintBoundary(
+                          key: ValueKey('badge-$badge'),
+                          child: GlassCard(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            borderRadius: 20,
+                            child: Text(
+                              label,
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
                           ),
                         );
                       }).toList(),
@@ -1115,6 +1121,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
               const SizedBox(height: 16),
               LayoutBuilder(
                 builder: (context, constraints) {
+                  // Performance optimization: Cache theme to avoid multiple lookups
+                  final theme = Theme.of(context);
+                  final colorScheme = theme.colorScheme;
                   final isNarrow = constraints.maxWidth < 360;
                   final cardSpacing = isNarrow ? DesignSystem.spacingXS : DesignSystem.spacingSM;
                   final cardPadding = isNarrow ? DesignSystem.spacingSM : DesignSystem.spacingMD;
@@ -1124,121 +1133,127 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                   return Row(
                     children: [
                       Expanded(
-                        child: GlassCard(
-                          padding: EdgeInsets.all(cardPadding),
-                          borderRadius: DesignSystem.radiusCard,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                context.tr('stats.metric.todayJaps'),
-                                style: TextStyle(
-                                  fontSize: titleSize,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  letterSpacing: 0.2,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              SizedBox(height: isNarrow ? 6 : 8),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  todayJapsFromCounter.toString(),
+                        child: RepaintBoundary(
+                          child: GlassCard(
+                            padding: EdgeInsets.all(cardPadding),
+                            borderRadius: DesignSystem.radiusCard,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  context.tr('stats.metric.todayJaps'),
                                   style: TextStyle(
-                                    fontSize: valueSize,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                    letterSpacing: -0.5,
+                                    fontSize: titleSize,
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.onSurface,
+                                    letterSpacing: 0.2,
                                   ),
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            ],
+                                SizedBox(height: isNarrow ? 6 : 8),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    todayJapsFromCounter.toString(),
+                                    style: TextStyle(
+                                      fontSize: valueSize,
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.onSurface,
+                                      letterSpacing: -0.5,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                       SizedBox(width: cardSpacing),
                       Expanded(
-                        child: GlassCard(
-                          padding: EdgeInsets.all(cardPadding),
-                          borderRadius: DesignSystem.radiusCard,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                context.tr('stats.metric.todayMalas'),
-                                style: TextStyle(
-                                  fontSize: titleSize,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  letterSpacing: 0.2,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              SizedBox(height: isNarrow ? 6 : 8),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  todayMalasFromCounter.toString(),
+                        child: RepaintBoundary(
+                          child: GlassCard(
+                            padding: EdgeInsets.all(cardPadding),
+                            borderRadius: DesignSystem.radiusCard,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  context.tr('stats.metric.todayMalas'),
                                   style: TextStyle(
-                                    fontSize: valueSize,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                    letterSpacing: -0.5,
+                                    fontSize: titleSize,
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.onSurface,
+                                    letterSpacing: 0.2,
                                   ),
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            ],
+                                SizedBox(height: isNarrow ? 6 : 8),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    todayMalasFromCounter.toString(),
+                                    style: TextStyle(
+                                      fontSize: valueSize,
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.onSurface,
+                                      letterSpacing: -0.5,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                       SizedBox(width: cardSpacing),
                       Expanded(
-                        child: GlassCard(
-                          padding: EdgeInsets.all(cardPadding),
-                          borderRadius: DesignSystem.radiusCard,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                context.tr('stats.metric.lifetimeMalas'),
-                                style: TextStyle(
-                                  fontSize: titleSize,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  letterSpacing: 0.2,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              SizedBox(height: isNarrow ? 6 : 8),
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  lifetimeMalasFromCounter.toString(),
+                        child: RepaintBoundary(
+                          child: GlassCard(
+                            padding: EdgeInsets.all(cardPadding),
+                            borderRadius: DesignSystem.radiusCard,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  context.tr('stats.metric.lifetimeMalas'),
                                   style: TextStyle(
-                                    fontSize: valueSize,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                    letterSpacing: -0.5,
+                                    fontSize: titleSize,
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.onSurface,
+                                    letterSpacing: 0.2,
                                   ),
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            ],
+                                SizedBox(height: isNarrow ? 6 : 8),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    lifetimeMalasFromCounter.toString(),
+                                    style: TextStyle(
+                                      fontSize: valueSize,
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.onSurface,
+                                      letterSpacing: -0.5,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -1249,6 +1264,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
               const SizedBox(height: 16),
               LayoutBuilder(
                 builder: (context, constraints) {
+                  // Performance optimization: Cache theme to avoid multiple lookups
+                  final theme = Theme.of(context);
+                  final colorScheme = theme.colorScheme;
                   final isNarrow = constraints.maxWidth < 360;
                   final cardSpacing = isNarrow ? DesignSystem.spacingXS : DesignSystem.spacingSM;
                   final cardPadding = isNarrow ? DesignSystem.spacingSM : DesignSystem.spacingMD;
@@ -1258,87 +1276,91 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                   return Row(
                     children: [
                       Expanded(
-                        child: GlassCard(
-                          padding: EdgeInsets.all(cardPadding),
-                          borderRadius: DesignSystem.radiusCard,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                context.tr('stats.metric.todayMeditation'),
-                                style: TextStyle(
-                                  fontSize: titleSize,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  letterSpacing: 0.2,
+                        child: RepaintBoundary(
+                          child: GlassCard(
+                            padding: EdgeInsets.all(cardPadding),
+                            borderRadius: DesignSystem.radiusCard,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  context.tr('stats.metric.todayMeditation'),
+                                  style: TextStyle(
+                                    fontSize: titleSize,
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.onSurface,
+                                    letterSpacing: 0.2,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              SizedBox(height: isNarrow ? 6 : 8),
-                              ValueListenableBuilder<int>(
-                                valueListenable: _todayMinNotifier,
-                                builder: (_, todayMin, __) => FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    todayMin.toString(),
-                                    style: TextStyle(
-                                      fontSize: valueSize,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                      letterSpacing: -0.5,
+                                SizedBox(height: isNarrow ? 6 : 8),
+                                ValueListenableBuilder<int>(
+                                  valueListenable: _todayMinNotifier,
+                                  builder: (_, todayMin, __) => FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      todayMin.toString(),
+                                      style: TextStyle(
+                                        fontSize: valueSize,
+                                        fontWeight: FontWeight.bold,
+                                        color: colorScheme.onSurface,
+                                        letterSpacing: -0.5,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
                       SizedBox(width: cardSpacing),
                       Expanded(
-                        child: GlassCard(
-                          padding: EdgeInsets.all(cardPadding),
-                          borderRadius: DesignSystem.radiusCard,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                context.tr('stats.metric.lifetimeMeditation'),
-                                style: TextStyle(
-                                  fontSize: titleSize,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                  letterSpacing: 0.2,
+                        child: RepaintBoundary(
+                          child: GlassCard(
+                            padding: EdgeInsets.all(cardPadding),
+                            borderRadius: DesignSystem.radiusCard,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  context.tr('stats.metric.lifetimeMeditation'),
+                                  style: TextStyle(
+                                    fontSize: titleSize,
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.onSurface,
+                                    letterSpacing: 0.2,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              SizedBox(height: isNarrow ? 6 : 8),
-                              ValueListenableBuilder<int>(
-                                valueListenable: _lifetimeMinNotifier,
-                                builder: (_, lifetimeMin, __) => FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    lifetimeMin.toString(),
-                                    style: TextStyle(
-                                      fontSize: valueSize,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                      letterSpacing: -0.5,
+                                SizedBox(height: isNarrow ? 6 : 8),
+                                ValueListenableBuilder<int>(
+                                  valueListenable: _lifetimeMinNotifier,
+                                  builder: (_, lifetimeMin, __) => FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      lifetimeMin.toString(),
+                                      style: TextStyle(
+                                        fontSize: valueSize,
+                                        fontWeight: FontWeight.bold,
+                                        color: colorScheme.onSurface,
+                                        letterSpacing: -0.5,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -1349,6 +1371,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
               const SizedBox(height: 16),
               Builder(
                 builder: (context) {
+                  // Performance optimization: Cache theme to avoid multiple lookups
+                  final theme = Theme.of(context);
+                  final colorScheme = theme.colorScheme;
                   final reached = todayMalasFromCounter >= goal;
                   return GlassCard(
                     padding: const EdgeInsets.all(12),
@@ -1358,8 +1383,8 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                         Icon(
                           reached ? Icons.check_circle : Icons.flag,
                           color: reached
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.outline,
+                              ? colorScheme.primary
+                              : colorScheme.outline,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -1370,7 +1395,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                   : 'stats.dailyGoal.pending',
                               args: {'todayMalas': '$todayMalasFromCounter', 'goal': '$goal'},
                             ),
-                            style: Theme.of(context).textTheme.bodyMedium,
+                            style: theme.textTheme.bodyMedium,
                           ),
                         ),
                       ],
@@ -1422,6 +1447,9 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                     final barHeight = val == 0
                                         ? 6.0
                                         : (normalized * 96).clamp(14.0, 96.0);
+                                    
+                                    // Performance optimization: Cache colorScheme to avoid repeated lookups
+                                    final colorScheme = theme.colorScheme;
 
                                     return RepaintBoundary(
                                       key: ValueKey('chart-bar-$index'),
@@ -1438,7 +1466,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: theme.colorScheme
+                                            color: colorScheme
                                                 .surfaceContainerHighest
                                                 .withValues(alpha: 0.7),
                                             borderRadius:
@@ -1449,7 +1477,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                             style: theme.textTheme.labelSmall?.copyWith(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 11,
-                                              color: Theme.of(context).colorScheme.onSurface, // Explicit dark color
+                                              color: colorScheme.onSurface, // Use cached colorScheme
                                             ),
                                             textAlign: TextAlign.center,
                                           ),
@@ -1465,14 +1493,14 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                               begin: Alignment.bottomCenter,
                                               end: Alignment.topCenter,
                                               colors: [
-                                                theme.colorScheme.primary,
-                                                theme.colorScheme.primaryContainer,
+                                                colorScheme.primary,
+                                                colorScheme.primaryContainer,
                                               ],
                                             ),
                                             borderRadius: BorderRadius.circular(6),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: theme.colorScheme.primary
+                                                color: colorScheme.primary
                                                     .withOpacity(0.2),
                                                 blurRadius: 4,
                                                 offset: const Offset(0, 3),
@@ -1484,7 +1512,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                               ? Icon(
                                                   Icons.energy_savings_leaf,
                                                   size: 12,
-                                                  color: theme.colorScheme.onPrimary,
+                                                  color: colorScheme.onPrimary,
                                                 )
                                               : null,
                                         ),
@@ -1494,7 +1522,7 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                                           style: theme.textTheme.labelSmall?.copyWith(
                                             fontWeight: FontWeight.w600,
                                             fontSize: 11,
-                                            color: Theme.of(context).colorScheme.onSurface, // Explicit dark color
+                                            color: colorScheme.onSurface, // Use cached colorScheme
                                           ),
                                           textAlign: TextAlign.center,
                                         ),
