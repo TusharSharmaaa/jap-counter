@@ -326,11 +326,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _navIcon(Icons.touch_app, 0, 'nav.counter', iconSize: iconSize, fontSize: fontSize),
-                          _navIcon(Icons.bar_chart, 1, 'nav.stats', iconSize: iconSize, fontSize: fontSize),
-                          _navIcon(Icons.menu_book, 2, 'nav.gita', iconSize: iconSize, fontSize: fontSize),
-                          _navIcon(Icons.timer, 3, 'nav.timer', iconSize: iconSize, fontSize: fontSize),
-                          _navIcon(Icons.settings, 4, 'nav.settings', iconSize: iconSize, fontSize: fontSize),
+                          _navIcon(Icons.touch_app, 0, 'nav.counter', isDark: isDark, iconSize: iconSize, fontSize: fontSize),
+                          _navIcon(Icons.bar_chart, 1, 'nav.stats', isDark: isDark, iconSize: iconSize, fontSize: fontSize),
+                          _navIcon(Icons.menu_book, 2, 'nav.gita', isDark: isDark, iconSize: iconSize, fontSize: fontSize),
+                          _navIcon(Icons.timer, 3, 'nav.timer', isDark: isDark, iconSize: iconSize, fontSize: fontSize),
+                          _navIcon(Icons.settings, 4, 'nav.settings', isDark: isDark, iconSize: iconSize, fontSize: fontSize),
                         ],
                       ),
                     ),
@@ -360,24 +360,25 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  Widget _navIcon(IconData icon, int idx, String labelKey, {double iconSize = 22.0, double fontSize = 10.0}) {
+  Widget _navIcon(IconData icon, int idx, String labelKey, {required bool isDark, double iconSize = 22.0, double fontSize = 10.0}) {
     final active = _index == idx;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     
-    // Light theme: use original theme colors (no changes)
-    // Dark theme: use white for all icons and text
-    final iconColor = isDark
-        ? Colors.white // Dark theme: all icons white
-        : (active 
-            ? theme.colorScheme.primary // Light theme: active = primary orange
-            : theme.colorScheme.onSurfaceVariant); // Light theme: inactive = grey
+    // Logic for both themes:
+    // - When active (tapped): icon becomes orange, text stays same color
+    // - When inactive: icon and text use theme-specific base color
     
-    final textColor = isDark
-        ? Colors.white // Dark theme: all text white
-        : (active 
-            ? theme.colorScheme.onSurface // Light theme: active = dark
-            : theme.colorScheme.onSurfaceVariant); // Light theme: inactive = grey
+    // Icon color logic:
+    // Light theme: inactive = black, active = orange
+    // Dark theme: inactive = white, active = orange
+    final Color iconColor = active
+        ? DesignSystem.primary // Always use the bright orange when active (both themes)
+        : (isDark ? Colors.white : Colors.black); // Base color when inactive
+    
+    // Text color logic:
+    // Light theme: always black (inactive and active)
+    // Dark theme: always white (inactive and active)
+    final Color textColor = isDark ? Colors.white : Colors.black;
+    
     return Expanded(
       child: GestureDetector(
         onTap: () => _handleNavTap(idx),
@@ -385,18 +386,8 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           duration: const Duration(milliseconds: 200),
           padding: EdgeInsets.symmetric(vertical: 6, horizontal: 4),
           decoration: BoxDecoration(
-            color: active
-                ? theme.colorScheme.primary.withValues(alpha: 0.15)
-                : Colors.transparent,
+            color: Colors.transparent, // No background color change on active
             borderRadius: BorderRadius.circular(12),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                      blurRadius: 10,
-                    ),
-                  ]
-                : const [],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -407,9 +398,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               Flexible(
                 child: Text(
                   _translate(labelKey),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: textColor, // Already set above with proper light/dark theme separation
-                    fontWeight: active ? FontWeight.w600 : null,
+                  style: TextStyle(
+                    color: textColor, // Explicitly set color - no theme override
+                    fontWeight: active ? FontWeight.w600 : FontWeight.normal,
                     fontSize: fontSize,
                   ),
                   textAlign: TextAlign.center,
