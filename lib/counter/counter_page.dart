@@ -370,24 +370,35 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     }
   }
 
+  // CRITICAL FIX: Add debouncing flag to prevent duplicate goal completion dialogs
+  bool _goalCompletionCheckInProgress = false;
+  
   Future<void> _checkGoalCompletion() async {
-    // First refresh goal to ensure we have the latest value
-    await _refreshGoal();
+    // Prevent multiple simultaneous checks (debouncing)
+    if (_goalCompletionCheckInProgress) return;
     
-    final goalStore = await GoalStore.create();
-    final currentMalas = _malas;
-    final currentGoal = _dailyGoal;
-    
-    // Check if goal is met and we haven't shown the dialog yet
-    if (!_goalCompletedShown && currentGoal > 0 && currentMalas >= currentGoal) {
-      await goalStore.setLastCongratsToday();
-      if (!mounted) return;
+    _goalCompletionCheckInProgress = true;
+    try {
+      // First refresh goal to ensure we have the latest value
+      await _refreshGoal();
       
-      setState(() {
-        _goalCompletedShown = true;
-      });
+      final goalStore = await GoalStore.create();
+      final currentMalas = _malas;
+      final currentGoal = _dailyGoal;
       
-      await _showGoalCompleteDialog();
+      // Check if goal is met and we haven't shown the dialog yet
+      if (!_goalCompletedShown && currentGoal > 0 && currentMalas >= currentGoal) {
+        await goalStore.setLastCongratsToday();
+        if (!mounted) return;
+        
+        setState(() {
+          _goalCompletedShown = true;
+        });
+        
+        await _showGoalCompleteDialog();
+      }
+    } finally {
+      _goalCompletionCheckInProgress = false;
     }
   }
 
@@ -625,7 +636,12 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
                     divisions: AppConstants.maxGoalValue,
                     label: sliderValue.toString(),
                     onChanged: (value) {
-                      setLocalState(() => sliderValue = value.round());
+                      // CRITICAL FIX: Validate input before setting (prevent negative/out of range)
+                      final validatedValue = value.round().clamp(
+                        AppConstants.minGoalValue,
+                        AppConstants.maxGoalValue,
+                      );
+                      setLocalState(() => sliderValue = validatedValue);
                     },
                   ),
                   const SizedBox(height: 6),
@@ -967,16 +983,19 @@ class CounterPageState extends State<CounterPage> with WidgetsBindingObserver {
     }));
     // Resume ad preloading when counter session ends
     AdManager.instance.onCounterSessionEnd();
-    // Dispose confetti controller safely
+    // CRITICAL FIX: Ensure ConfettiController is always disposed even if errors occur
+    // Use try-finally to guarantee disposal
     try {
       _confettiController.dispose();
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[Counter] Error disposing confetti: $e');
       }
+    } finally {
+      _cancelMalaResetTimer();
+      // Ensure super.dispose() is always called
+      super.dispose();
     }
-    _cancelMalaResetTimer();
-    super.dispose();
   }
 }
 

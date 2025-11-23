@@ -2,6 +2,7 @@ import 'dart:async' show Completer, Timer;
 import 'dart:convert';
 
 import '../core/prefs_manager.dart';
+import '../utils/retry_helper.dart';
 import 'streak_store.dart';
 import 'counter_store.dart';
 
@@ -158,42 +159,61 @@ class ActivityStore {
   static Timer? _batchWriteTimer;
   static Completer<void>? _pendingWriteCompleter;
 
+  // Lock to prevent race conditions in batch writes
+  static Completer<void>? _writeLock;
+  
   /// Record daily summary with batching for performance.
   /// Writes are batched and deferred to reduce SharedPreferences I/O on every tap.
   /// PERF: This was called on every tap before - now batches writes every 2 seconds or on flush.
+  /// CRITICAL FIX: Added locking to prevent race conditions in concurrent writes.
   static Future<void> recordDailySummary(int japs, int malas) async {
+    // Wait for any ongoing write to complete
+    if (_writeLock != null) {
+      await _writeLock!.future;
+    }
+    
     // Validate inputs to prevent negative values
     final validJaps = japs < 0 ? 0 : japs;
     final validMalas = malas < 0 ? 0 : malas;
     
-    // Update pending values
-    _pendingJaps = validJaps;
-    _pendingMalas = validMalas;
+    // Create lock for this write operation
+    final lock = Completer<void>();
+    _writeLock = lock;
     
-    // Cancel existing timer
-    _batchWriteTimer?.cancel();
-    
-    // Create new completer if needed
-    _pendingWriteCompleter ??= Completer<void>();
-    final completer = _pendingWriteCompleter!;
-    
-    // Schedule batched write after 2 seconds of inactivity
-    _batchWriteTimer = Timer(const Duration(seconds: 2), () async {
-      await _flushDailySummary();
-    });
-    
-    // Also flush immediately every 10 taps (every 10th call)
-    // This ensures data is persisted frequently enough
-    if ((validJaps % 10) == 0) {
-      await _flushDailySummary();
+    try {
+      // Update pending values atomically (protected by lock)
+      _pendingJaps = validJaps;
+      _pendingMalas = validMalas;
+      
+      // Cancel existing timer
+      _batchWriteTimer?.cancel();
+      
+      // Create new completer if needed
+      _pendingWriteCompleter ??= Completer<void>();
+      final completer = _pendingWriteCompleter!;
+      
+      // Schedule batched write after 2 seconds of inactivity
+      _batchWriteTimer = Timer(const Duration(seconds: 2), () async {
+        await _flushDailySummary();
+      });
+      
+      // CRITICAL FIX: Flush immediately every 5 taps (instead of 10) to reduce data loss risk
+      // This ensures data is persisted more frequently
+      if ((validJaps % 5) == 0) {
+        await _flushDailySummary();
+      }
+      
+      // Return the completer's future so callers can await if needed
+      return completer.future;
+    } finally {
+      // Release lock
+      _writeLock = null;
+      lock.complete();
     }
-    
-    // Return the completer's future so callers can await if needed
-    return completer.future;
   }
   
   /// Flush pending daily summary write to disk immediately.
-  /// Called on app background, every 10 taps, or after 2 seconds of inactivity.
+  /// Called on app background, every 5 taps, or after 2 seconds of inactivity.
   static Future<void> _flushDailySummary() async {
     if (_pendingJaps == null || _pendingMalas == null) {
       return;
@@ -211,36 +231,44 @@ class ActivityStore {
     final completer = _pendingWriteCompleter;
     _pendingWriteCompleter = null;
     
+    // CRITICAL FIX: Use retry mechanism for failed writes
     try {
-      final prefs = await PrefsManager.instance;
-      final raw = prefs.getString(_kDailyHistory);
-      Map<String, dynamic> history;
-      try {
-        history = raw == null
-            ? <String, dynamic>{}
-            : Map<String, dynamic>.from(jsonDecode(raw));
-      } catch (e) {
-        // Handle corrupted JSON data
-        history = <String, dynamic>{};
-      }
-      final key = _yyyymmdd(DateTime.now());
-      history[key] = {
-        'japs': japs,
-        'malas': malas,
-      };
-      await prefs.setString(_kDailyHistory, jsonEncode(history));
-      
-      // Invalidate history cache
-      _cachedHistory = null;
-      _cachedHistoryDate = null;
-      
-      // Invalidate lifetime malas cache since history changed
-      CounterStore.invalidateLifetimeMalasCache();
+      await RetryHelper.retryVoid(
+        operation: () async {
+          final prefs = await PrefsManager.instance;
+          final raw = prefs.getString(_kDailyHistory);
+          Map<String, dynamic> history;
+          try {
+            history = raw == null
+                ? <String, dynamic>{}
+                : Map<String, dynamic>.from(jsonDecode(raw));
+          } catch (e) {
+            // Handle corrupted JSON data
+            history = <String, dynamic>{};
+          }
+          final key = _yyyymmdd(DateTime.now());
+          history[key] = {
+            'japs': japs,
+            'malas': malas,
+          };
+          await prefs.setString(_kDailyHistory, jsonEncode(history));
+          
+          // Invalidate history cache
+          _cachedHistory = null;
+          _cachedHistoryDate = null;
+          
+          // Invalidate lifetime malas cache since history changed
+          CounterStore.invalidateLifetimeMalasCache();
+        },
+        maxRetries: 3,
+        initialDelay: const Duration(milliseconds: 100),
+        maxDelay: const Duration(seconds: 1),
+      );
       
       // Complete the completer to notify awaiting callers
       completer?.complete();
     } catch (e) {
-      // If write fails, complete with error
+      // If write fails after retries, complete with error
       completer?.completeError(e);
     }
   }

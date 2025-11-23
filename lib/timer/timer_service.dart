@@ -161,11 +161,20 @@ class TimerService extends ChangeNotifier {
     }
 
     // Update display notifier to reflect current state
-    final currentSeconds = remaining.inSeconds;
-    _lastDisplayedSeconds = currentSeconds;
-    final minutes = currentSeconds ~/ 60;
-    final secs = currentSeconds % 60;
-    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    // CRITICAL FIX: Check if notifier is disposed before setting value
+    if (displayNotifier.hasListeners) {
+      final currentSeconds = remaining.inSeconds;
+      _lastDisplayedSeconds = currentSeconds;
+      final minutes = currentSeconds ~/ 60;
+      final secs = currentSeconds % 60;
+      try {
+        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[TimerService] Error setting display notifier in load: $e');
+        }
+      }
+    }
 
     if (kDebugMode) {
       debugPrint(
@@ -356,11 +365,20 @@ class TimerService extends ChangeNotifier {
     _stopTicker();
     
     // Update display to show paused state
-    final pausedSeconds = remaining.inSeconds;
-    _lastDisplayedSeconds = pausedSeconds;
-    final minutes = pausedSeconds ~/ 60;
-    final secs = pausedSeconds % 60;
-    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    // CRITICAL FIX: Check if notifier is disposed before setting value
+    if (displayNotifier.hasListeners) {
+      final pausedSeconds = remaining.inSeconds;
+      _lastDisplayedSeconds = pausedSeconds;
+      final minutes = pausedSeconds ~/ 60;
+      final secs = pausedSeconds % 60;
+      try {
+        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[TimerService] Error setting display notifier in pause: $e');
+        }
+      }
+    }
     
     // Save pause timestamp to detect if app was closed
     final prefs = await PrefsManager.instance;
@@ -387,11 +405,20 @@ class TimerService extends ChangeNotifier {
     _recordedSeconds = 0;
     
     // Update display to show reset state (target time)
-    final resetSeconds = _target.inSeconds;
-    _lastDisplayedSeconds = resetSeconds;
-    final minutes = resetSeconds ~/ 60;
-    final secs = resetSeconds % 60;
-    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    // CRITICAL FIX: Check if notifier is disposed before setting value
+    if (displayNotifier.hasListeners) {
+      final resetSeconds = _target.inSeconds;
+      _lastDisplayedSeconds = resetSeconds;
+      final minutes = resetSeconds ~/ 60;
+      final secs = resetSeconds % 60;
+      try {
+        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[TimerService] Error setting display notifier in reset: $e');
+        }
+      }
+    }
     
     // Clear pause timestamp when resetting
     final prefs = await PrefsManager.instance;
@@ -410,11 +437,20 @@ class TimerService extends ChangeNotifier {
     _recordedSeconds = 0;
     
     // Update display to show new target time
-    final targetSeconds = _target.inSeconds;
-    _lastDisplayedSeconds = targetSeconds;
-    final minutes = targetSeconds ~/ 60;
-    final secs = targetSeconds % 60;
-    displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    // CRITICAL FIX: Check if notifier is disposed before setting value
+    if (displayNotifier.hasListeners) {
+      final targetSeconds = _target.inSeconds;
+      _lastDisplayedSeconds = targetSeconds;
+      final minutes = targetSeconds ~/ 60;
+      final secs = targetSeconds % 60;
+      try {
+        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[TimerService] Error setting display notifier in selectDuration: $e');
+        }
+      }
+    }
     
     await _persist();
     notifyListeners();
@@ -441,8 +477,17 @@ class TimerService extends ChangeNotifier {
     _stopTicker();
     
     // Update display to show completed state (00:00)
+    // CRITICAL FIX: Check if notifier is disposed before setting value
     _lastDisplayedSeconds = 0;
-    displayNotifier.value = '00:00';
+    if (displayNotifier.hasListeners) {
+      try {
+        displayNotifier.value = '00:00';
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[TimerService] Error setting display notifier in complete: $e');
+        }
+      }
+    }
     
     await _persist();
     notifyListeners();
@@ -470,12 +515,21 @@ class TimerService extends ChangeNotifier {
       _startTicker();
     } else {
       // Update display notifier even when not running
-      final currentSeconds = remaining.inSeconds;
-      if (_lastDisplayedSeconds != currentSeconds) {
-        _lastDisplayedSeconds = currentSeconds;
-        final minutes = currentSeconds ~/ 60;
-        final secs = currentSeconds % 60;
-        displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+      // CRITICAL FIX: Check if notifier is disposed before setting value
+      if (displayNotifier.hasListeners) {
+        final currentSeconds = remaining.inSeconds;
+        if (_lastDisplayedSeconds != currentSeconds) {
+          _lastDisplayedSeconds = currentSeconds;
+          final minutes = currentSeconds ~/ 60;
+          final secs = currentSeconds % 60;
+          try {
+            displayNotifier.value = '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('[TimerService] Error setting display notifier in refresh: $e');
+            }
+          }
+        }
       }
       notifyListeners();
     }

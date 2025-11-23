@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/prefs_manager.dart';
+import '../utils/retry_helper.dart';
 import 'activity_store.dart';
 import 'xp_store.dart';
 
@@ -242,9 +243,13 @@ class CounterStore {
       _cachedLifetime = _cachedLifetime! + 1;
       _cacheDirty = true;
       
-      // Sync every 10 taps OR after 500ms of inactivity
-      if (_cachedToday! % 10 == 0) {
-        await _syncToDisk(); // Force sync every 10 taps
+      // CRITICAL FIX: Reduce batch size from 10 to 5 to minimize data loss risk
+      // Sync every 5 taps OR after 500ms of inactivity
+      // This ensures maximum 4 taps could be lost (instead of 9) if app crashes
+      if (_cachedToday! % 5 == 0) {
+        await _syncToDisk(); // Force sync every 5 taps
+        // Validate write succeeded
+        await _validateSync();
       } else {
         _scheduleSync();
       }
@@ -301,30 +306,71 @@ class CounterStore {
   }
   
   Future<void> _performSync() async {
-    // Always write today (it might be 0 if reset)
-    await _prefs.setInt(_kTodayJaps, _cachedToday ?? 0);
-    
-    // For lifetime, ensure we never write a value less than what's already stored
-    // This prevents accidentally resetting lifetime due to initialization issues
-    if (_cachedLifetime != null) {
-      // Read existing lifetime from disk to ensure we don't overwrite with a lower value
-      final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
-      // Only write if our cached value is greater than or equal to existing
-      // This ensures lifetime always increases, never decreases
-      if (_cachedLifetime! >= existingLifetime) {
-        await _prefs.setInt(_kLifetimeJaps, _cachedLifetime!);
-      } else {
-        // If cached value is lower (shouldn't happen, but safety check),
-        // use the existing value and update cache
-        _cachedLifetime = existingLifetime;
+    // CRITICAL FIX: Use retry mechanism for failed writes
+    await RetryHelper.retryVoid(
+      operation: () async {
+        // Always write today (it might be 0 if reset)
+        final todayValue = _cachedToday ?? 0;
+        await _prefs.setInt(_kTodayJaps, todayValue);
+        
+        // For lifetime, ensure we never write a value less than what's already stored
+        // This prevents accidentally resetting lifetime due to initialization issues
+        if (_cachedLifetime != null) {
+          // Read existing lifetime from disk to ensure we don't overwrite with a lower value
+          final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+          // Only write if our cached value is greater than or equal to existing
+          // This ensures lifetime always increases, never decreases
+          if (_cachedLifetime! >= existingLifetime) {
+            await _prefs.setInt(_kLifetimeJaps, _cachedLifetime!);
+          } else {
+            // If cached value is lower (shouldn't happen, but safety check),
+            // use the existing value and update cache
+            _cachedLifetime = existingLifetime;
+          }
+        } else {
+          // If cache is null, read from disk and update cache, but don't write
+          // This preserves existing lifetime value
+          final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+          _cachedLifetime = existingLifetime;
+        }
+        _cacheDirty = false;
+      },
+      maxRetries: 3,
+      initialDelay: const Duration(milliseconds: 100),
+      maxDelay: const Duration(seconds: 1),
+      onRetry: (attempt, error) {
+        if (kDebugMode) {
+          debugPrint('[CounterStore] Retrying sync (attempt $attempt): $error');
+        }
+      },
+    );
+  }
+  
+  /// Validate that sync succeeded by reading back values
+  /// This ensures data persistence and catches write failures early
+  Future<void> _validateSync() async {
+    try {
+      final persistedToday = _prefs.getInt(_kTodayJaps) ?? 0;
+      final expectedToday = _cachedToday ?? 0;
+      
+      // If persisted value is less than expected, there was a write failure
+      // This can happen on slow storage or if write was interrupted
+      if (persistedToday < expectedToday) {
+        if (kDebugMode) {
+          debugPrint('[CounterStore] Sync validation failed: persisted=$persistedToday, expected=$expectedToday');
+        }
+        // Mark dirty again to retry sync
+        _cacheDirty = true;
+        // Retry sync immediately
+        await _performSync();
       }
-    } else {
-      // If cache is null, read from disk and update cache, but don't write
-      // This preserves existing lifetime value
-      final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
-      _cachedLifetime = existingLifetime;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[CounterStore] Sync validation error: $e');
+      }
+      // Mark dirty for retry
+      _cacheDirty = true;
     }
-    _cacheDirty = false;
   }
   
   Future<void> _updateXP() async {

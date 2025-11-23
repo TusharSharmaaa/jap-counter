@@ -19,7 +19,14 @@ class GoalStore {
   int get dailyMalasGoal => _prefs.getInt(_kDailyMalasGoal) ?? 0;
 
   Future<void> setDailyMalasGoal(int malas) async {
-    // Validate and clamp goal value
+    // CRITICAL FIX: Validate for negative values before clamping
+    // This prevents invalid data from being stored
+    if (malas < 0) {
+      // If negative, set to 0 (no goal) instead of clamping
+      await _prefs.setInt(_kDailyMalasGoal, 0);
+      return;
+    }
+    // Validate and clamp goal value to valid range
     final validated = malas.clamp(AppConstants.minGoalValue, AppConstants.maxGoalValue);
     await _prefs.setInt(_kDailyMalasGoal, validated);
   }

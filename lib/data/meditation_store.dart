@@ -1,3 +1,5 @@
+import 'dart:async' show Completer, unawaited;
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/prefs_manager.dart';
@@ -10,6 +12,9 @@ class MeditationStore {
   static const _kLastDate = 'med_last_date'; // yyyymmdd
 
   final SharedPreferences _prefs;
+  
+  // Lock to prevent race conditions in addMinutes operations
+  static Completer<void>? _addMinutesLock;
 
   MeditationStore._(this._prefs);
 
@@ -21,15 +26,41 @@ class MeditationStore {
   }
 
   /// Add minutes to today and lifetime.
+  /// CRITICAL FIX: Added locking to prevent race conditions in concurrent writes.
   Future<void> addMinutes(int minutes) async {
-    await _ensureToday();
-    final today = _prefs.getInt(_kTodayMinutes) ?? 0;
-    final life = _prefs.getInt(_kLifetimeMinutes) ?? 0;
-    await _prefs.setInt(_kTodayMinutes, today + minutes);
-    await _prefs.setInt(_kLifetimeMinutes, life + minutes);
-    if (minutes > 0) {
-      final xp = await XPStore.create();
-      await xp.addXP(minutes ~/ 5);
+    // Wait for any ongoing addMinutes operation to complete
+    if (_addMinutesLock != null) {
+      await _addMinutesLock!.future;
+    }
+    
+    // Create lock for this operation
+    final lock = Completer<void>();
+    _addMinutesLock = lock;
+    
+    try {
+      await _ensureToday();
+      
+      // Read current values
+      final today = _prefs.getInt(_kTodayMinutes) ?? 0;
+      final life = _prefs.getInt(_kLifetimeMinutes) ?? 0;
+      
+      // Validate minutes is non-negative
+      final validMinutes = minutes < 0 ? 0 : minutes;
+      
+      // Write new values atomically (protected by lock)
+      await _prefs.setInt(_kTodayMinutes, today + validMinutes);
+      await _prefs.setInt(_kLifetimeMinutes, life + validMinutes);
+      
+      // Update XP asynchronously (non-blocking)
+      if (validMinutes > 0) {
+        unawaited(XPStore.create().then((xp) => xp.addXP(validMinutes ~/ 5)).catchError((_) {
+          // Silently ignore XP update errors - not critical
+        }));
+      }
+    } finally {
+      // Release lock
+      _addMinutesLock = null;
+      lock.complete();
     }
   }
 

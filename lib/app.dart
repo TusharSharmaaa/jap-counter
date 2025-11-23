@@ -75,6 +75,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         }
       }));
       // Flush pending writes when app goes to background
+      // Note: CounterStore flush is handled by CounterPage's lifecycle observer
       unawaited(ActivityStore.flushPendingWrites().catchError((error, stackTrace) {
         if (kDebugMode) {
           debugPrint('[App] Error flushing pending writes: $error\n$stackTrace');
@@ -88,6 +89,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         }
       }));
       // Flush pending writes before app closes
+      // Note: CounterStore flush is handled by CounterPage's lifecycle observer
       unawaited(ActivityStore.flushPendingWrites().catchError((error, stackTrace) {
         if (kDebugMode) {
           debugPrint('[App] Error flushing pending writes on close: $error\n$stackTrace');
