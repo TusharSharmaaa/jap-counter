@@ -22,12 +22,29 @@ Future<void> main() async {
   await PrefsManager.ensureInitialized();
   
   // Load theme mode synchronously before showing app
+  // Default to light theme for new users (not system theme)
   final prefs = await PrefsManager.instance;
-  final stored = prefs.getInt('themeMode') ?? ThemeMode.system.index;
+  final stored = prefs.getInt('themeMode');
   final values = ThemeMode.values;
-  final initialThemeMode = (stored >= 0 && stored < values.length)
-      ? values[stored]
-      : ThemeMode.system;
+  ThemeMode initialThemeMode;
+  if (stored == null) {
+    // New user: default to light theme
+    initialThemeMode = ThemeMode.light;
+  } else if (stored >= 0 && stored < values.length) {
+    final mode = values[stored];
+    // Migrate ThemeMode.system to ThemeMode.light for existing users
+    // This ensures consistent behavior since settings page only has Light/Dark options
+    if (mode == ThemeMode.system) {
+      initialThemeMode = ThemeMode.light;
+      // Save the migrated value immediately to prevent race conditions
+      await prefs.setInt('themeMode', ThemeMode.light.index);
+    } else {
+      initialThemeMode = mode;
+    }
+  } else {
+    // Invalid value: default to light
+    initialThemeMode = ThemeMode.light;
+  }
   
   runApp(SplashApp(initialThemeMode: initialThemeMode));
 }

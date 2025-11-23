@@ -126,11 +126,27 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   Future<void> _loadThemeMode() async {
     final prefs = await PrefsManager.instance;
-    final stored = prefs.getInt('themeMode') ?? ThemeMode.system.index;
+    final stored = prefs.getInt('themeMode');
     final values = ThemeMode.values;
-    final mode = (stored >= 0 && stored < values.length)
-        ? values[stored]
-        : ThemeMode.system;
+    ThemeMode mode;
+    if (stored == null) {
+      // New user: default to light theme
+      mode = ThemeMode.light;
+    } else if (stored >= 0 && stored < values.length) {
+      final loadedMode = values[stored];
+      // Migrate ThemeMode.system to ThemeMode.light for existing users
+      // This ensures consistent behavior since settings page only has Light/Dark options
+      if (loadedMode == ThemeMode.system) {
+        mode = ThemeMode.light;
+        // Save the migrated value to preferences
+        await prefs.setInt('themeMode', ThemeMode.light.index);
+      } else {
+        mode = loadedMode;
+      }
+    } else {
+      // Invalid value: default to light
+      mode = ThemeMode.light;
+    }
     if (mounted) {
       setState(() => _themeMode = mode);
     } else {

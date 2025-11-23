@@ -133,7 +133,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = widget.themeMode == ThemeMode.dark;
+    // Check effective brightness instead of just themeMode
+    // This correctly handles ThemeMode.system and shows the actual theme being displayed
+    // If themeMode is system, we check the actual brightness from the context
+    final effectiveBrightness = widget.themeMode == ThemeMode.system
+        ? Theme.of(context).brightness
+        : (widget.themeMode == ThemeMode.dark ? Brightness.dark : Brightness.light);
+    final isDark = effectiveBrightness == Brightness.dark;
     final language = widget.language;
 
     return Scaffold(
