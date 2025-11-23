@@ -1594,11 +1594,17 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                       : () async {
                           setState(() => _shareBusy = true);
                           try {
-                            final int todayJaps = todayJapsFromCounter;
-                            final int lifetimeMalasLocal = lifetimeMalasFromCounter;
+                            // CRITICAL FIX: Force sync and fetch fresh data from CounterStore to avoid stale cache
+                            // This ensures we get the absolute latest value, not from cached FutureBuilder
+                            final s = await CounterStore.create();
+                            // Force sync any pending writes to ensure we have the latest value
+                            await s.forceSyncNow();
+                            // Read fresh value from store (after sync, cache should be up-to-date)
+                            final int todayJaps = s.todayJaps; // Read from store after ensuring sync
+                            final int lifetimeMalasLocal = s.lifetimeMalas; // Fetch fresh from store
                             final int streakDays = streak;
                             debugPrint(
-                              '[Stats] Share tapped → todayJaps=$todayJaps lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
+                              '[Stats] Share tapped → todayJaps=$todayJaps (fresh from store after sync) lifetimeMalas=$lifetimeMalasLocal streakDays=$streakDays',
                             );
                             await openShareMyStreak(
                               context,
@@ -1611,8 +1617,14 @@ class _StatsPageState extends State<_StatsPage> with AutomaticKeepAliveClientMix
                           }
                         },
                   onLongPress: () async {
-                    final int todayJaps = todayJapsFromCounter;
-                    final int lifetimeMalasLocal = lifetimeMalasFromCounter;
+                    // CRITICAL FIX: Force sync and fetch fresh data from CounterStore to avoid stale cache
+                    // This ensures we get the absolute latest value, not from cached FutureBuilder
+                    final s = await CounterStore.create();
+                    // Force sync any pending writes to ensure we have the latest value
+                    await s.forceSyncNow();
+                    // Read fresh value from store (after sync, cache should be up-to-date)
+                    final int todayJaps = s.todayJaps; // Read from store after ensuring sync
+                    final int lifetimeMalasLocal = s.lifetimeMalas; // Fetch fresh from store
                     final int streakDays = streak;
                     debugPrint(
                       '[Stats][DEV] Long-press bypass → opening preview directly',
