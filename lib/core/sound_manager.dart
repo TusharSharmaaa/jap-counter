@@ -4,6 +4,8 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
+import 'prefs_manager.dart';
+
 /// Centralised audio helper used by the Timer experience.
 ///
 /// This manager wraps a looping ambience player and a short SFX (bell) player,
@@ -35,9 +37,20 @@ class SoundManager {
 
   double _ambienceVolume = 0.85;
   double _bellVolume = 1.0;
+  static const _kAmbienceVolume = 'sound.ambienceVolume';
+  static const _kBellVolume = 'sound.bellVolume';
 
   Future<void> init() async {
     if (_initialized) return;
+
+    // Load persisted volume settings
+    try {
+      final prefs = await PrefsManager.instance;
+      _ambienceVolume = prefs.getDouble(_kAmbienceVolume) ?? 0.85;
+      _bellVolume = prefs.getDouble(_kBellVolume) ?? 1.0;
+    } catch (_) {
+      // Use defaults if loading fails
+    }
 
     _session ??= await AudioSession.instance;
     final config = const AudioSessionConfiguration.music().copyWith(
@@ -167,10 +180,16 @@ class SoundManager {
 
   Future<void> dispose() async {
     try {
+      await stopAmbience();
+    } catch (_) {}
+    try {
       await _ambiencePlayer.dispose();
     } catch (_) {}
     try {
       await _sfxPlayer.dispose();
+    } catch (_) {}
+    try {
+      await _session?.setActive(false);
     } catch (_) {}
     _initialized = false;
     _ambiencePrepared = false;
@@ -180,11 +199,25 @@ class SoundManager {
   Future<void> setAmbienceVolume(double value) async {
     _ambienceVolume = value.clamp(0.0, 1.0);
     await _ambiencePlayer.setVolume(_ambienceVolume);
+    // Persist volume setting
+    try {
+      final prefs = await PrefsManager.instance;
+      await prefs.setDouble(_kAmbienceVolume, _ambienceVolume);
+    } catch (_) {
+      // Ignore persistence errors
+    }
   }
 
   Future<void> setBellVolume(double value) async {
     _bellVolume = value.clamp(0.0, 1.0);
     await _sfxPlayer.setVolume(_bellVolume);
+    // Persist volume setting
+    try {
+      final prefs = await PrefsManager.instance;
+      await prefs.setDouble(_kBellVolume, _bellVolume);
+    } catch (_) {
+      // Ignore persistence errors
+    }
   }
 
   Future<bool> _prepareAmbience(String id) async {

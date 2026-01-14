@@ -10,10 +10,10 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../core/ad_manager.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/design_system.dart';
 import 'dedication_store.dart';
 
 String _toHindiDigits(int number) {
@@ -87,23 +87,36 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
     if (mounted) setState(() => _dedication = d);
   }
 
+  Future<File?> _captureCardImage({String prefix = 'streak_share'}) async {
+    try {
+      final ctx = _cardKey.currentContext;
+      if (ctx == null) return null;
+      final boundary = ctx.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+
+      final image = await boundary.toImage(pixelRatio: 3.5);
+      final byteData = await image.toByteData(format: ImageByteFormat.png);
+      if (byteData == null) return null;
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/${prefix}_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+      return file;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[SharePreview] Capture failed: $e');
+      return null;
+    }
+  }
+
   Future<void> _shareCard() async {
     final shareText =
         '${context.tr('share.shareText')}\n${context.tr('share.shareTextLink')}';
     try {
       setState(() => _sharing = true);
-      final ctx = _cardKey.currentContext;
-      if (ctx == null) return;
-      final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3.5); // crisper share
-      final byteData = await image.toByteData(format: ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
-
-      final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/streak_share_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(pngBytes);
+      final file = await _captureCardImage();
+      if (file == null) return;
       AdManager.instance.recordEvent(
         'stats.share_rewarded',
         'share_card_generated',
@@ -129,18 +142,8 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
   Future<void> _saveCardPng() async {
     try {
       setState(() => _sharing = true);
-      final ctx = _cardKey.currentContext;
-      if (ctx == null) return;
-      final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3.5);
-      final byteData = await image.toByteData(format: ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
-
-      final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/rjc_streak_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(pngBytes);
+      final file = await _captureCardImage(prefix: 'rjc_streak');
+      if (file == null) return;
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -155,24 +158,40 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
     }
   }
 
-  Future<void> _shareWhatsAppText() async {
+  Future<void> _shareWhatsAppCard() async {
     final shareText =
         '${context.tr('share.shareText')}\n${context.tr('share.shareTextLink')}';
-    final msg = Uri.encodeComponent(shareText);
-    final waUri = Uri.parse('whatsapp://send?text=$msg');
     try {
-      final can = await canLaunchUrl(waUri);
-      if (can) {
-        await launchUrl(waUri, mode: LaunchMode.externalApplication);
+      setState(() => _sharing = true);
+      final file = await _captureCardImage(prefix: 'whatsapp_streak');
+      if (file == null) {
+        await SharePlus.instance.share(ShareParams(text: shareText));
         return;
       }
-    } catch (_) {}
+      AdManager.instance.recordEvent(
+        'stats.share_rewarded',
+        'share_card_generated',
+      );
 
-    await SharePlus.instance.share(ShareParams(text: shareText));
-    AdManager.instance.recordEvent(
-      'stats.share_rewarded',
-      'share_intent_launched',
-    );
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: shareText,
+          title: context.tr('share.whatsappTooltip'),
+        ),
+      );
+      AdManager.instance.recordEvent(
+        'stats.share_rewarded',
+        'share_intent_launched',
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('[SharePreview] WhatsApp share failed: $e');
+    } finally {
+      unawaited(
+        AdManager.instance.preloadPlacement('stats.share_rewarded'),
+      );
+      if (mounted) setState(() => _sharing = false);
+    }
   }
 
   @override
@@ -185,12 +204,8 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
         centerTitle: true,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFFFE0B2), Color(0xFFFFF3E0)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: SafeArea(
           child: Column(
@@ -353,7 +368,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                                           .textTheme
                                           .bodyLarge
                                           ?.copyWith(
-                                            color: Colors.deepOrange.shade900,
+                                            color: DesignSystem.buttonPrimary,
                                             fontStyle: FontStyle.italic,
                                           ),
                                     ),
@@ -369,51 +384,50 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                                         ),
                                   ),
                                   const SizedBox(height: 16),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.temple_hindu,
-                                          size: 14,
-                                          color: Colors.brown.shade800
-                                              .withValues(alpha: 0.55),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
-                                          children: [
-                                            Text(
-                                              context.tr('share.footer'),
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelMedium
-                                                  ?.copyWith(
-                                                    color: Colors.brown.shade800
-                                                        .withValues(
-                                                          alpha: 0.55,
-                                                        ),
-                                                    fontWeight: FontWeight.w600,
-                                                    letterSpacing: 0.3,
-                                                  ),
-                                            ),
-                                            Text(
-                                              context.tr('share.footerSub'),
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelSmall
-                                                  ?.copyWith(
-                                                    color: Colors.brown.shade800
-                                                        .withValues(alpha: 0.4),
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.temple_hindu,
+                                        size: 14,
+                                        color: Colors.brown.shade800
+                                            .withValues(alpha: 0.55),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            context.tr('share.footer'),
+                                            textAlign: TextAlign.left,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelMedium
+                                                ?.copyWith(
+                                                  color: Colors.brown.shade800
+                                                      .withValues(alpha: 0.55),
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.3,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            context.tr('share.footerSub'),
+                                            textAlign: TextAlign.left,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                  color: Colors.brown.shade800
+                                                      .withValues(alpha: 0.4),
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -441,7 +455,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                         ),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: Colors.deepOrangeAccent,
+                          backgroundColor: const Color(0xFFD97757), // Eye-friendly softer orange
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -457,7 +471,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
                     ),
                     const SizedBox(width: 6),
                     IconButton.filled(
-                      onPressed: _sharing ? null : _shareWhatsAppText,
+                      onPressed: _sharing ? null : _shareWhatsAppCard,
                       icon: const FaIcon(
                         FontAwesomeIcons.whatsapp,
                         color: Colors.white,
@@ -490,6 +504,7 @@ class _StreakSharePreviewPageState extends State<StreakSharePreviewPage>
               fontSize: 17,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.2,
+              color: Colors.black, // Black color for visibility
             ),
           ),
         ],

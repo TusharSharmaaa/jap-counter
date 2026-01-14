@@ -45,6 +45,7 @@ dependencies:
   audioplayers: ^6.1.0
   wakelock_plus: ^1.2.7
   provider: ^6.1.2
+  vibration: ^3.1.4
   path_provider: ^2.1.5
   http: ^1.5.0
   font_awesome_flutter: ^10.7.0
@@ -85,6 +86,7 @@ flutter:
     - assets/audio/birds_loop.mp3
     - assets/audio/water_loop.mp3
     - assets/audio/bell_end.mp3
+    - assets/audio/Temple Bell.mp3
     - assets/config/ad_policy.json
 
 

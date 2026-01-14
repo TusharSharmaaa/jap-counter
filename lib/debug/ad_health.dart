@@ -124,3 +124,7 @@ class AdHealth {
     return parts.isEmpty ? 'n/a' : parts.join(', ');
   }
 }
+
+
+
+

@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/prefs_manager.dart';
+
 class SessionStore {
   static const _kSessions = 'sessions.json';
   static const _maxSessions = 10;
@@ -11,7 +13,7 @@ class SessionStore {
   SessionStore._(this._prefs);
 
   static Future<SessionStore> create() async =>
-      SessionStore._(await SharedPreferences.getInstance());
+      SessionStore._(await PrefsManager.instance);
 
   Future<List<Map<String, dynamic>>> getSessions() async {
     final raw = _prefs.getString(_kSessions);
@@ -27,6 +29,14 @@ class SessionStore {
     required String type, // "jap" or "meditation"
     required int count, // japs or minutes
   }) async {
+    // Validate input bounds
+    if (count < 0 || count > 1000000) {
+      return; // Ignore invalid counts
+    }
+    if (type != 'jap' && type != 'meditation') {
+      return; // Ignore invalid types
+    }
+    
     final list = await getSessions();
     final entry = {
       'type': type,

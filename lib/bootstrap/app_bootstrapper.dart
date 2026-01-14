@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/ad_manager.dart';
+import '../core/prefs_manager.dart';
 import '../debug/boot_health.dart';
 
 const _logTag = '[BOOTSTRAP]';
@@ -81,7 +81,7 @@ class AppBootstrapper {
       log('run start');
 
       await runStep('shared_prefs', () async {
-        await SharedPreferences.getInstance();
+        await PrefsManager.ensureInitialized();
         return true;
       });
 

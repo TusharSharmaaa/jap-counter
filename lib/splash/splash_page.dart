@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../theme/design_system.dart';
 
 class SplashPage extends StatefulWidget {
   final VoidCallback onComplete;
@@ -36,8 +37,12 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      body: Center(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+        ),
+        child: Center(
         child: FadeTransition(
           opacity: _fade,
           child: Column(
@@ -56,18 +61,19 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
                     Theme.of(context).colorScheme.tertiary,
                   ],
                 ).createShader(rect),
-                child: const Text(
-                  'Radha Jap Counter',
+                child: Text(
+                  'Naam Jap Counter : Sadhna',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onSurface,
                     letterSpacing: 1.2,
                   ),
                 ),
               ),
             ],
           ),
+        ),
         ),
       ),
     );

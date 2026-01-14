@@ -16,6 +16,11 @@ class AppLocalizationScope extends InheritedWidget {
     return scope!;
   }
 
+  static AppLocalizationScope? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<AppLocalizationScope>();
+  }
+
   @override
   bool updateShouldNotify(covariant AppLocalizationScope oldWidget) =>
       language != oldWidget.language;
@@ -94,6 +99,12 @@ class AppStrings {
       'stats.badge.streak7': '🔥 7-day Streak',
       'stats.badge.streak21': '🔥 21-day Streak',
       'stats.badge.streak40': '🔥 40-day Streak',
+      'stats.celebration.7.title': '🎉 Congratulations!',
+      'stats.celebration.7.message': 'You have completed 7 days of Sadhna! Your dedication and discipline are truly inspiring. Keep up the amazing work! 🙏',
+      'stats.celebration.21.title': '🎉 Amazing Achievement!',
+      'stats.celebration.21.message': '21 days of continuous Sadhna! Your devotion and commitment are remarkable. You are building a beautiful practice! 🌸',
+      'stats.celebration.40.title': '🎉 Extraordinary Dedication!',
+      'stats.celebration.40.message': '40 days of Tapasya! This is a rare and beautiful achievement. Your spiritual practice is truly inspiring! 🌼',
 
       // Settings page
       'settings.title': 'Settings',
@@ -114,6 +125,37 @@ class AppStrings {
       'settings.sound': 'Sound',
       'settings.sound.action': 'Play sound feedback on actions',
       'settings.sound.malaBell': 'Play bell sound on mala completion',
+      'settings.haptic.title': 'Haptic Feedback',
+      'settings.haptic.description':
+          'Choose when the device should provide haptic feedback while counting.',
+      'settings.haptic.test': 'Test haptic feedback',
+      'settings.haptic.mode.off': 'Off',
+      'settings.haptic.mode.everyTap': 'Every tap',
+      'settings.haptic.mode.everyN': 'Every N taps',
+      'settings.haptic.mode.everyMala': 'Every mala',
+      'settings.haptic.mode.off.desc': 'No vibration feedback while you count.',
+      'settings.haptic.mode.everyTap.desc':
+          'Feel a light tap on each counter tap.',
+      'settings.haptic.mode.everyN.desc':
+          'Trigger a vibration after a custom number of taps.',
+      'settings.haptic.mode.everyMala.desc':
+          'Celebrate with a vibration when a mala (108) completes.',
+      'settings.soundFeedback.title': 'Sound Feedback',
+      'settings.soundFeedback.description':
+          'Choose when to hear a short bell sound during your counting.',
+      'settings.soundFeedback.preview': 'Preview sound',
+      'settings.soundFeedback.mode.off': 'Off',
+      'settings.soundFeedback.mode.everyTap': 'Every tap',
+      'settings.soundFeedback.mode.everyN': 'Every N taps',
+      'settings.soundFeedback.mode.everyMala': 'Every mala',
+      'settings.soundFeedback.mode.off.desc':
+          'No sound feedback while you count.',
+      'settings.soundFeedback.mode.everyTap.desc':
+          'Play a short chime on every counter tap.',
+      'settings.soundFeedback.mode.everyN.desc':
+          'Play a sound after a custom number of taps.',
+      'settings.soundFeedback.mode.everyMala.desc':
+          'Play a short bell sound when a full mala (108) completes.',
       'settings.about': 'About',
       'settings.privacy': 'Privacy Policy',
       'settings.terms': 'Terms & Conditions',
@@ -146,6 +188,20 @@ class AppStrings {
       'counter.goal.status.progress': 'Progress: {malas} / {goal} mala{suffix}',
       'counter.mala.new': 'Start a new mala',
       'counter.mala.remaining': '{count} more japs will complete this mala',
+      'counter.malaCompleted': '🎯 Mala completed! Keep your practice going.',
+      'counter.streak.milestone': '✨ {days}-day streak! Keep going.',
+      'counter.streak.dedication': '🔥 {days}-Day Streak — Keep your practice going!',
+      'counter.goal.dialog.title': 'Set your daily jap goal (malas)',
+      'counter.goal.dialog.noGoal': 'No daily goal',
+      'counter.goal.dialog.goalText': '{count} mala{suffix} per day',
+      'counter.goal.dialog.hint': 'Use the slider to adjust your daily mala goal.',
+      'counter.goal.complete.title': '🎉 Goal Completed!',
+      'counter.goal.complete.message': 'Congratulations! You have completed your daily goal of {count} mala{suffix}. Keep up the great work! 🙏',
+      'counter.stat.todayJaps': "Today's Japs",
+      'counter.stat.malas': 'Malas',
+      'counter.stat.lifetimeMalas': 'Lifetime Malas',
+      'counter.tapToCount': 'Tap to Count',
+      'counter.malaProgress.completed': 'Malas completed: {count}',
 
       // Timer
       'timer.complete.title': 'Meditation Completed',
@@ -162,8 +218,16 @@ class AppStrings {
       'timer.share.today': 'Today',
       'timer.share.lifetime': 'Lifetime',
       'timer.share.cta': 'Share meditation',
+      'timer.action.start': 'Start',
+      'timer.action.pause': 'Pause',
+      'timer.action.resume': 'Resume',
+      'timer.action.reset': 'Reset',
+      'timer.status.running': '🕉️ Meditation in progress…',
+      'timer.status.completed': '🌸 Meditation complete',
+      'timer.status.paused': '⏸️ Meditation paused',
+      'timer.status.idle': '🙏 Steady your mind',
       'timer.share.caption':
-          'Today: {today} · Lifetime: {lifetime} — Radha Jap Counter',
+          'Today: {today} · Lifetime: {lifetime} — Naam Jap Counter : Sadhna',
       'timer.share.error': 'Unable to share right now. Please try again.',
 
       // Share card
@@ -175,23 +239,39 @@ class AppStrings {
       'share.lifetimeMalas': 'Lifetime Malas · {value}',
       'share.streakDays': 'Practice Days · {value}',
       'share.dedication': '💠 Dedication: {note}',
-      'share.motto': '“Practice, Always.” 🌼',
-      'share.footer': 'Radha Jap Counter',
+      'share.motto': '“Every chant counts in silence.” 🌼',
+      'share.footer': 'Naam Jap Counter : Sadhna',
       'share.footerSub': 'Download from Play Store today',
       'share.saveTooltip': 'Save Image',
-      'share.whatsappTooltip': 'WhatsApp (Text)',
-      'share.shareText': '🌸 Glimpse of my practice — with Radha Jap Counter.',
+      'share.whatsappTooltip': 'WhatsApp',
+      'share.shareText': '🌸 Glimpse of my practice — with Naam Jap Counter : Sadhna.',
       'share.shareTextLink':
-          '🌸 Download Radha Jap Counter today: https://play.google.com/store/apps/details?id=com.example.jap_counter',
+          '🌸 Download Naam Jap Counter : Sadhna today: https://play.google.com/store/apps/details?id=com.example.jap_counter',
       'share.saved': 'Saved image to: {path}',
       'share.donate': 'Tap to support',
+
+      // Notifications
+      'notification.streak.21plus': '🔥 21+ days of continuous practice — Amazing!',
+      'notification.streak.7plus': '🌸 7 days of discipline — Keep the momentum!',
+      'notification.streak.default': '🙏 Take a few quiet moments today.',
+      'notification.body.withMalas': 'Today you completed {malas} malas — {streakMsg}',
+      'notification.body.noMalas': 'Your practice awaits — {streakMsg}',
+      'notification.title.morning': 'Good Morning Sadhak',
+      'notification.title.noon': 'Midday Meditation',
+      'notification.title.evening': 'Evening Practice',
+      'notification.body.noon': 'Take a moment of peace — {note}',
+      'notification.body.evening': 'Complete the day in meditation 🌙',
+      'notification.dynamic.title': "Today's Jap Count: {count}",
+      'notification.dynamic.body': 'Complete your practice with "Radhe Radhe" 🌸',
+      'notification.motivation.title': '🌞 A New Day of Practice',
+      'notification.motivation.body': 'Complete your japs today, just like yesterday 🙏',
     },
     'hi': {
       // Navigation
       'nav.counter': 'जप',
       'nav.stats': 'आँकड़े',
       'nav.gita': 'गीता',
-      'nav.timer': 'घड़ी',
+      'nav.timer': 'ध्यान',
       'nav.settings': 'सेटिंग्स',
 
       // Generic
@@ -256,6 +336,12 @@ class AppStrings {
       'stats.badge.streak7': '🔥 7-दिन की श्रंखला',
       'stats.badge.streak21': '🔥 21-दिन की श्रंखला',
       'stats.badge.streak40': '🔥 40-दिन की श्रंखला',
+      'stats.celebration.7.title': '🎉 बधाई हो!',
+      'stats.celebration.7.message': 'आपने 7 दिन की साधना पूरी की है! आपका समर्पण और अनुशासन वास्तव में प्रेरणादायक है। अद्भुत कार्य जारी रखें! 🙏',
+      'stats.celebration.21.title': '🎉 अद्भुत उपलब्धि!',
+      'stats.celebration.21.message': '21 दिन की निरंतर साधना! आपकी भक्ति और प्रतिबद्धता उल्लेखनीय है। आप एक सुंदर अभ्यास बना रहे हैं! 🌸',
+      'stats.celebration.40.title': '🎉 असाधारण समर्पण!',
+      'stats.celebration.40.message': '40 दिन की तपस्या! यह एक दुर्लभ और सुंदर उपलब्धि है। आपकी आध्यात्मिक साधना वास्तव में प्रेरणादायक है! 🌼',
 
       // Settings page
       'settings.title': 'सेटिंग्स',
@@ -275,6 +361,37 @@ class AppStrings {
       'settings.sound': 'ध्वनि',
       'settings.sound.action': 'क्रियाओं पर ध्वनि चलाएँ',
       'settings.sound.malaBell': 'माला पूर्ण होने पर घंटी बजाएँ',
+      'settings.haptic.title': 'हैप्टिक प्रतिक्रिया',
+      'settings.haptic.description':
+          'गिनती करते समय डिवाइस कब कंपन दे, यह चुनें।',
+      'settings.haptic.test': 'हैप्टिक प्रतिक्रिया जाँचें',
+      'settings.haptic.mode.off': 'बंद',
+      'settings.haptic.mode.everyTap': 'हर टैप पर',
+      'settings.haptic.mode.everyN': 'अनुकूल टैप पर',
+      'settings.haptic.mode.everyMala': 'हर माला पर',
+      'settings.haptic.mode.off.desc': 'गिनती के दौरान कोई कंपन नहीं।',
+      'settings.haptic.mode.everyTap.desc':
+          'हर काउंटर टैप पर हल्का कंपन महसूस करें।',
+      'settings.haptic.mode.everyN.desc':
+          'निर्धारित टैप संख्या के बाद कंपन चलाएँ।',
+      'settings.haptic.mode.everyMala.desc':
+          'प्रत्येक पूर्ण माला (108) पर कंपन से उत्सव मनाएँ।',
+      'settings.soundFeedback.title': 'ध्वनि प्रतिक्रिया',
+      'settings.soundFeedback.description':
+          'गिनती के दौरान छोटी घंटी कब सुननी है, चुनें।',
+      'settings.soundFeedback.preview': 'ध्वनि पूर्वावलोकन',
+      'settings.soundFeedback.mode.off': 'बंद',
+      'settings.soundFeedback.mode.everyTap': 'हर टैप पर',
+      'settings.soundFeedback.mode.everyN': 'अनुकूल टैप पर',
+      'settings.soundFeedback.mode.everyMala': 'हर माला पर',
+      'settings.soundFeedback.mode.off.desc':
+          'गिनती करते समय कोई ध्वनि नहीं।',
+      'settings.soundFeedback.mode.everyTap.desc':
+          'हर काउंटर टैप पर छोटी धुन चलाएँ।',
+      'settings.soundFeedback.mode.everyN.desc':
+          'निर्धारित टैप संख्या के बाद ध्वनि चलाएँ।',
+      'settings.soundFeedback.mode.everyMala.desc':
+          'पूर्ण माला (108) होने पर छोटी घंटी बजाएँ।',
       'settings.about': 'परिचय',
       'settings.privacy': 'गोपनीयता नीति',
       'settings.terms': 'नियम व शर्तें',
@@ -307,6 +424,20 @@ class AppStrings {
       'counter.goal.status.progress': 'प्रगति: {malas} / {goal} माला{suffix}',
       'counter.mala.new': 'नई माला प्रारंभ करें',
       'counter.mala.remaining': '{count} और जप इस माला को पूर्ण करेंगे',
+      'counter.malaCompleted': '🎯 माला पूर्ण! साधना जारी रखें।',
+      'counter.streak.milestone': '✨ {days}-दिन की श्रंखला! जारी रखें।',
+      'counter.streak.dedication': '🔥 {days}-दिन की साधना — निरंतर जारी है!',
+      'counter.goal.dialog.title': 'दैनिक जप लक्ष्य चुनें (माला)',
+      'counter.goal.dialog.noGoal': 'कोई दैनिक लक्ष्य नहीं',
+      'counter.goal.dialog.goalText': 'प्रति दिन {count} माला{suffix}',
+      'counter.goal.dialog.hint': 'दैनिक माला लक्ष्य समायोजित करने हेतु स्लाइडर का उपयोग करें।',
+      'counter.goal.complete.title': '🎉 लक्ष्य पूर्ण!',
+      'counter.goal.complete.message': 'बधाई हो! आपने अपना दैनिक लक्ष्य {count} माला{suffix} पूरा कर लिया है। अद्भुत कार्य जारी रखें! 🙏',
+      'counter.stat.todayJaps': 'आज के जप',
+      'counter.stat.malas': 'मालाएँ',
+      'counter.stat.lifetimeMalas': 'जीवनभर की मालाएँ',
+      'counter.tapToCount': 'जप गिनने हेतु टैप करें',
+      'counter.malaProgress.completed': 'पूर्ण मालाएँ: {count}',
 
       // Timer
       'timer.complete.title': 'साधना पूर्ण हुई',
@@ -323,8 +454,16 @@ class AppStrings {
       'timer.share.today': 'आज',
       'timer.share.lifetime': 'कुल योग',
       'timer.share.cta': 'ध्यान साझा करें',
+      'timer.action.start': 'प्रारंभ करें',
+      'timer.action.pause': 'विराम',
+      'timer.action.resume': 'पुनः प्रारंभ',
+      'timer.action.reset': 'रीसेट',
+      'timer.status.running': '🕉️ साधना जारी है...',
+      'timer.status.completed': '🌸 ध्यान पूर्ण',
+      'timer.status.paused': '⏸️ ध्यान विराम',
+      'timer.status.idle': '🙏 मन को शांत करें',
       'timer.share.caption':
-          'आज: {today} · कुल: {lifetime} — Radha Jap Counter',
+          'आज: {today} · कुल: {lifetime} — Naam Jap Counter : Sadhna',
       'timer.share.error': 'अभी साझा नहीं कर सके। कृपया पुनः प्रयास करें।',
 
       // Share card
@@ -336,16 +475,32 @@ class AppStrings {
       'share.lifetimeMalas': 'जीवनभर की मालाएँ · {value}',
       'share.streakDays': 'अभ्यास के दिन · {value}',
       'share.dedication': '💠 समर्पण: {note}',
-      'share.motto': '“साधना निरंतर।” 🌼',
-      'share.footer': 'Radha Jap Counter',
+      'share.motto': '“हर जप मौन में मायने रखता है।” 🌼',
+      'share.footer': 'Naam Jap Counter : Sadhna',
       'share.footerSub': 'आज ही Play Store से डाउनलोड करें',
       'share.saveTooltip': 'चित्र सहेजें',
-      'share.whatsappTooltip': 'व्हाट्सऐप (पाठ)',
-      'share.shareText': '🌸 मेरी साधना की झलक — Radha Jap Counter के साथ।',
+      'share.whatsappTooltip': 'व्हाट्सऐप',
+      'share.shareText': '🌸 मेरी साधना की झलक — Naam Jap Counter : Sadhna के साथ।',
       'share.shareTextLink':
-          '🌸 आज ही Radha Jap Counter डाउनलोड करें: https://play.google.com/store/apps/details?id=com.example.jap_counter',
+          '🌸 आज ही Naam Jap Counter : Sadhna डाउनलोड करें: https://play.google.com/store/apps/details?id=com.example.jap_counter',
       'share.saved': 'चित्र सहेजा गया: {path}',
       'share.donate': 'सहयोग हेतु टैप करें',
+
+      // Notifications
+      'notification.streak.21plus': '🔥 21+ दिन की निरंतर साधना — अद्भुत है!',
+      'notification.streak.7plus': '🌸 7 दिन का अनुशासन — स्थिरता बनाए रखें।',
+      'notification.streak.default': '🙏 आज भी कुछ पल शांत बैठें।',
+      'notification.body.withMalas': 'आज आपने {malas} माला जपी हैं — {streakMsg}',
+      'notification.body.noMalas': 'आपकी साधना प्रतीक्षा कर रही है — {streakMsg}',
+      'notification.title.morning': 'सुप्रभात साधक',
+      'notification.title.noon': 'मध्याह्न ध्यान',
+      'notification.title.evening': 'संध्या साधना',
+      'notification.body.noon': 'क्षणिक शांति लें — {note}',
+      'notification.body.evening': 'दिवस की पूर्णता ध्यान में 🌙',
+      'notification.dynamic.title': 'आज का जप संख्याः {count}',
+      'notification.dynamic.body': '"राधे राधे" के संग साधना पूर्ण करें 🌸',
+      'notification.motivation.title': '🌞 नई साधना का दिन',
+      'notification.motivation.body': 'कल की तरह आज भी अपने जाप पूरे करें 🙏',
     },
   };
 

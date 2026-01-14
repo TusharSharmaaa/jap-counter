@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'dart:html' as io;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -16,11 +16,14 @@ import '../core/ad_manager.dart';
 import '../core/sound_manager.dart';
 import '../data/meditation_store.dart';
 import '../l10n/app_localizations.dart';
-import '../theme/responsive_tokens.dart';
+import '../theme/design_system.dart';
+import '../widgets/widgets.dart';
 import 'timer_service.dart';
 
 class TimerPage extends StatefulWidget {
-  const TimerPage({super.key});
+  final VoidCallback? onMeditationUpdated;
+  
+  const TimerPage({super.key, this.onMeditationUpdated});
 
   @override
   State<TimerPage> createState() => _TimerPageState();
@@ -42,6 +45,7 @@ class _TimerPageState extends State<TimerPage>
   bool _shareBusy = false;
   int _todayMinutes = 0;
   int _lifetimeMinutes = 0;
+  Timer? _periodicCommitTimer;
 
   @override
   bool get wantKeepAlive => true;
@@ -80,15 +84,19 @@ class _TimerPageState extends State<TimerPage>
 
   Future<void> _bootstrap() async {
     _applyServiceSnapshot();
-    _revealContent();
-    if (mounted) setState(() {});
-
     final soundInit = _soundManager.init();
 
     unawaited(_ensureWakelockActive(_timerService.running));
     unawaited(_syncAmbience(soundInit));
     unawaited(_loadMeditationStats());
     unawaited(AdManager.instance.preloadPlacement('timer.share_rewarded'));
+    
+    // Batch state updates
+    if (mounted) {
+      setState(() {
+        _visible = true;
+      });
+    }
   }
 
   void _applyServiceSnapshot() {
@@ -144,12 +152,7 @@ class _TimerPageState extends State<TimerPage>
   }
 
   void _revealContent() {
-    if (_visible) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_visible) {
-        setState(() => _visible = true);
-      }
-    });
+    // Removed - now handled in _bootstrap
   }
 
   Future<void> _loadMeditationStats() async {
@@ -164,22 +167,28 @@ class _TimerPageState extends State<TimerPage>
   Future<void> _pauseForInterruption() async {
     final wasRunning = _timerService.running;
     if (wasRunning) {
+      _stopPeriodicCommit();
       await _timerService.pause();
       await _safeSoundCall(() => _soundManager.pauseAmbience());
       _wasRunning = false;
       await _ensureWakelockActive(false);
+      // Only commit progress if timer was actually running
+      // This prevents double-counting when app goes to background
+      await _commitProgress();
     }
-    await _commitProgress();
-    if (wasRunning && mounted) {
-      setState(() {});
-    }
+    // Don't commit progress if timer wasn't running - prevents unwanted counting
   }
 
   Future<void> _commitProgress({bool forceFull = false}) async {
     final minutes = await _timerService.captureUncreditedMinutes(
       forceFull: forceFull,
     );
-    if (minutes <= 0) return;
+    if (minutes <= 0) {
+      if (kDebugMode) {
+        debugPrint('[TimerPage] No minutes to commit (minutes=$minutes, forceFull=$forceFull)');
+      }
+      return;
+    }
     final store = await MeditationStore.create();
     await store.addMinutes(minutes);
     if (!mounted) return;
@@ -187,15 +196,55 @@ class _TimerPageState extends State<TimerPage>
       _todayMinutes = store.todayMinutes;
       _lifetimeMinutes = store.lifetimeMinutes;
     });
+    // Notify stats page to refresh meditation minutes
+    widget.onMeditationUpdated?.call();
+    if (kDebugMode) {
+      debugPrint('[TimerPage] Committed $minutes minutes. Today: $_todayMinutes, Lifetime: $_lifetimeMinutes');
+    }
+  }
+
+  void _startPeriodicCommit() {
+    _stopPeriodicCommit();
+    // Commit progress every minute while timer is running
+    _periodicCommitTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
+      if (!_timerService.running) {
+        timer.cancel();
+        _periodicCommitTimer = null;
+        return;
+      }
+      // Commit any full minutes that have elapsed
+      await _commitProgress(forceFull: false);
+      // Reload meditation stats to ensure UI reflects the latest values
+      await _loadMeditationStats();
+    });
+    if (kDebugMode) {
+      debugPrint('[TimerPage] Started periodic commit timer');
+    }
+  }
+
+  void _stopPeriodicCommit() {
+    _periodicCommitTimer?.cancel();
+    _periodicCommitTimer = null;
+    if (kDebugMode) {
+      debugPrint('[TimerPage] Stopped periodic commit timer');
+    }
   }
 
   Future<void> _finalizeSessionOnExit() async {
-    await _pauseForInterruption();
+    // Only pause and commit if timer is running
+    final wasRunning = _timerService.running;
+    if (wasRunning) {
+      await _timerService.pause();
+      await _safeSoundCall(() => _soundManager.pauseAmbience());
+      await _commitProgress();
+    }
     await _ensureWakelockActive(false);
   }
 
   @override
   void dispose() {
+    _periodicCommitTimer?.cancel();
+    _periodicCommitTimer = null;
     WidgetsBinding.instance.removeObserver(this);
     _timerServiceInstance?.removeListener(_handleServiceUpdate);
     if (!(_timerServiceInstance?.running ?? false)) {
@@ -221,6 +270,7 @@ class _TimerPageState extends State<TimerPage>
             () => _soundManager.playAmbience(forceId: _ambienceId),
           ),
         );
+        _startPeriodicCommit();
       }
       _timerService.refresh();
       unawaited(_ensureWakelockActive(_timerService.running));
@@ -258,14 +308,22 @@ class _TimerPageState extends State<TimerPage>
       unawaited(_onComplete());
     }
 
+    // Handle sound changes
     if (_ambienceId != newSound) {
       if (newSound == 'mute') {
         unawaited(_safeSoundCall(() => _soundManager.stopAmbience()));
       } else if (nowRunning) {
+        // Sound changed while running - set and play new sound
+        unawaited(
+          _safeSoundCall(
+            () => _soundManager.setAmbience(newSound, preload: true),
+          ),
+        );
         unawaited(
           _safeSoundCall(() => _soundManager.playAmbience(forceId: newSound)),
         );
       } else {
+        // Sound changed while not running - just set it
         unawaited(
           _safeSoundCall(
             () => _soundManager.setAmbience(newSound, preload: true),
@@ -273,10 +331,17 @@ class _TimerPageState extends State<TimerPage>
         );
       }
     } else if (!_wasRunning && nowRunning && newSound != 'mute') {
+      // Timer just started/resumed with same sound - ensure it plays
+      unawaited(
+        _safeSoundCall(
+          () => _soundManager.setAmbience(newSound, preload: true),
+        ),
+      );
       unawaited(
         _safeSoundCall(() => _soundManager.playAmbience(forceId: newSound)),
       );
     } else if (_wasRunning && !nowRunning && newSound != 'mute') {
+      // Timer just paused - pause the sound
       unawaited(_safeSoundCall(() => _soundManager.pauseAmbience()));
     }
 
@@ -290,8 +355,10 @@ class _TimerPageState extends State<TimerPage>
 
     if (!_wasRunning && nowRunning) {
       unawaited(_ensureWakelockActive(true));
+      _startPeriodicCommit();
     } else if (_wasRunning && !nowRunning) {
       unawaited(_ensureWakelockActive(false));
+      _stopPeriodicCommit();
     }
 
     _wasRunning = nowRunning;
@@ -355,6 +422,7 @@ class _TimerPageState extends State<TimerPage>
     }
     await _timerService.start(runId: _activeRunId);
     await _ensureWakelockActive(true);
+    _startPeriodicCommit();
     unawaited(
       AdManager.instance.preloadPlacement('timer.post_session_interstitial'),
     );
@@ -364,10 +432,14 @@ class _TimerPageState extends State<TimerPage>
   Future<void> _pause() async {
     if (!_timerService.running) return;
     HapticFeedback.selectionClick();
+    _stopPeriodicCommit();
     await _timerService.pause();
     await _safeSoundCall(() => _soundManager.pauseAmbience());
     await _ensureWakelockActive(false);
+    // Commit progress when user manually pauses
     await _commitProgress();
+    // Reload meditation stats to ensure we have the latest values
+    await _loadMeditationStats();
     if (mounted) setState(() {});
   }
 
@@ -375,21 +447,33 @@ class _TimerPageState extends State<TimerPage>
     if (_timerService.running || _timerService.remaining == Duration.zero) {
       return;
     }
+    HapticFeedback.lightImpact();
     final existingRunId = _timerService.runId;
     if ((_activeRunId ?? '').isEmpty) {
       _activeRunId = existingRunId.isNotEmpty
           ? existingRunId
           : DateTime.now().microsecondsSinceEpoch.toString();
     }
+    
+    // Resume timer first
+    await _timerService.resume(runId: _activeRunId);
+    
+    // Then handle sound - ensure it plays if not muted
     if (_ambienceId != 'mute') {
+      // Set and play ambience when resuming
       await _safeSoundCall(
         () => _soundManager.setAmbience(_ambienceId, preload: true),
+      );
+      // Explicitly play the ambience after setting it
+      await _safeSoundCall(
+        () => _soundManager.playAmbience(forceId: _ambienceId),
       );
     } else {
       await _safeSoundCall(() => _soundManager.stopAmbience());
     }
-    await _timerService.resume(runId: _activeRunId);
+    
     await _ensureWakelockActive(true);
+    _startPeriodicCommit();
     unawaited(
       AdManager.instance.preloadPlacement('timer.post_session_interstitial'),
     );
@@ -398,12 +482,15 @@ class _TimerPageState extends State<TimerPage>
 
   Future<void> _reset() async {
     HapticFeedback.selectionClick();
-    if (_timerService.running) {
+    _stopPeriodicCommit();
+    final wasRunning = _timerService.running;
+    if (wasRunning) {
       await _timerService.pause();
       await _safeSoundCall(() => _soundManager.pauseAmbience());
+      // Commit any progress before resetting
+      await _commitProgress();
     }
     await _ensureWakelockActive(false);
-    await _commitProgress();
     _activeRunId = null;
     await _timerService.reset();
     await _safeSoundCall(() => _soundManager.stopAmbience());
@@ -412,13 +499,51 @@ class _TimerPageState extends State<TimerPage>
 
   Future<void> _onComplete() async {
     HapticFeedback.mediumImpact();
+    _stopPeriodicCommit();
+    
+    // Show dialog immediately when timer completes
+    if (!mounted) return;
+    
+    // Show completion dialog immediately
+    unawaited(showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          title: Text(
+            'Meditation complete',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'Your session has finished.',
+            style: theme.textTheme.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    ));
+    
+    // Continue with background tasks
     await _safeSoundCall(() => _soundManager.stopAmbience());
     await _safeSoundCall(() => _soundManager.playBell());
     await _ensureWakelockActive(false);
+    
+    // Always commit remaining time when timer completes
     final addedMinutes = await _timerService.captureUncreditedMinutes(
       forceFull: true,
     );
-    final targetMinutes = _timerService.target.inMinutes;
+    
+    // Always commit remaining time when timer completes
+    // This ensures any partial minutes are credited
     if (addedMinutes > 0) {
       final medStore = await MeditationStore.create();
       await medStore.addMinutes(addedMinutes);
@@ -428,30 +553,18 @@ class _TimerPageState extends State<TimerPage>
           _lifetimeMinutes = medStore.lifetimeMinutes;
         });
       }
+      if (kDebugMode) {
+        debugPrint('[TimerPage] Timer completed. Credited $addedMinutes minutes. Today: $_todayMinutes, Lifetime: $_lifetimeMinutes');
+      }
     }
+    // Reload meditation stats to ensure we have the latest values
+    await _loadMeditationStats();
+    
+    final targetMinutes = _timerService.target.inMinutes;
     await AdManager.instance.recordEvent(
       'timer.session',
       'complete',
       data: {'minutes': targetMinutes.toDouble()},
-    );
-
-    if (!mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Meditation complete'),
-          content: const Text('Your session has finished.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
     );
 
     if (!mounted) return;
@@ -464,7 +577,9 @@ class _TimerPageState extends State<TimerPage>
   // ---- derived ----
   double get _progress => _timerService.progress;
 
+  // Use displayNotifier from TimerService for efficient updates
   String get _readout {
+    // Fallback to calculating if displayNotifier not available
     final s = _remaining.inSeconds.clamp(0, 24 * 60 * 60);
     final m = (s ~/ 60).toString().padLeft(2, '0');
     final ss = (s % 60).toString().padLeft(2, '0');
@@ -569,6 +684,7 @@ class _TimerPageState extends State<TimerPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    // Use Consumer but optimize with ValueListenableBuilder for display
     return Consumer<TimerService>(
       builder: (context, svc, _) {
         final isRunning = svc.running;
@@ -588,36 +704,42 @@ class _TimerPageState extends State<TimerPage>
           primaryAction = () => unawaited(_start());
         }
 
-        final primaryLabel = isRunning
-            ? 'Pause'
-            : (isPaused ? 'Resume' : 'Start');
+        final primaryLabelKey = isRunning
+            ? 'timer.action.pause'
+            : (isPaused ? 'timer.action.resume' : 'timer.action.start');
+        final primaryLabel = context.tr(primaryLabelKey);
         final resetAction = (isIdle && svc.isPristine)
             ? null
             : () => unawaited(_reset());
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Timer'), centerTitle: true),
-          body: SafeArea(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          appBar: AppBar(
+            title: Text(context.tr('nav.timer')),
+            centerTitle: true,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            flexibleSpace: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+              ),
+            ),
+          ),
+          body: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+            ),
+            child: SafeArea(
             child: Column(
               children: [
                 Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    ResponsiveTokens.spacingMD,
-                    ResponsiveTokens.spacingSM + 4,
-                    ResponsiveTokens.spacingMD,
-                    ResponsiveTokens.spacingSM,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   child: _HeaderCard(soundLabel: _ambienceLabel(context)),
                 ),
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const ClampingScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(
-                      ResponsiveTokens.spacingMD,
-                      ResponsiveTokens.spacingSM,
-                      ResponsiveTokens.spacingMD,
-                      ResponsiveTokens.spacingMD,
-                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     child: AnimatedOpacity(
                       opacity: _visible ? 1 : 0,
                       duration: const Duration(milliseconds: 700),
@@ -626,7 +748,6 @@ class _TimerPageState extends State<TimerPage>
                         children: [
                           LayoutBuilder(
                             builder: (context, constraints) {
-                              final isNarrow = constraints.maxWidth < 420;
                               final duration = _DurationSection(
                                 presets: _presets,
                                 selected: _selectedMinutes,
@@ -638,98 +759,138 @@ class _TimerPageState extends State<TimerPage>
                                 onSelect: _selectAmbience,
                                 enabled: !isRunning,
                               );
-                              
-                              // Stack vertically on narrow screens to prevent overflow
-                              if (isNarrow) {
+                              // Use responsive layout: side by side on larger screens, stacked on small
+                              final isSmallScreen = constraints.maxWidth < 400;
+                              if (isSmallScreen) {
                                 return Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     duration,
-                                    SizedBox(height: ResponsiveTokens.spacingSM),
+                                    const SizedBox(height: 12),
                                     sound,
                                   ],
                                 );
                               }
-                              
                               return Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(child: duration),
-                                  SizedBox(width: ResponsiveTokens.spacingSM),
-                                  Expanded(child: sound),
+                                  Flexible(child: duration),
+                                  const SizedBox(width: 12),
+                                  Flexible(child: sound),
                                 ],
                               );
                             },
                           ),
-                          SizedBox(height: ResponsiveTokens.spacingLG),
-                          _PrimaryTimerCard(
-                            readout: _readout,
-                            progress: _progress,
-                            statusText: _statusText,
-                            isPaused: isPaused,
-                          ),
-                          SizedBox(height: ResponsiveTokens.spacingLG),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: FilledButton(
-                                  onPressed: primaryAction,
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: isPaused 
-                                        ? const Color(0xFF6B2C91) // Dark purple for Resume
-                                        : Theme.of(context).colorScheme.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                  ),
-                                  child: Text(primaryLabel),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: resetAction,
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFF6B2C91),
-                                    side: const BorderSide(color: Color(0xFF6B2C91), width: 1.5),
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                  ),
-                                  child: const Text('Reset'),
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: ResponsiveTokens.spacingMD * 2),
-                          FilledButton.icon(
-                            onPressed: _shareBusy ? null : _shareMeditation,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF6B2C91),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
+                          const SizedBox(height: 24),
+                          // Use ValueListenableBuilder for timer display (only rebuilds display text)
+                          RepaintBoundary(
+                            child: ValueListenableBuilder<String>(
+                              valueListenable: svc.displayNotifier,
+                              builder: (context, display, _) {
+                                // Calculate status text based on current state
+                                String statusKey;
+                                if (isRunning) {
+                                  statusKey = 'timer.status.running';
+                                } else if (isCompleted) {
+                                  statusKey = 'timer.status.completed';
+                                } else if (isPaused) {
+                                  statusKey = 'timer.status.paused';
+                                } else {
+                                  statusKey = 'timer.status.idle';
+                                }
+                                final statusText = context.tr(statusKey);
+
+                                return _PrimaryTimerCard(
+                                  readout: display,
+                                  progress: svc.progress,
+                                  statusText: statusText,
+                                );
+                              },
                             ),
-                            icon: _shareBusy
-                                ? SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: const AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
+                          ),
+                          const SizedBox(height: 24),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isNarrow = constraints.maxWidth < 360;
+                              final buttonSpacing = isNarrow ? 8.0 : 12.0;
+                              final buttonHeight = isNarrow ? 44.0 : 48.0;
+                              
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: buttonHeight,
+                                      child: FilledButton(
+                                        onPressed: primaryAction,
+                                        child: Text(
+                                          primaryLabel,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                     ),
-                                  )
-                                : const Icon(Icons.ios_share, color: Colors.white),
-                            label: Text(
-                              context.tr('timer.share.cta'),
-                              style: const TextStyle(color: Colors.white),
-                            ),
+                                  ),
+                                  SizedBox(width: buttonSpacing),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: buttonHeight,
+                                      child: OutlinedButton(
+                                        onPressed: resetAction,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: DesignSystem.buttonPrimary,
+                                          side: BorderSide(color: DesignSystem.buttonPrimary),
+                                        ),
+                                        child: Text(
+                                          context.tr('timer.action.reset'),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
-                          SizedBox(height: ResponsiveTokens.spacingXL),
+                          const SizedBox(height: 32),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isNarrow = constraints.maxWidth < 360;
+                              final buttonHeight = isNarrow ? 44.0 : 48.0;
+                              
+                              return SizedBox(
+                                height: buttonHeight,
+                                child: FilledButton.icon(
+                                  onPressed: _shareBusy ? null : _shareMeditation,
+                                  icon: _shareBusy
+                                      ? SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                              Theme.of(context).colorScheme.onPrimary,
+                                            ),
+                                          ),
+                                        )
+                                      : const Icon(Icons.ios_share),
+                                  label: Text(
+                                    context.tr('timer.share.cta'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          SizedBox(height: MediaQuery.of(context).padding.bottom + 24),
                         ],
                       ),
                     ),
                   ),
                 ),
               ],
+            ),
             ),
           ),
         );
@@ -743,98 +904,50 @@ class _PrimaryTimerCard extends StatelessWidget {
   final String readout;
   final double progress;
   final String statusText;
-  final bool isPaused;
 
   const _PrimaryTimerCard({
     required this.readout,
     required this.progress,
     required this.statusText,
-    required this.isPaused,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Container(
-          padding: EdgeInsets.symmetric(
-            vertical: ResponsiveTokens.spacingLG,
-            horizontal: constraints.maxWidth < 360 
-                ? ResponsiveTokens.spacingMD 
-                : 20,
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      borderRadius: 20,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            readout,
+            style: theme.textTheme.displayMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+            ),
           ),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: theme.dividerColor.withOpacity(.35)),
-            boxShadow: [
-              BoxShadow(
-                color: theme.colorScheme.shadow.withOpacity(.05),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(value: progress, minHeight: 8),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                readout,
-                style: theme.textTheme.displayLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                  fontSize: 48,
-                ),
+          const SizedBox(height: 10),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Text(
+              statusText,
+              key: ValueKey(statusText),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.primary,
+                letterSpacing: .5,
               ),
-              SizedBox(height: ResponsiveTokens.spacingMD),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 8,
-                  backgroundColor: const Color(0xFFFFE5E5), // Light pink/red
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    Color(0xFFD32F2F), // Dark red/pink
-                  ),
-                ),
-              ),
-              SizedBox(height: ResponsiveTokens.spacingSM + 2),
-              if (isPaused)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.pause,
-                      size: 18,
-                      color: const Color(0xFFFF6B35), // Orange pause icon
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'ध्यान विराम',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                )
-              else
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  child: Text(
-                    statusText,
-                    key: ValueKey(statusText),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                      letterSpacing: .5,
-                    ),
-                  ),
-                ),
-            ],
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -846,89 +959,59 @@ class _HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 360;
-        return Container(
-          padding: EdgeInsets.all(isNarrow ? ResponsiveTokens.spacingSM : ResponsiveTokens.spacingMD),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8D5F2), // Light purple background
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.dividerColor.withOpacity(.2)),
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: 16,
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: theme.colorScheme.primary.withOpacity(.12),
+            ),
+            child: const Icon(Icons.spa),
           ),
-          child: Row(
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Meditation Timer',
+                  style: theme.textTheme.titleMedium,
+                  softWrap: true,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'भक्ति में ध्यान, ध्यान में शांति।',
+                  style: theme.textTheme.bodySmall,
+                  softWrap: true,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                  maxWidth: 48,
-                  maxHeight: 48,
-                ),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0xFF6B2C91), // Dark purple icon background
-                ),
-                child: const Icon(
-                  Icons.spa,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-              SizedBox(width: ResponsiveTokens.spacingSM),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Meditation Timer',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'भक्ति में ध्यान, ध्यान में शांति।',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.black87,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: ResponsiveTokens.spacingXS),
-              Flexible(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.graphic_eq, size: 18, color: Colors.black87),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        soundLabel,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.end,
-                      ),
-                    ),
-                  ],
-                ),
+              const Icon(Icons.graphic_eq, size: 18),
+              const SizedBox(width: 4),
+              Text(
+                soundLabel,
+                style: theme.textTheme.labelLarge,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -948,47 +1031,48 @@ class _DurationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 360;
-        return Container(
-          padding: EdgeInsets.all(isNarrow ? ResponsiveTokens.spacingSM : 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.dividerColor.withOpacity(.4)),
+    return GlassCard(
+      padding: const EdgeInsets.all(12),
+      borderRadius: 16,
+      child: DropdownButtonFormField<int>(
+        value: selected,
+        icon: const Icon(Icons.expand_more),
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: 'Select time',
+          labelStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
           ),
-          child: DropdownButtonFormField<int>(
-            value: selected,
-            icon: const Icon(Icons.expand_more),
-            isExpanded: isNarrow,
-            decoration: InputDecoration(
-              labelText: 'Select time',
-              labelStyle: TextStyle(color: Colors.black87),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isNarrow ? ResponsiveTokens.spacingSM : 12,
-                vertical: 14,
-              ),
-            ),
-            items: presets
-                .map((m) => DropdownMenuItem(
-                      value: m,
-                      child: Text('$m minutes'),
-                    ))
-                .toList(),
-            onChanged: !enabled
-                ? null
-                : (value) {
-                    if (value != null) onSelect(value);
-                  },
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 14,
           ),
-        );
-      },
+          isDense: true,
+        ),
+        items: presets
+            .map((m) => DropdownMenuItem(
+                  value: m,
+                  child: Text(
+                    '$m minutes',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ))
+            .toList(),
+        style: TextStyle(
+          color: theme.colorScheme.onSurface,
+        ),
+        onChanged: !enabled
+            ? null
+            : (value) {
+                if (value != null) onSelect(value);
+              },
+      ),
     );
   }
 }
@@ -1008,51 +1092,52 @@ class _AmbienceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 360;
-        return Container(
-          padding: EdgeInsets.all(isNarrow ? ResponsiveTokens.spacingSM : 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.dividerColor.withOpacity(.4)),
+    return GlassCard(
+      padding: const EdgeInsets.all(12),
+      borderRadius: 16,
+      child: DropdownButtonFormField<String>(
+        value: selected,
+        icon: const Icon(Icons.expand_more),
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: context.tr('timer.ambience.label'),
+          labelStyle: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
           ),
-          child: DropdownButtonFormField<String>(
-            value: selected,
-            icon: const Icon(Icons.expand_more),
-            isExpanded: isNarrow,
-            decoration: InputDecoration(
-              labelText: 'Select sound',
-              labelStyle: TextStyle(color: Colors.black87),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: theme.dividerColor.withOpacity(.6)),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: isNarrow ? ResponsiveTokens.spacingSM : 12,
-                vertical: 14,
-              ),
-            ),
-            items: _options
-                .map(
-                  (id) => DropdownMenuItem(
-                    value: id,
-                    child: Text(context.tr('timer.ambience.$id')),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 14,
+          ),
+          isDense: true,
+        ),
+        items: _options
+            .map(
+              (id) => DropdownMenuItem(
+                value: id,
+                child: Text(
+                  context.tr('timer.ambience.$id'),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface,
                   ),
-                )
-                .toList(),
-            onChanged: !enabled
-                ? null
-                : (value) {
-                    if (value != null) {
-                      unawaited(onSelect(value));
-                    }
-                  },
-          ),
-        );
-      },
+                ),
+              ),
+            )
+            .toList(),
+        style: TextStyle(
+          color: theme.colorScheme.onSurface,
+        ),
+        onChanged: !enabled
+            ? null
+            : (value) {
+                if (value != null) {
+                  unawaited(onSelect(value));
+                }
+              },
+      ),
     );
   }
 }
@@ -1071,7 +1156,7 @@ class _ShareStatTile extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: Colors.white70,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -1079,7 +1164,7 @@ class _ShareStatTile extends StatelessWidget {
         Text(
           value,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -1104,29 +1189,12 @@ class _TimerShareCard extends StatelessWidget {
     final lifetimeLabel = context.tr('timer.share.lifetime');
     final title = context.tr('timer.share.cardTitle');
     final subtitle = context.tr('timer.share.subtitle');
-    final onPrimary = Colors.white;
-    final muted = Colors.white.withOpacity(0.72);
+    final onPrimary = theme.colorScheme.onSurface;
+    final muted = theme.colorScheme.onSurfaceVariant;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.colorScheme.primary.withOpacity(0.92),
-            theme.colorScheme.secondary.withOpacity(0.75),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.25),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+    return GlassCard(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      borderRadius: 24,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1165,7 +1233,7 @@ class _TimerShareCard extends StatelessWidget {
           Divider(color: onPrimary.withOpacity(0.25), thickness: 1),
           const SizedBox(height: 12),
           Text(
-            'Radha Jap Counter',
+            'Naam Jap Counter : Sadhna',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: onPrimary,
               fontWeight: FontWeight.w600,
@@ -1237,7 +1305,7 @@ class _TimerShareSheetState extends State<_TimerShareSheet> {
       }
 
       final dir = await getTemporaryDirectory();
-      final file = File(
+      final file = io.File(
         '${dir.path}/timer_share_${DateTime.now().millisecondsSinceEpoch}.png',
       );
       await file.writeAsBytes(pngBytes);
@@ -1282,15 +1350,7 @@ class _TimerShareSheetState extends State<_TimerShareSheet> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
-            ),
-          ],
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: SafeArea(
           child: Padding(

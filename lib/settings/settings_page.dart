@@ -1,26 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
+import '../core/prefs_manager.dart';
 import '../notifications/notification_service.dart';
-import '../data/goal_store.dart';
+import '../data/language_store.dart';
 import '../legal/privacy_policy.dart';
 import '../legal/terms_conditions.dart';
 import 'about_page.dart';
 import '../ui/glow_card.dart';
 import '../l10n/app_localizations.dart';
-import '../theme/responsive_tokens.dart';
+import '../data/tap_feedback_settings.dart';
+import '../counter/tap_feedback_controller.dart';
+import '../theme/design_system.dart';
+import '../widgets/widgets.dart';
 
 class SettingsPage extends StatefulWidget {
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
   final String language;
   final ValueChanged<String> onLanguageChanged;
 
   const SettingsPage({
     super.key,
+    required this.themeMode,
+    required this.onThemeModeChanged,
     required this.language,
     required this.onLanguageChanged,
   });
@@ -32,8 +38,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _reminders = false;
   bool _remindersLocked = false;
-  int _goalMalas = 1;
-  bool _soundEnabled = true;
+  TapFeedbackSettings? _feedbackSettings;
 
   static const _keyReminders = 'notificationsEnabled';
 
@@ -44,22 +49,22 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final gs = await GoalStore.create();
+    final prefs = await PrefsManager.instance;
     final ns = NotificationService();
     await ns.init();
     final allowed = await ns.areNotificationsAllowed();
     final storedReminders = prefs.getBool(_keyReminders) ?? true;
     final shouldEnable = allowed || storedReminders;
     if (allowed && shouldEnable) {
-      await ns.scheduleDefaults();
+      final language = await LanguageStore.current();
+      await ns.scheduleDefaults(language: language);
     }
+    final feedbackSettings = await TapFeedbackSettings.load();
     if (!mounted) return;
     setState(() {
       _remindersLocked = allowed;
       _reminders = shouldEnable;
-      _goalMalas = gs.dailyMalasGoal;
-      _soundEnabled = prefs.getBool('settings.soundEnabled') ?? true;
+      _feedbackSettings = feedbackSettings;
     });
   }
 
@@ -73,14 +78,17 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     HapticFeedback.lightImpact();
     setState(() => _reminders = value);
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     await prefs.setBool(_keyReminders, value);
 
     final ns = NotificationService();
     if (value) {
       await ns.init();
       final allowed = await ns.requestPermission();
-      if (allowed) await ns.scheduleDefaults();
+      if (allowed) {
+        final language = await LanguageStore.current();
+        await ns.scheduleDefaults(language: language);
+      }
       if (!allowed) {
         setState(() => _reminders = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -93,11 +101,11 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _toggleBell(bool value) async {
+  Future<void> _updateFeedbackSettings(TapFeedbackSettings settings) async {
     HapticFeedback.lightImpact();
-    setState(() => _soundEnabled = value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('settings.soundEnabled', value);
+    setState(() => _feedbackSettings = settings);
+    await settings.save();
+    await TapFeedbackController.instance.updateSettings(settings);
   }
 
   Future<void> _shareApp() async {
@@ -105,7 +113,7 @@ class _SettingsPageState extends State<SettingsPage> {
     const pkg = 'com.example.jap_counter';
     final link = 'https://play.google.com/store/apps/details?id=$pkg';
     await SharePlus.instance.share(
-      ShareParams(text: link, subject: 'Radha Jap Counter'),
+      ShareParams(text: link, subject: 'Naam Jap Counter : Sadhna'),
     );
   }
 
@@ -123,337 +131,224 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _openGoalSheet() async {
-    var temp = _goalMalas;
-    final result = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
-        return Padding(
-          padding: EdgeInsets.fromLTRB(24, 24, 24, bottomInset + 24),
-          child: StatefulBuilder(
-            builder: (context, setModalState) {
-              final label = _formatGoalLabel(context, temp);
-              const quickOptions = [0, 1, 2, 3, 5, 8, 10];
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr('settings.goal.title'),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    context.tr('settings.goal.subtitle'),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: quickOptions.map((option) {
-                      final optionLabel = _formatGoalLabel(context, option);
-                      return ChoiceChip(
-                        label: Text(optionLabel),
-                        selected: temp == option,
-                        onSelected: (_) {
-                          HapticFeedback.selectionClick();
-                          setModalState(() => temp = option);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  Slider(
-                    min: 0,
-                    max: 20,
-                    divisions: 20,
-                    value: temp.toDouble(),
-                    label: '$temp',
-                    onChanged: (value) {
-                      HapticFeedback.lightImpact();
-                      setModalState(() => temp = value.round());
-                    },
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      label,
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text(context.tr('common.cancel')),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton(
-                        onPressed: () => Navigator.pop<int>(context, temp),
-                        child: Text(context.tr('common.save')),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        );
-      },
-    );
-
-    if (result == null) return;
-
-    setState(() => _goalMalas = result);
-    final gs = await GoalStore.create();
-    await gs.setDailyMalasGoal(result);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(context.tr('settings.goal.updated')),
-        duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final isDark = widget.themeMode == ThemeMode.dark;
     final language = widget.language;
-    final goalLabel = _formatGoalLabel(context, _goalMalas);
 
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr('settings.title'))),
-      body: SafeArea(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(context.tr('settings.title')),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+          ),
+        ),
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+        ),
+        child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isTablet = ResponsiveTokens.isTablet(constraints.maxWidth);
-            final padding = ResponsiveTokens.getResponsivePadding(constraints.maxWidth);
+            final isNarrow = constraints.maxWidth < 360;
+            final padding = isNarrow ? 12.0 : 16.0;
             
-            if (isTablet) {
-              // Two-column layout for tablets
-              return Padding(
-                padding: padding,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            return ListView(
+              padding: EdgeInsets.fromLTRB(
+                padding,
+                padding,
+                padding,
+                MediaQuery.of(context).padding.bottom + 32,
+              ),
+          children: [
+            _SettingsSection(
+              icon: Icons.dark_mode,
+              title: context.tr('settings.theme'),
+              children: [
+                Center(
+                  child: SegmentedButton<bool>(
+                    segments: [
+                      ButtonSegment(
+                        value: false,
+                        label: Text(context.tr('common.light')),
+                        icon: const Icon(Icons.wb_sunny),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        label: Text(context.tr('common.dark')),
+                        icon: const Icon(Icons.dark_mode),
+                      ),
+                    ],
+                    selected: {isDark},
+                    onSelectionChanged: (selection) {
+                      final dark = selection.first;
+                      HapticFeedback.selectionClick();
+                      widget.onThemeModeChanged(
+                        dark ? ThemeMode.dark : ThemeMode.light,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _SettingsSection(
+              icon: Icons.language,
+              title: context.tr('settings.language'),
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: _buildSettingsList(context),
+                    Text(
+                      context.tr('settings.language.subtitle'),
+                      style: Theme.of(context).textTheme.bodySmall,
+                      textAlign: TextAlign.center,
                     ),
-                    SizedBox(width: ResponsiveTokens.spacingMD),
-                    Expanded(
-                      child: _buildSettingsList(context),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: SegmentedButton<String>(
+                        segments: [
+                          ButtonSegment(
+                            value: 'en',
+                            label: Text(context.tr('common.english')),
+                          ),
+                          ButtonSegment(
+                            value: 'hi',
+                            label: Text(context.tr('common.hindi')),
+                          ),
+                        ],
+                        selected: {widget.language},
+                        onSelectionChanged: (selection) {
+                          final value = selection.first;
+                          HapticFeedback.selectionClick();
+                          widget.onLanguageChanged(value);
+                        },
+                      ),
                     ),
                   ],
                 ),
-              );
-            }
-            
-            // Single column for phones
-            return ListView(
-              padding: padding,
-              children: _buildSettingsListChildren(context, goalLabel),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_feedbackSettings != null) ...[
+              _SettingsSection(
+                icon: Icons.vibration,
+                title: context.tr('settings.haptic.title'),
+                children: [
+                  _HapticFeedbackSettings(
+                    settings: _feedbackSettings!,
+                    onChanged: _updateFeedbackSettings,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _SettingsSection(
+                icon: Icons.music_note,
+                title: context.tr('settings.soundFeedback.title'),
+                children: [
+                  _SoundFeedbackSettings(
+                    settings: _feedbackSettings!,
+                    onChanged: _updateFeedbackSettings,
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            _SettingsSection(
+              icon: Icons.notifications_active,
+              title: context.tr('settings.notifications'),
+              children: [
+                _SettingsSwitchTile(
+                  icon: Icons.alarm,
+                  title: context.tr('settings.notifications.daily'),
+                  subtitle: _remindersLocked
+                      ? context.tr('settings.notifications.locked')
+                      : context.tr('settings.notifications.desc'),
+                  value: _reminders,
+                  onChanged: _toggleReminders,
+                  enabled: !_remindersLocked,
+                  onDisabledTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          context.tr('settings.notifications.locked'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _SettingsSection(
+              icon: Icons.info_outline,
+              title: context.tr('settings.about'),
+              children: [
+                _SettingsActionTile(
+                  icon: Icons.share_rounded,
+                  title: context.tr('common.shareApp'),
+                  onTap: _shareApp,
+                ),
+                _SettingsActionTile(
+                  icon: Icons.star_rate_rounded,
+                  title: context.tr('settings.rate'),
+                  subtitle: context.tr('settings.rate.subtitle'),
+                  onTap: _rateOnPlayStore,
+                ),
+                _SettingsActionTile(
+                  icon: Icons.privacy_tip_outlined,
+                  title: context.tr('settings.privacy'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const PrivacyPolicyPage(),
+                    ),
+                  ),
+                ),
+                _SettingsActionTile(
+                  icon: Icons.article_outlined,
+                  title: context.tr('settings.terms'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const TermsConditionsPage(),
+                    ),
+                  ),
+                ),
+                _SettingsActionTile(
+                  icon: Icons.info_outline,
+                  title: context.tr('settings.aboutApp'),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const AboutPage())),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _aboutFooter(context),
+          ],
             );
           },
+        ),
         ),
       ),
     );
   }
 
-  List<Widget> _buildSettingsListChildren(
-    BuildContext context,
-    String goalLabel,
-  ) {
-    return [
-      _SettingsSection(
-        icon: Icons.language,
-        title: context.tr('settings.language'),
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                context.tr('settings.language.subtitle'),
-                style: Theme.of(context).textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: SegmentedButton<String>(
-                  segments: [
-                    ButtonSegment(
-                      value: 'en',
-                      label: Text(context.tr('common.english')),
-                    ),
-                    ButtonSegment(
-                      value: 'hi',
-                      label: Text(context.tr('common.hindi')),
-                    ),
-                  ],
-                  selected: {widget.language},
-                  onSelectionChanged: (selection) {
-                    final value = selection.first;
-                    HapticFeedback.selectionClick();
-                    widget.onLanguageChanged(value);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      SizedBox(height: ResponsiveTokens.spacingMD),
-      _SettingsSection(
-        icon: Icons.music_note,
-        title: context.tr('settings.sound'),
-        children: [
-          _SettingsSwitchTile(
-            icon: Icons.music_note_outlined,
-            title: context.tr('settings.sound.malaBell'),
-            subtitle: context.tr('settings.sound.action'),
-            value: _soundEnabled,
-            onChanged: _toggleBell,
-          ),
-        ],
-      ),
-      SizedBox(height: ResponsiveTokens.spacingMD),
-      _SettingsSection(
-        icon: Icons.flag,
-        title: context.tr('settings.goal'),
-        children: [
-          _SettingsActionTile(
-            icon: Icons.flag_outlined,
-            title: context.tr('settings.goal.title'),
-            subtitle: context.tr('settings.goal.subtitle'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ValuePill(label: goalLabel),
-                const SizedBox(width: 8),
-                const Icon(Icons.chevron_right),
-              ],
-            ),
-            onTap: _openGoalSheet,
-          ),
-        ],
-      ),
-      SizedBox(height: ResponsiveTokens.spacingMD),
-      _SettingsSection(
-        icon: Icons.notifications_active,
-        title: context.tr('settings.notifications'),
-        children: [
-          _SettingsSwitchTile(
-            icon: Icons.alarm,
-            title: context.tr('settings.notifications.daily'),
-            subtitle: _remindersLocked
-                ? context.tr('settings.notifications.locked')
-                : context.tr('settings.notifications.desc'),
-            value: _reminders,
-            onChanged: _toggleReminders,
-            enabled: !_remindersLocked,
-            onDisabledTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    context.tr('settings.notifications.locked'),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      SizedBox(height: ResponsiveTokens.spacingMD),
-      _SettingsSection(
-        icon: Icons.info_outline,
-        title: context.tr('settings.about'),
-        children: [
-          _SettingsActionTile(
-            icon: Icons.share_rounded,
-            title: context.tr('common.shareApp'),
-            onTap: _shareApp,
-          ),
-          _SettingsActionTile(
-            icon: Icons.star_rate_rounded,
-            title: context.tr('settings.rate'),
-            subtitle: context.tr('settings.rate.subtitle'),
-            onTap: _rateOnPlayStore,
-          ),
-          _SettingsActionTile(
-            icon: Icons.privacy_tip_outlined,
-            title: context.tr('settings.privacy'),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const PrivacyPolicyPage(),
-              ),
-            ),
-          ),
-          _SettingsActionTile(
-            icon: Icons.article_outlined,
-            title: context.tr('settings.terms'),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const TermsConditionsPage(),
-              ),
-            ),
-          ),
-          _SettingsActionTile(
-            icon: Icons.info_outline,
-            title: context.tr('settings.aboutApp'),
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const AboutPage())),
-          ),
-        ],
-      ),
-      SizedBox(height: ResponsiveTokens.spacingLG),
-      _aboutFooter(context),
-    ];
-  }
-
-  Widget _buildSettingsList(BuildContext context) {
-    final goalLabel = _formatGoalLabel(context, _goalMalas);
-    return ListView(
-      shrinkWrap: true,
-      children: _buildSettingsListChildren(context, goalLabel),
-    );
-  }
-
-  String _formatGoalLabel(BuildContext context, int value) {
-    if (value == 0) return context.tr('common.off');
-    final language = widget.language;
-    if (language == 'hi') {
-      return '$value माला${value == 1 ? '' : 'एँ'}';
-    }
-    return '$value mala${value == 1 ? '' : 's'}';
-  }
-
   Widget _aboutFooter(BuildContext context) {
     final style = Theme.of(context).textTheme.bodySmall;
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snapshot) {
-        final ver = snapshot.data?.version ?? '';
-        final build = snapshot.data?.buildNumber ?? '';
-        final versionLabel = ver.isEmpty ? '' : ' • v$ver+$build';
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 28),
-          child: Column(
-            children: [
-              Text('Radha Jap Counter$versionLabel', style: style),
-              const SizedBox(height: 4),
-              Text('Made with devotion in India', style: style),
-            ],
-          ),
-        );
-      },
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 28),
+      child: Column(
+        children: [
+          Text('Naam Jap Counter : Sadhna • V 1.0', style: style),
+          const SizedBox(height: 4),
+          Text('Made with devotion in India', style: style),
+        ],
+      ),
     );
   }
 }
@@ -472,9 +367,10 @@ class _SettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return GlowCard(
+    return GlassCard(
       margin: EdgeInsets.zero,
       padding: const EdgeInsets.all(18),
+      borderRadius: DesignSystem.radiusCard,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -490,9 +386,9 @@ class _SettingsSection extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: ResponsiveTokens.spacingMD),
+          const SizedBox(height: 16),
           for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) SizedBox(height: ResponsiveTokens.spacingMD),
+            if (i > 0) const Divider(height: 20),
             children[i],
           ],
         ],
@@ -600,12 +496,6 @@ class _SettingsIconCircle extends StatelessWidget {
     return Container(
       width: 40,
       height: 40,
-      constraints: const BoxConstraints(
-        minWidth: 36,
-        minHeight: 36,
-        maxWidth: 44,
-        maxHeight: 44,
-      ),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: color.withOpacity(0.12),
@@ -636,6 +526,299 @@ class _ValuePill extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+}
+
+class _HapticFeedbackSettings extends StatefulWidget {
+  final TapFeedbackSettings settings;
+  final ValueChanged<TapFeedbackSettings> onChanged;
+
+  const _HapticFeedbackSettings({
+    required this.settings,
+    required this.onChanged,
+  });
+
+  @override
+  State<_HapticFeedbackSettings> createState() =>
+      _HapticFeedbackSettingsState();
+}
+
+class _HapticFeedbackSettingsState extends State<_HapticFeedbackSettings> {
+  static const int _minInterval = 1;
+  static const int _maxInterval = 50;
+
+  late HapticMode _mode;
+  late int _n;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromWidget();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HapticFeedbackSettings oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != widget.settings) {
+      _syncFromWidget();
+    }
+  }
+
+  void _syncFromWidget() {
+    // Migrate any remaining everyN to everyMala (shouldn't happen due to migration in load, but safety check)
+    final mode = widget.settings.hapticMode;
+    _mode = mode == HapticMode.everyN ? HapticMode.everyMala : mode;
+    _n = _sanitizeInterval(widget.settings.hapticN);
+  }
+
+  int _sanitizeInterval(int value) {
+    if (value < _minInterval) return _minInterval;
+    if (value > _maxInterval) return _maxInterval;
+    return value;
+  }
+
+  String _labelFor(BuildContext context, HapticMode mode) {
+    final key = switch (mode) {
+      HapticMode.off => 'settings.haptic.mode.off',
+      HapticMode.everyTap => 'settings.haptic.mode.everyTap',
+      HapticMode.everyN => 'settings.haptic.mode.everyN',
+      HapticMode.everyMala => 'settings.haptic.mode.everyMala',
+    };
+    return context.tr(key);
+  }
+
+  String _descriptionFor(BuildContext context, HapticMode mode) {
+    final key = switch (mode) {
+      HapticMode.off => 'settings.haptic.mode.off.desc',
+      HapticMode.everyTap => 'settings.haptic.mode.everyTap.desc',
+      HapticMode.everyN => 'settings.haptic.mode.everyN.desc',
+      HapticMode.everyMala => 'settings.haptic.mode.everyMala.desc',
+    };
+    return context.tr(key);
+  }
+
+  Future<void> _previewHaptic() async {
+    HapticFeedback.selectionClick();
+    final current = widget.settings.copyWith(
+      hapticMode: _mode,
+      hapticN: _n,
+    );
+    await TapFeedbackController.instance.updateSettings(current);
+    await TapFeedbackController.instance.previewHaptic();
+  }
+
+  void _updateMode(HapticMode mode) {
+    if (_mode == mode) return;
+    setState(() => _mode = mode);
+    widget.onChanged(widget.settings.copyWith(hapticMode: mode));
+  }
+
+  void _updateN(int value) {
+    final sanitized = _sanitizeInterval(value);
+    if (_n == sanitized) return;
+    setState(() => _n = sanitized);
+    widget.onChanged(widget.settings.copyWith(hapticN: sanitized));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.tr('settings.haptic.description'),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...HapticMode.values.where((mode) => mode != HapticMode.everyN).map(
+          (mode) => RadioListTile<HapticMode>(
+            value: mode,
+            contentPadding: EdgeInsets.zero,
+            groupValue: _mode,
+            onChanged: (value) {
+              if (value != null) {
+                HapticFeedback.selectionClick();
+                _updateMode(value);
+              }
+            },
+            title: Text(_labelFor(context, mode)),
+            subtitle: Text(_descriptionFor(context, mode)),
+          ),
+        ),
+        const SizedBox(height: 16),
+        FilledButton.tonalIcon(
+          onPressed: _previewHaptic,
+          icon: const Icon(Icons.vibration_rounded),
+          label: Text(context.tr('settings.haptic.test')),
+        ),
+      ],
+    );
+  }
+}
+
+class _SoundFeedbackSettings extends StatefulWidget {
+  final TapFeedbackSettings settings;
+  final ValueChanged<TapFeedbackSettings> onChanged;
+
+  const _SoundFeedbackSettings({
+    required this.settings,
+    required this.onChanged,
+  });
+
+  @override
+  State<_SoundFeedbackSettings> createState() => _SoundFeedbackSettingsState();
+}
+
+class _SoundFeedbackSettingsState extends State<_SoundFeedbackSettings> {
+  static const int _minInterval = 1;
+  static const int _maxInterval = 108;
+
+  late SoundMode _mode;
+  late int _n;
+  late String _asset;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromWidget();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SoundFeedbackSettings oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != widget.settings) {
+      _syncFromWidget();
+    }
+  }
+
+  void _syncFromWidget() {
+    // Migrate any remaining everyN or everyTap to everyMala (shouldn't happen due to migration in load, but safety check)
+    final mode = widget.settings.soundMode;
+    _mode = (mode == SoundMode.everyN || mode == SoundMode.everyTap) 
+        ? SoundMode.everyMala 
+        : mode;
+    _n = _sanitizeInterval(widget.settings.soundN);
+    // Always use bell sound
+    _asset = 'audio/bell_end.mp3';
+  }
+
+  int _sanitizeInterval(int value) {
+    if (value < _minInterval) return _minInterval;
+    if (value > _maxInterval) return _maxInterval;
+    return value;
+  }
+
+  String _labelFor(BuildContext context, SoundMode mode) {
+    final key = switch (mode) {
+      SoundMode.off => 'settings.soundFeedback.mode.off',
+      SoundMode.everyTap => 'settings.soundFeedback.mode.everyTap',
+      SoundMode.everyN => 'settings.soundFeedback.mode.everyN',
+      SoundMode.everyMala => 'settings.soundFeedback.mode.everyMala',
+    };
+    return context.tr(key);
+  }
+
+  String _descriptionFor(BuildContext context, SoundMode mode) {
+    final key = switch (mode) {
+      SoundMode.off => 'settings.soundFeedback.mode.off.desc',
+      SoundMode.everyTap => 'settings.soundFeedback.mode.everyTap.desc',
+      SoundMode.everyN => 'settings.soundFeedback.mode.everyN.desc',
+      SoundMode.everyMala => 'settings.soundFeedback.mode.everyMala.desc',
+    };
+    return context.tr(key);
+  }
+
+  String _displayNameForAsset(String asset) {
+    final name = asset.split('/').last;
+    final withoutExt = name.replaceAll('.mp3', '').replaceAll('.wav', '');
+    return withoutExt
+        .split('_')
+        .map((part) => part.isEmpty
+            ? ''
+            : part[0].toUpperCase() + part.substring(1).toLowerCase())
+        .join(' ');
+  }
+
+  void _updateMode(SoundMode mode) {
+    if (_mode == mode) return;
+    setState(() => _mode = mode);
+    // Always use bell sound when updating mode
+    widget.onChanged(widget.settings.copyWith(
+      soundMode: mode,
+      soundAsset: 'audio/bell_end.mp3',
+    ));
+  }
+
+  void _updateN(int value) {
+    final sanitized = _sanitizeInterval(value);
+    if (_n == sanitized) return;
+    setState(() => _n = sanitized);
+    widget.onChanged(widget.settings.copyWith(soundN: sanitized));
+  }
+
+  void _updateAsset(String asset) {
+    if (_asset == asset) return;
+    setState(() => _asset = asset);
+    widget.onChanged(widget.settings.copyWith(soundAsset: asset));
+  }
+
+  Future<void> _previewSound() async {
+    if (_mode == SoundMode.off) {
+      HapticFeedback.selectionClick();
+      return;
+    }
+    HapticFeedback.selectionClick();
+    // Always use bell sound
+    final current = widget.settings.copyWith(
+      soundMode: _mode,
+      soundN: _n,
+      soundAsset: 'audio/bell_end.mp3',
+    );
+    await TapFeedbackController.instance.updateSettings(current);
+    await TapFeedbackController.instance.previewSound();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final disableSoundControls = _mode == SoundMode.off;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.tr('settings.soundFeedback.description'),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...SoundMode.values.where((mode) => mode != SoundMode.everyN && mode != SoundMode.everyTap).map(
+          (mode) => RadioListTile<SoundMode>(
+            value: mode,
+            contentPadding: EdgeInsets.zero,
+            groupValue: _mode,
+            onChanged: (value) {
+              if (value != null) {
+                HapticFeedback.selectionClick();
+                _updateMode(value);
+              }
+            },
+            title: Text(_labelFor(context, mode)),
+            subtitle: Text(_descriptionFor(context, mode)),
+          ),
+        ),
+        const SizedBox(height: 16),
+        FilledButton.tonalIcon(
+          onPressed: disableSoundControls ? null : _previewSound,
+          icon: const Icon(Icons.music_note_rounded),
+          label: Text(context.tr('settings.soundFeedback.preview')),
+        ),
+      ],
     );
   }
 }

@@ -143,7 +143,7 @@ class QuoteImageGenerator {
     final footerY = innerRect.bottom - 140;
     _paintText(
       canvas,
-      text: 'Radha Jap Counter',
+      text: 'Naam Jap Counter : Sadhna',
       style: footerStyle,
       maxWidth: innerRect.width,
       startX: innerRect.left + 20,

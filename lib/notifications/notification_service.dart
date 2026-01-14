@@ -1,12 +1,17 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../core/app_constants.dart';
 import '../data/activity_store.dart';
 import '../data/dedication_store.dart';
 import '../data/insight_store.dart';
+import '../l10n/app_localizations.dart';
 
 class NotificationService {
   NotificationService._();
@@ -25,19 +30,24 @@ class NotificationService {
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'bhakti_daily_channel',
-    'Bhakti Daily Reminders',
-    description: 'Daily devotional reminders at 7:00 / 12:00 / 18:00',
+    'Naam Jap Counter : Sadhna',
+    description: 'Daily devotional reminders at 7:00 AM, 12:00 PM, and 6:00 PM',
     importance: Importance.high,
     playSound: true,
+    enableVibration: true,
+    showBadge: true,
   );
+  
+  // Notification accent color (orange/saffron theme)
+  static const Color _notificationColor = Color(0xFFFF6B35);
 
   Future<void> init() async {
     if (_initialized) return;
 
-    // Timezone
+    // Timezone - use device local timezone
     try {
       tzdata.initializeTimeZones();
-      tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+      tz.setLocalLocation(tz.local);
     } catch (e) {
       if (kDebugMode) debugPrint('[Notifications] TZ init failed: $e');
     }
@@ -101,29 +111,75 @@ class NotificationService {
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
   }
+  
+  /// Get all pending notifications (for debugging/verification)
+  Future<List<PendingNotificationRequest>> getPendingNotifications() async {
+    return await _plugin.pendingNotificationRequests();
+  }
+  
+  /// Verify that all 3 daily notifications are scheduled
+  /// Returns true if all notifications are scheduled, false otherwise
+  Future<bool> verifyDailyNotificationsScheduled() async {
+    final pending = await getPendingNotifications();
+    final requiredIds = [700, 1200, 1800]; // 7am, 12pm, 6pm
+    final scheduledIds = pending.map((n) => n.id).toSet();
+    
+    final allScheduled = requiredIds.every((id) => scheduledIds.contains(id));
+    
+    if (kDebugMode) {
+      debugPrint('[Notifications] Verification:');
+      debugPrint('  Required IDs: $requiredIds');
+      debugPrint('  Scheduled IDs: ${scheduledIds.toList()}');
+      debugPrint('  All scheduled: $allScheduled');
+      for (final n in pending.where((n) => requiredIds.contains(n.id))) {
+        debugPrint('  - ID ${n.id}: ${n.title}');
+      }
+    }
+    
+    return allScheduled;
+  }
 
-  Future<void> scheduleDefaults() async {
+  Future<void> scheduleDefaults({String language = 'hi'}) async {
+    // Cancel first (fast operation)
     await cancelAll();
+    
+    // Defer heavy operations to background
+    unawaited(_scheduleDefaultsAsync(language));
+  }
 
+  Future<void> _scheduleDefaultsAsync(String language) async {
     final dstore = await DedicationStore.create();
-    final note = dstore.note.isEmpty ? 'Radha Jap Counter' : dstore.note;
+    final note = dstore.note.isEmpty ? AppConstants.appName : dstore.note;
     final streakDays = await ActivityStore.currentStreak();
-    final streakMsg = (streakDays >= 21)
-        ? '🔥 21+ दिन की निरंतर साधना — अद्भुत है!'
-        : (streakDays >= 7)
-        ? '🌸 7 दिन का अनुशासन — स्थिरता बनाए रखें।'
-        : '🙏 आज भी कुछ पल शांत बैठें।';
+    
+    // Get localized streak message
+    final streakMsgKey = streakDays >= 21
+        ? 'notification.streak.21plus'
+        : streakDays >= 7
+        ? 'notification.streak.7plus'
+        : 'notification.streak.default';
+    final streakMsg = AppStrings.resolve(language, streakMsgKey);
 
     final insights = await InsightStore.create();
     final malas = insights.getTodayMalas();
-    final body = malas >= 1
-        ? 'आज आपने $malas माला जपी हैं — $streakMsg'
-        : 'आपकी साधना प्रतीक्षा कर रही है — $streakMsg';
+    
+    // Get localized body message
+    final bodyKey = malas >= 1 ? 'notification.body.withMalas' : 'notification.body.noMalas';
+    var body = AppStrings.resolve(language, bodyKey);
+    body = body.replaceAll('{malas}', '$malas').replaceAll('{streakMsg}', streakMsg);
+
+    // Get localized titles and bodies
+    final morningTitle = AppStrings.resolve(language, 'notification.title.morning');
+    final noonTitle = AppStrings.resolve(language, 'notification.title.noon');
+    final eveningTitle = AppStrings.resolve(language, 'notification.title.evening');
+    var noonBody = AppStrings.resolve(language, 'notification.body.noon');
+    noonBody = noonBody.replaceAll('{note}', note);
+    final eveningBody = AppStrings.resolve(language, 'notification.body.evening');
 
     final notifications = [
-      _dailyAt('सुप्रभात साधक', body, 7, 0, id: 700),
-      _dailyAt('मध्याह्न ध्यान', 'क्षणिक शांति लें — $note', 12, 0, id: 1200),
-      _dailyAt('संध्या साधना', 'दिवस की पूर्णता ध्यान में 🌙', 18, 0, id: 1800),
+      _dailyAt(morningTitle, body, 7, 0, id: 700),
+      _dailyAt(noonTitle, noonBody, 12, 0, id: 1200),
+      _dailyAt(eveningTitle, eveningBody, 18, 0, id: 1800),
     ];
 
     for (final n in notifications) {
@@ -133,37 +189,102 @@ class NotificationService {
           n.title,
           n.body,
           n.scheduledDate,
-          const NotificationDetails(
+          NotificationDetails(
             android: AndroidNotificationDetails(
-              'daily_sadhana',
-              'Daily Reminders',
+              _channel.id,
+              _channel.name,
+              channelDescription: _channel.description,
               importance: Importance.high,
               priority: Priority.high,
+              playSound: true,
+              icon: '@mipmap/ic_launcher',
+              color: _notificationColor,
+              enableVibration: true,
+              styleInformation: BigTextStyleInformation(
+                n.body,
+                contentTitle: n.title,
+                summaryText: AppConstants.appName,
+              ),
+              category: AndroidNotificationCategory.reminder,
+              autoCancel: true,
+              ongoing: false,
+              showWhen: true,
+              when: n.scheduledDate.millisecondsSinceEpoch,
+            ),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+              sound: 'default',
+              badgeNumber: null,
+              threadIdentifier: 'daily-reminders',
+              categoryIdentifier: 'DAILY_REMINDER',
+              interruptionLevel: InterruptionLevel.active,
             ),
           ),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          androidAllowWhileIdle: true,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: DateTimeComponents.time,
         );
+        
+        if (kDebugMode) {
+          debugPrint(
+            '[Notifications] Scheduled ${n.id} for ${n.scheduledDate.hour}:${n.scheduledDate.minute.toString().padLeft(2, '0')} - ${n.title}',
+          );
+        }
       } on PlatformException catch (e) {
         if (kDebugMode) {
           debugPrint('[Notifications] Daily reminder skipped (${n.id}): $e');
         }
       }
     }
+    
+    // Verify all notifications were scheduled successfully
+    if (kDebugMode) {
+      final verified = await verifyDailyNotificationsScheduled();
+      if (!verified) {
+        debugPrint('[Notifications] WARNING: Not all daily notifications were scheduled!');
+      }
+    }
   }
 
-  Future<void> scheduleDynamicJapReminder(int todayJaps) async {
-    final notificationDetails = const NotificationDetails(
+  Future<void> scheduleDynamicJapReminder(int todayJaps, {String language = 'hi'}) async {
+    // Get localized notification text
+    var title = AppStrings.resolve(language, 'notification.dynamic.title');
+    title = title.replaceAll('{count}', '$todayJaps');
+    final body = AppStrings.resolve(language, 'notification.dynamic.body');
+    
+    final notificationDetails = NotificationDetails(
       android: AndroidNotificationDetails(
         'daily_jap_count',
-        'Daily Jap Count',
+        AppConstants.appName,
+        channelDescription: 'Daily jap count reminders',
         importance: Importance.high,
         priority: Priority.high,
-        styleInformation: BigTextStyleInformation(''),
+        playSound: true,
+        icon: '@mipmap/ic_launcher',
+        color: _notificationColor,
+        enableVibration: true,
+        styleInformation: BigTextStyleInformation(
+          body,
+          contentTitle: title,
+          summaryText: AppConstants.appName,
+        ),
+        category: AndroidNotificationCategory.reminder,
+        autoCancel: true,
+        showWhen: true,
       ),
-      iOS: DarwinNotificationDetails(),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        sound: 'default',
+        threadIdentifier: 'daily-jap-count',
+        categoryIdentifier: 'DAILY_JAP_COUNT',
+        interruptionLevel: InterruptionLevel.active,
+      ),
     );
 
     final now = DateTime.now();
@@ -175,8 +296,8 @@ class NotificationService {
     try {
       await _plugin.zonedSchedule(
         4,
-        'आज का जप संख्याः $todayJaps',
-        '“राधे राधे” के संग साधना पूर्ण करें 🌸',
+        title,
+        body,
         tz.TZDateTime.from(time, tz.local),
         notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -198,34 +319,73 @@ class NotificationService {
     }
   }
 
-  Future<void> scheduleDailyMotivation() async {
-    const android = AndroidNotificationDetails(
-      'daily_motivation',
-      'Daily Motivation',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
-    const details = NotificationDetails(android: android);
+  Future<void> scheduleDailyMotivation({String language = 'hi'}) async {
     final tzNow = tz.TZDateTime.now(tz.local);
-    final tomorrow7am = tz.TZDateTime(
+    var scheduled7am = tz.TZDateTime(
       tz.local,
       tzNow.year,
       tzNow.month,
       tzNow.day,
       7,
-    ).add(const Duration(days: 1));
+    );
+    // If it's already past 7am today, schedule for tomorrow
+    if (scheduled7am.isBefore(tzNow)) {
+      scheduled7am = scheduled7am.add(const Duration(days: 1));
+    }
+    
+    // Get localized notification text
+    final title = AppStrings.resolve(language, 'notification.motivation.title');
+    final body = AppStrings.resolve(language, 'notification.motivation.body');
+    
     try {
       await _plugin.zonedSchedule(
         2001,
-        '🌞 नई साधना का दिन',
-        'कल की तरह आज भी अपने जाप पूरे करें 🙏',
-        tomorrow7am,
-        details,
+        title,
+        body,
+        scheduled7am,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channel.id,
+            _channel.name,
+            channelDescription: _channel.description,
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+            icon: '@mipmap/ic_launcher',
+            color: _notificationColor,
+            enableVibration: true,
+            styleInformation: BigTextStyleInformation(
+              body,
+              contentTitle: title,
+              summaryText: AppConstants.appName,
+            ),
+            category: AndroidNotificationCategory.reminder,
+            autoCancel: true,
+            showWhen: true,
+            when: scheduled7am.millisecondsSinceEpoch,
+          ),
+          iOS: DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            sound: 'default',
+            threadIdentifier: 'daily-motivation',
+            categoryIdentifier: 'DAILY_MOTIVATION',
+            interruptionLevel: InterruptionLevel.active,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         androidAllowWhileIdle: true,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
       );
+      
+      if (kDebugMode) {
+        debugPrint(
+          '[Notifications] Daily motivation scheduled for ${scheduled7am.hour}:${scheduled7am.minute.toString().padLeft(2, '0')}',
+        );
+      }
     } on PlatformException catch (e) {
       if (kDebugMode) {
         debugPrint('[Notifications] Daily motivation scheduling skipped: $e');
@@ -233,56 +393,6 @@ class NotificationService {
     }
   }
 
-  Future<void> _scheduleDailyAt({
-    required int hour,
-    required int minute,
-    required int id,
-    required String title,
-    required String body,
-  }) async {
-    final now = tz.TZDateTime.now(tz.local);
-    var scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
-    if (scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
-
-    await _plugin.zonedSchedule(
-      id,
-      title,
-      body,
-      scheduled,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
-          channelDescription: _channel.description,
-          priority: Priority.high,
-          importance: Importance.high,
-          playSound: true,
-          icon: '@mipmap/ic_launcher',
-        ),
-        iOS: const DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents:
-          DateTimeComponents.time, // repeat daily at this time
-    );
-
-    if (kDebugMode) {
-      debugPrint(
-        '[Notifications] Scheduled $hour:${minute.toString().padLeft(2, '0')} with: $title',
-      );
-    }
-  }
 }
 
 class _DailyNotification {

@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/prefs_manager.dart';
+
 /// Stores user's daily mala goal (e.g., 1–10 malas).
 /// Also caches the last-completed date to avoid repetitive nudges.
 class GoalStore {
@@ -11,7 +13,7 @@ class GoalStore {
   GoalStore._(this._prefs);
 
   static Future<GoalStore> create() async =>
-      GoalStore._(await SharedPreferences.getInstance());
+      GoalStore._(await PrefsManager.instance);
 
   int get dailyMalasGoal => _prefs.getInt(_kDailyMalasGoal) ?? 0;
 
@@ -20,16 +22,25 @@ class GoalStore {
 
   String? get lastCongratsDate => _prefs.getString(_kLastCongrats);
 
+  /// Shared helper method for date formatting (YYYY-MM-DD)
+  static String _formatDate(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
   Future<void> setLastCongratsToday() async {
-    final now = DateTime.now();
-    final d =
-        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final d = _formatDate(DateTime.now());
     await _prefs.setString(_kLastCongrats, d);
+  }
+  
+  /// Clear the last congrats date (useful when goal is increased)
+  Future<void> clearLastCongrats() async {
+    await _prefs.remove(_kLastCongrats);
   }
 
   static String todayKey() {
-    final now = DateTime.now();
-    return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    return _formatDate(DateTime.now());
   }
 }
 

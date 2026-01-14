@@ -1,5 +1,8 @@
+import 'dart:async' show unawaited, Timer, Completer, TimeoutException;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/prefs_manager.dart';
+import 'activity_store.dart';
 import 'xp_store.dart';
 
 /// Offline-only store for Counter page with daily reset.
@@ -7,72 +10,338 @@ class CounterStore {
   CounterStore._(this._prefs);
 
   final SharedPreferences _prefs;
-
+  
+  // Lock to prevent race conditions in increment operations
+  static Future<void>? _currentIncrement;
+  
+  // In-memory cache for performance (batched writes)
+  int? _cachedToday;
+  int? _cachedLifetime;
+  bool _cacheDirty = false;
+  static Timer? _syncTimer;
+  static CounterStore? _syncInstance;
+  
+  // Cache for lifetime malas calculation to avoid expensive recalculations
+  static String? _cachedLifetimeMalasDate;
+  static int? _cachedLifetimeMalasGlobal;
+  
   // Keys
   static const _kTodayJaps = 'counter.todayJaps';
   static const _kLifetimeJaps = 'counter.lifetimeJaps';
   static const _kLastDate = 'counter.lastDate'; // YYYY-MM-DD
 
   /// Factory that also enforces daily reset.
+  /// Uses singleton pattern to avoid expensive recalculations.
   static Future<CounterStore> create() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
+    final todayKey = _yyyymmdd(DateTime.now());
+    
+    // Reuse existing instance if it exists and date hasn't changed
+    if (_syncInstance != null) {
+      final lastDate = _syncInstance!._prefs.getString(_kLastDate);
+      // If same day and instance exists, reuse it (avoid expensive history calculation)
+      if (lastDate == todayKey && !_syncInstance!._cacheDirty) {
+        return _syncInstance!;
+      }
+      
+      // Force sync any pending writes from previous instance before loading
+      if (_syncInstance!._cacheDirty) {
+        await _syncInstance!._syncToDisk();
+      }
+    }
+    
     final store = CounterStore._(prefs);
+    
     await store._resetIfNewDay();
+    // Load cache from disk - ensure we read the latest persisted values
+    store._cachedToday = prefs.getInt(_kTodayJaps) ?? 0;
+    final storedLifetime = prefs.getInt(_kLifetimeJaps) ?? 0;
+    
+    // CRITICAL: Calculate lifetime MALAS from completed malas in history
+    // This ensures we only count COMPLETE malas (108 japs = 1 mala)
+    // Strategy: Sum all completed malas from previous days + today's current completed malas
+    // OPTIMIZATION: Only recalculate if date changed or cache is invalid
+    final todayJaps = store._cachedToday ?? 0;
+    final todayCompletedMalas = todayJaps ~/ 108;
+    
+    // Check if we can reuse cached lifetime malas calculation
+    int totalLifetimeMalas;
+    int lifetimeMalasFromPreviousDays;
+    if (_cachedLifetimeMalasDate == todayKey && _cachedLifetimeMalasGlobal != null) {
+      // Reuse cached calculation - just update with today's completed malas
+      lifetimeMalasFromPreviousDays = _cachedLifetimeMalasGlobal!;
+      totalLifetimeMalas = lifetimeMalasFromPreviousDays + todayCompletedMalas;
+    } else {
+      // Need to recalculate - this is expensive but only happens on new day or first load
+      final history = await ActivityStore.getDailyHistory();
+      
+      // Sum completed malas from all previous days (excluding today)
+      lifetimeMalasFromPreviousDays = 0;
+      for (final entry in history.entries) {
+        final dateKey = entry.key;
+        final entryData = entry.value;
+        
+        // Skip today - we'll use current counter value instead
+        if (dateKey == todayKey) {
+          continue;
+        }
+        
+        // Sum completed malas from this day
+        if (entryData is Map<String, dynamic>) {
+          final malas = entryData['malas'] as num?;
+          if (malas != null) {
+            lifetimeMalasFromPreviousDays += malas.toInt();
+          }
+        }
+      }
+      
+      // Total lifetime malas = previous days' completed malas + today's current completed malas
+      totalLifetimeMalas = lifetimeMalasFromPreviousDays + todayCompletedMalas;
+      
+      // Cache the result for future use
+      _cachedLifetimeMalasDate = todayKey;
+      _cachedLifetimeMalasGlobal = lifetimeMalasFromPreviousDays;
+    }
+    
+    // Store the calculated lifetime malas (completed malas only)
+    store._cachedLifetimeMalas = totalLifetimeMalas;
+    
+    // Convert lifetime malas to japs for storage compatibility
+    final calculatedLifetimeJapsFromMalas = totalLifetimeMalas * 108;
+    
+    // For lifetime japs, use the maximum of:
+    // 1. Lifetime japs calculated from completed malas (malas * 108)
+    // 2. Stored lifetime japs - preserves data even if history is incomplete
+    var calculatedLifetimeJaps = calculatedLifetimeJapsFromMalas;
+    if (storedLifetime > calculatedLifetimeJaps) {
+      calculatedLifetimeJaps = storedLifetime;
+    }
+    
+    // Safety check: lifetime japs should never be less than today's japs
+    if (calculatedLifetimeJaps < todayJaps) {
+      calculatedLifetimeJaps = todayJaps;
+      final todayCompletedMalasFromJaps = calculatedLifetimeJaps ~/ 108;
+      if (todayCompletedMalasFromJaps > totalLifetimeMalas) {
+        store._cachedLifetimeMalas = todayCompletedMalasFromJaps;
+      }
+    }
+    
+    // Store lifetime japs
+    store._cachedLifetime = calculatedLifetimeJaps;
+    
+    // If calculated lifetime is higher than stored, update stored value
+    if (store._cachedLifetime! > storedLifetime) {
+      store._cacheDirty = true;
+      await store._syncToDisk();
+    }
+    
+    _syncInstance = store;
     return store;
   }
 
-  int get todayJaps => _prefs.getInt(_kTodayJaps) ?? 0;
-  int get lifetimeJaps => _prefs.getInt(_kLifetimeJaps) ?? 0;
-
-  /// Get today's japs including pending increments (for immediate UI updates).
-  int get todayJapsWithPending => todayJaps + _pendingIncrements;
-  
-  /// Get lifetime japs including pending increments (for immediate UI updates).
-  int get lifetimeJapsWithPending => lifetimeJaps + _pendingIncrements;
+  int get todayJaps => _cachedToday ?? _prefs.getInt(_kTodayJaps) ?? 0;
+  int get lifetimeJaps => _cachedLifetime ?? _prefs.getInt(_kLifetimeJaps) ?? 0;
 
   int get todayMalas => todayJaps ~/ 108;
-  int get lifetimeMalas => lifetimeJaps ~/ 108;
+  
+  /// Get lifetime malas - calculated from completed malas in history, not from japs
+  /// This ensures we only count complete malas (108 japs = 1 mala)
+  int get lifetimeMalas {
+    // Use cached lifetime malas if available (calculated from history)
+    // Otherwise, fall back to calculating from japs (but this should be rare)
+    if (_cachedLifetimeMalas != null) {
+      return _cachedLifetimeMalas!;
+    }
+    // Fallback: calculate from japs (should only happen if cache is not initialized)
+    return lifetimeJaps ~/ 108;
+  }
+  
+  // Cache for lifetime malas calculated from history
+  int? _cachedLifetimeMalas;
+  
+  /// Refresh lifetime malas calculation from history
+  /// This should be called after recording daily summary to update the cache
+  /// OPTIMIZATION: Uses cached calculation when possible
+  Future<void> refreshLifetimeMalas() async {
+    final todayKey = _yyyymmdd(DateTime.now());
+    final todayJaps = _cachedToday ?? _prefs.getInt(_kTodayJaps) ?? 0;
+    final todayCompletedMalas = todayJaps ~/ 108;
+    
+    // Use cached previous days' malas if available and date matches
+    if (_cachedLifetimeMalasDate == todayKey && _cachedLifetimeMalasGlobal != null) {
+      _cachedLifetimeMalas = _cachedLifetimeMalasGlobal! + todayCompletedMalas;
+      return;
+    }
+    
+    // Otherwise recalculate (should be rare - only after date change or cache invalidated)
+    final history = await ActivityStore.getDailyHistory();
+    
+    // Sum completed malas from all previous days (excluding today)
+    int lifetimeMalasFromPreviousDays = 0;
+    for (final entry in history.entries) {
+      final dateKey = entry.key;
+      final entryData = entry.value;
+      
+      // Skip today - we'll use current counter value instead
+      if (dateKey == todayKey) {
+        continue;
+      }
+      
+      // Sum completed malas from this day
+      if (entryData is Map<String, dynamic>) {
+        final malas = entryData['malas'] as num?;
+        if (malas != null) {
+          lifetimeMalasFromPreviousDays += malas.toInt();
+        }
+      }
+    }
+    
+    // Cache the previous days' malas for future use
+    _cachedLifetimeMalasDate = todayKey;
+    _cachedLifetimeMalasGlobal = lifetimeMalasFromPreviousDays;
+    
+    // Total lifetime malas = previous days' completed malas + today's current completed malas
+    _cachedLifetimeMalas = lifetimeMalasFromPreviousDays + todayCompletedMalas;
+  }
+  
+  /// Invalidate lifetime malas cache (call when history changes)
+  static void invalidateLifetimeMalasCache() {
+    _cachedLifetimeMalasDate = null;
+    _cachedLifetimeMalasGlobal = null;
+  }
 
-  // Batch persistence state
-  int _pendingIncrements = 0;
-  static const int _batchSize = 10; // Flush every 10 taps
-  static const Duration _batchTimeout = Duration(seconds: 2);
-
-  /// Increment today + lifetime by 1 jap (batched for performance).
-  /// Flushes immediately if batch size reached or after timeout.
+  /// Increment today + lifetime by 1 jap.
+  /// Uses a locking mechanism to prevent race conditions in single-threaded Dart code.
+  /// Note: This works for single-threaded execution, but SharedPreferences operations
+  /// are not thread-safe for concurrent writes across isolates.
   Future<void> increment() async {
     await _resetIfNewDay();
-    _pendingIncrements++;
     
-    // Flush if batch size reached
-    if (_pendingIncrements >= _batchSize) {
-      await _flushPending();
+    // Wait for any ongoing increment to complete
+    if (_currentIncrement != null) {
+      await _currentIncrement;
+    }
+    
+    // Create a new increment operation
+    final completer = Completer<void>();
+    _currentIncrement = completer.future;
+    
+    try {
+      // Ensure cache is initialized from disk if null
+      if (_cachedToday == null) {
+        _cachedToday = _prefs.getInt(_kTodayJaps) ?? 0;
+      }
+      if (_cachedLifetime == null) {
+        _cachedLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+      }
+      
+      // Update in-memory cache immediately for responsiveness
+      // Always increment from the current cached value (which should be initialized above)
+      _cachedToday = _cachedToday! + 1;
+      _cachedLifetime = _cachedLifetime! + 1;
+      _cacheDirty = true;
+      
+      // Sync every 10 taps OR after 500ms of inactivity
+      if (_cachedToday! % 10 == 0) {
+        await _syncToDisk(); // Force sync every 10 taps
+      } else {
+        _scheduleSync();
+      }
+      
+      // Update XP asynchronously (non-blocking)
+      unawaited(_updateXP());
+    } finally {
+      // Clear the lock
+      _currentIncrement = null;
+      completer.complete();
+    }
+  }
+  
+  /// Force immediate sync to disk (used when app goes to background or closes).
+  Future<void> forceSyncNow() async {
+    _syncTimer?.cancel();
+    await _syncToDisk();
+  }
+  
+  void _scheduleSync() {
+    _syncTimer?.cancel();
+    _syncInstance = this;
+    _syncTimer = Timer(const Duration(milliseconds: 500), () async {
+      if (_syncInstance?._cacheDirty == true) {
+        await _syncInstance!._syncToDisk();
+      }
+    });
+  }
+  
+  Future<void> _syncToDisk() async {
+    if (!_cacheDirty) return;
+    
+    // OPTIMIZATION: Add timeout to prevent hanging on slow I/O
+    try {
+      await Future.any([
+        _performSync(),
+        Future.delayed(const Duration(seconds: 2), () {
+          throw TimeoutException('Sync timeout');
+        }),
+      ]);
+    } on TimeoutException {
+      // If sync times out, mark dirty for retry but don't block
+      // This prevents UI freezing on slow storage
+      _cacheDirty = true;
+    } catch (e) {
+      // If sync fails, mark dirty again for retry
+      _cacheDirty = true;
+    }
+  }
+  
+  Future<void> _performSync() async {
+    // Always write today (it might be 0 if reset)
+    await _prefs.setInt(_kTodayJaps, _cachedToday ?? 0);
+    
+    // For lifetime, ensure we never write a value less than what's already stored
+    // This prevents accidentally resetting lifetime due to initialization issues
+    if (_cachedLifetime != null) {
+      // Read existing lifetime from disk to ensure we don't overwrite with a lower value
+      final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+      // Only write if our cached value is greater than or equal to existing
+      // This ensures lifetime always increases, never decreases
+      if (_cachedLifetime! >= existingLifetime) {
+        await _prefs.setInt(_kLifetimeJaps, _cachedLifetime!);
+      } else {
+        // If cached value is lower (shouldn't happen, but safety check),
+        // use the existing value and update cache
+        _cachedLifetime = existingLifetime;
+      }
+    } else {
+      // If cache is null, read from disk and update cache, but don't write
+      // This preserves existing lifetime value
+      final existingLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+      _cachedLifetime = existingLifetime;
+    }
+    _cacheDirty = false;
+  }
+  
+  Future<void> _updateXP() async {
+    try {
+      final xp = await XPStore.create();
+      await xp.addXP(1);
+    } catch (_) {
+      // Ignore XP update errors
     }
   }
 
-  /// Flush pending increments to storage.
-  Future<void> _flushPending() async {
-    if (_pendingIncrements == 0) return;
-    
-    final toAdd = _pendingIncrements;
-    _pendingIncrements = 0;
-    
-    final currentToday = _prefs.getInt(_kTodayJaps) ?? 0;
-    final currentLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
-    
-    await _prefs.setInt(_kTodayJaps, currentToday + toAdd);
-    await _prefs.setInt(_kLifetimeJaps, currentLifetime + toAdd);
-    
-    final xp = await XPStore.create();
-    await xp.addXP(toAdd);
-  }
-
-  /// Force flush any pending increments (call on pause/dispose).
-  Future<void> flushPending() => _flushPending();
-
   /// Clears only today's japs (used on new day).
+  /// IMPORTANT: Only resets today, never touches lifetime.
   Future<void> _resetToday() async {
-    await _prefs.setInt(_kTodayJaps, 0);
+    // Ensure lifetime cache is loaded before resetting today
+    // This prevents accidentally overwriting lifetime with 0
+    if (_cachedLifetime == null) {
+      _cachedLifetime = _prefs.getInt(_kLifetimeJaps) ?? 0;
+    }
+    
+    _cachedToday = 0;
+    _cacheDirty = true;
+    await _syncToDisk();
   }
 
   /// Resets today when the calendar day changes.

@@ -1,2 +1,2 @@
 # jap-counter
-Radha Jap Counter Flutter App
+Naam Jap Counter : Sadhna Flutter App

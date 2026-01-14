@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/prefs_manager.dart';
 import 'xp_store.dart';
 
 /// Tracks meditation minutes: today + lifetime, with daily reset.
@@ -13,7 +14,7 @@ class MeditationStore {
   MeditationStore._(this._prefs);
 
   static Future<MeditationStore> create() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PrefsManager.instance;
     final store = MeditationStore._(prefs);
     await store._ensureToday();
     return store;
@@ -32,8 +33,17 @@ class MeditationStore {
     }
   }
 
+  /// Synchronous getter for today's minutes.
+  /// Note: Uses synchronous SharedPreferences operations which are safe for getters.
+  /// For async contexts, prefer [getTodayMinutesAsync()] instead.
   int get todayMinutes {
     _ensureTodaySync();
+    return _prefs.getInt(_kTodayMinutes) ?? 0;
+  }
+  
+  /// Async version for ensuring today is reset - use this when possible
+  Future<int> getTodayMinutesAsync() async {
+    await _ensureToday();
     return _prefs.getInt(_kTodayMinutes) ?? 0;
   }
 

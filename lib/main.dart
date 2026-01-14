@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async' show unawaited, TimeoutException;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'bootstrap/app_bootstrapper.dart';
+import 'core/prefs_manager.dart';
+import 'data/language_store.dart';
 import 'data/streak_store.dart';
 import 'firebase_options.dart';
 import 'notifications/notification_service.dart';
@@ -15,19 +17,33 @@ const _bootLog = '[BOOT]';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SplashApp());
+  // Initialize SharedPreferences singleton early for better performance
+  await PrefsManager.ensureInitialized();
+  
+  // Load theme mode synchronously before showing app
+  final prefs = await PrefsManager.instance;
+  final stored = prefs.getInt('themeMode') ?? ThemeMode.system.index;
+  final values = ThemeMode.values;
+  final initialThemeMode = (stored >= 0 && stored < values.length)
+      ? values[stored]
+      : ThemeMode.system;
+  
+  runApp(SplashApp(initialThemeMode: initialThemeMode));
 }
 
 class SplashApp extends StatelessWidget {
-  const SplashApp({super.key});
+  final ThemeMode initialThemeMode;
+  
+  const SplashApp({super.key, required this.initialThemeMode});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Radha Jap Counter',
+      title: 'Naam Jap Counter : Sadhna',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
-      themeMode: ThemeMode.light,
+      darkTheme: buildTheme(Brightness.dark),
+      themeMode: initialThemeMode,
       home: const SplashScaffold(),
     );
   }
@@ -107,8 +123,9 @@ class _SplashScaffoldState extends State<SplashScaffold> {
     try {
       await NotificationService.initialize()
           .timeout(const Duration(seconds: 2));
+      final language = await LanguageStore.current();
       await NotificationService()
-          .scheduleDailyMotivation()
+          .scheduleDailyMotivation(language: language)
           .timeout(const Duration(seconds: 2));
       debugPrint('$_bootLog notifications primed');
     } on TimeoutException {
@@ -130,7 +147,7 @@ class _SplashScaffoldState extends State<SplashScaffold> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -139,10 +156,7 @@ class _SplashScaffoldState extends State<SplashScaffold> {
             const SizedBox(height: 16),
             Text(
               'Starting...',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Colors.black87),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
         ),
